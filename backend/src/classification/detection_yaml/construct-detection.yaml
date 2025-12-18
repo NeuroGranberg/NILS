@@ -1,0 +1,730 @@
+# =============================================================================
+# Construct Detection Configuration
+# =============================================================================
+# Version: 2.0.0
+# Date: 2025-12-02
+#
+# Purpose: Detect computed/derived constructs from MRI acquisitions.
+# Constructs are outputs COMPUTED from raw acquisitions (not acquired directly).
+#
+# KEY CONCEPTS:
+# 1. Constructs are additive (multiple can apply: ADC,FA from same DTI)
+# 2. Output is construct_csv: comma-separated, alphabetically sorted
+# 3. Most constructs require is_derived=True in ImageType
+#
+# NOTE: construct != DICOM DERIVED
+#   - DICOM DERIVED means pixels computed from other images
+#   - construct means what TYPE of computed output (ADC, FA, T1map, etc.)
+#
+# DETECTION: Three-tier like other detectors
+#   1. exclusive flag → HIGH confidence (0.95)
+#   2. keywords match → HIGH confidence (0.85)
+#   3. combination → MEDIUM confidence (0.75)
+#
+# UNIFIED FLAGS used (from ClassificationContext.unified_flags v1.1.0):
+#   - Diffusion: has_adc, has_eadc, has_fa, has_trace
+#   - Perfusion: has_cbf, has_cbv, has_mtt, has_tmax, has_ttp
+#   - Quantitative: has_t1_map, has_t2_map, has_r1, has_r2, is_qmap
+#   - Synthetic: has_t1_synthetic, has_t2_synthetic, has_pd_synthetic, has_flair_synthetic, has_myelin
+#   - Dixon: has_water, has_fat, has_dixon, has_in_phase, has_out_phase
+#   - Components: has_magnitude, has_phase, has_real, has_imaginary
+#   - SWI: has_swi, is_swi
+#   - Processing: is_mip, is_minip, is_mpr, is_derived
+# =============================================================================
+
+meta:
+  version: "2.0.0"
+  description: "Computed construct detection for MRI classification"
+  field: "construct_csv"
+  output_type: "csv"  # Multiple constructs can apply
+
+# =============================================================================
+# CONSTRUCT DEFINITIONS
+# =============================================================================
+
+constructs:
+  # ===========================================================================
+  # DIFFUSION CONSTRUCTS
+  # ===========================================================================
+  # These are derived maps from diffusion-weighted acquisitions
+  
+  ADC:
+    name: "ADC"
+    category: "diffusion"
+    description: "Apparent Diffusion Coefficient map (mm²/s)."
+    keywords:
+      - "adc"
+      - "apparent diffusion coefficient"
+      - "adc map"
+    detection:
+      exclusive: has_adc
+    requires_derived: true
+    notes: |
+      ADC is the most common diffusion map.
+      Computed from multi-b-value DWI.
+      Low ADC = restricted diffusion (e.g., acute stroke).
+
+  eADC:
+    name: "eADC"
+    category: "diffusion"
+    description: "Exponential ADC map."
+    keywords:
+      - "eadc"
+      - "exp adc"
+      - "exponential adc"
+    detection:
+      exclusive: has_eadc
+    requires_derived: true
+    notes: |
+      eADC = exp(-b * ADC)
+      Used for certain clinical applications.
+
+  FA:
+    name: "FA"
+    category: "diffusion"
+    description: "Fractional Anisotropy map."
+    keywords:
+      - "fractional anisotropy"
+      - "fa map"
+    detection:
+      exclusive: has_fa
+    requires_derived: true
+    notes: |
+      FA measures directional preference of diffusion.
+      FA=0 (isotropic) to FA=1 (perfectly anisotropic).
+      High FA in white matter tracts.
+
+  Trace:
+    name: "Trace"
+    category: "diffusion"
+    description: "Trace/isotropic diffusion-weighted image."
+    keywords:
+      - "trace"
+      - "tracew"
+      - "isodwi"
+      - "isotropic dwi"
+    detection:
+      exclusive: has_trace
+    requires_derived: true
+    notes: |
+      Combined DWI from multiple directions.
+      Direction-independent diffusion weighting.
+
+  MD:
+    name: "MD"
+    category: "diffusion"
+    description: "Mean Diffusivity map."
+    keywords:
+      - "mean diffusivity"
+      - "md map"
+      - "mean diff"
+    detection: null  # Keywords only - no specific flag
+    requires_derived: true
+
+  # ===========================================================================
+  # PERFUSION CONSTRUCTS
+  # ===========================================================================
+  # Derived from DSC-MRI or ASL perfusion acquisitions
+  
+  CBF:
+    name: "CBF"
+    category: "perfusion"
+    description: "Cerebral Blood Flow map (ml/100g/min)."
+    keywords:
+      - "cbf"
+      - "cerebral blood flow"
+      - "blood flow"
+      - "rcbf"
+    detection:
+      exclusive: has_cbf
+    requires_derived: true
+
+  CBV:
+    name: "CBV"
+    category: "perfusion"
+    description: "Cerebral Blood Volume map."
+    keywords:
+      - "cbv"
+      - "cerebral blood volume"
+      - "blood volume"
+      - "rcbv"
+    detection:
+      exclusive: has_cbv
+    requires_derived: true
+
+  MTT:
+    name: "MTT"
+    category: "perfusion"
+    description: "Mean Transit Time map."
+    keywords:
+      - "mtt"
+      - "mean transit time"
+      - "transit time"
+    detection:
+      exclusive: has_mtt
+    requires_derived: true
+
+  Tmax:
+    name: "Tmax"
+    category: "perfusion"
+    description: "Time to maximum of residue function."
+    keywords:
+      - "tmax"
+      - "t max"
+      - "time to max"
+    detection:
+      exclusive: has_tmax
+    requires_derived: true
+
+  TTP:
+    name: "TTP"
+    category: "perfusion"
+    description: "Time to Peak of contrast bolus."
+    keywords:
+      - "ttp"
+      - "time to peak"
+    detection:
+      exclusive: has_ttp
+    requires_derived: true
+
+  # ===========================================================================
+  # DIXON / FAT-WATER SEPARATION CONSTRUCTS
+  # ===========================================================================
+  
+  Water:
+    name: "Water"
+    category: "dixon"
+    description: "Dixon water-only image."
+    keywords:
+      - "water only"
+      - "water image"
+      - "dixon water"
+    detection:
+      exclusive: has_water
+    requires_derived: true
+    notes: |
+      Fat signal suppressed via Dixon reconstruction.
+      Better fat suppression than spectral methods near metal.
+
+  Fat:
+    name: "Fat"
+    category: "dixon"
+    description: "Dixon fat-only image."
+    keywords:
+      - "fat only"
+      - "fat image"
+      - "dixon fat"
+    detection:
+      exclusive: has_fat
+    requires_derived: true
+    notes: |
+      Water signal suppressed via Dixon reconstruction.
+      Useful for fat quantification.
+
+  InPhase:
+    name: "InPhase"
+    category: "dixon"
+    description: "In-phase image (water and fat in phase)."
+    keywords:
+      - "in phase"
+      - "inphase"
+    detection:
+      exclusive: has_in_phase
+    requires_derived: false  # Can be original acquisition
+    notes: |
+      Echo timed for water+fat constructive interference.
+
+  OutPhase:
+    name: "OutPhase"
+    category: "dixon"
+    description: "Opposed-phase image (water and fat opposed)."
+    keywords:
+      - "opposed phase"
+      - "out of phase"
+      - "opp phase"
+    detection:
+      exclusive: has_out_phase
+    requires_derived: false  # Can be original acquisition
+    notes: |
+      Echo timed for water-fat destructive interference.
+      Signal cancellation at fat-water interfaces.
+
+  # ===========================================================================
+  # QUANTITATIVE MAP CONSTRUCTS
+  # ===========================================================================
+  # Relaxometry and other quantitative parameter maps
+  
+  T1map:
+    name: "T1map"
+    category: "quantitative"
+    description: "Quantitative T1 relaxation time map."
+    keywords:
+      - "t1 map"
+      - "t1map"
+      - "t1 relaxation"
+      - "t1 mapping"
+    detection:
+      exclusive: has_t1_map
+      combination:
+        - is_qmap
+    requires_derived: true
+    notes: |
+      T1 relaxation time in milliseconds.
+      Acquired with VFA, IR, or MP2RAGE.
+
+  T2map:
+    name: "T2map"
+    category: "quantitative"
+    description: "Quantitative T2 relaxation time map."
+    keywords:
+      - "t2 map"
+      - "t2map"
+      - "t2 relaxation"
+      - "t2 mapping"
+    detection:
+      exclusive: has_t2_map
+      combination:
+        - is_qmap
+    requires_derived: true
+    notes: |
+      T2 relaxation time in milliseconds.
+      Acquired with multi-echo SE.
+
+  R1map:
+    name: "R1map"
+    category: "quantitative"
+    description: "R1 (1/T1) relaxation rate map."
+    keywords:
+      - "r1 map"
+      - "r1map"
+    detection:
+      exclusive: has_r1
+    requires_derived: true
+
+  R2map:
+    name: "R2map"
+    category: "quantitative"
+    description: "R2 (1/T2) relaxation rate map."
+    keywords:
+      - "r2 map"
+      - "r2map"
+    detection:
+      exclusive: has_r2
+    requires_derived: true
+
+  PDmap:
+    name: "PDmap"
+    category: "quantitative"
+    description: "Quantitative Proton Density map."
+    keywords:
+      - "pd map"
+      - "pdmap"
+      - "proton density map"
+    detection: null  # No specific flag - use keywords or qmap
+    requires_derived: true
+
+  # ===========================================================================
+  # MP2RAGE OUTPUT CONSTRUCTS
+  # ===========================================================================
+  # MP2RAGE acquires two inversion images (INV1, INV2) and computes derived outputs:
+  # - INV1: First inversion at short TI (~700-1000ms)
+  # - INV2: Second inversion at long TI (~2500-3200ms)
+  # - UNI: Bias-corrected T1w (has salt-and-pepper noise in background)
+  # - UNI-DEN: Denoised uniform (clean background, primary for segmentation)
+  # - T1map: Quantitative T1 relaxation map (handled by T1map construct above)
+  #
+  # All are fundamentally T1-weighted; the construct captures the specific output type.
+
+  INV1:
+    name: "INV1"
+    category: "mp2rage"
+    description: "MP2RAGE first inversion image at short TI."
+    keywords:
+      - "inv1"
+      - "inv 1"
+      - "inversion 1"
+    detection:
+      exclusive: is_mp2rage_inv1
+    requires_derived: false  # INV1 is ORIGINAL
+    notes: |
+      MP2RAGE INV1 is acquired at short TI (~700-1000ms).
+      At this TI, tissues are still recovering from inversion,
+      providing strong T1-weighted contrast.
+
+      INV1 has lower SNR than INV2 but stronger T1 weighting.
+      Used with INV2 to compute UNI and T1map outputs.
+
+  INV2:
+    name: "INV2"
+    category: "mp2rage"
+    description: "MP2RAGE second inversion image at long TI."
+    keywords:
+      - "inv2"
+      - "inv 2"
+      - "inversion 2"
+    detection:
+      exclusive: is_mp2rage_inv2
+    requires_derived: false  # INV2 is ORIGINAL
+    notes: |
+      MP2RAGE INV2 is acquired at long TI (~2500-3200ms).
+      At this TI, magnetization has largely recovered toward equilibrium,
+      providing higher SNR but weaker T1 contrast than INV1.
+
+      The long TI gives INV2 some PD-like characteristics, but it's
+      still part of the T1-weighted MP2RAGE acquisition.
+      Used with INV1 to compute UNI and T1map outputs.
+
+  Uniform:
+    name: "Uniform"
+    category: "mp2rage"
+    description: "MP2RAGE Uniform image - bias-corrected T1w."
+    keywords:
+      - "uni image"
+      - "uni images"
+      - "uniform image"
+      - "uniform images"
+    detection:
+      exclusive: has_uniform
+    requires_derived: true
+    notes: |
+      MP2RAGE Uniform image is computed from INV1 and INV2 using:
+      S_UNI = Re(INV1* · INV2) / (|INV1|² + |INV2|²)
+
+      This removes B1 bias and provides uniform T1 contrast.
+      Has "salt-and-pepper" noise in background due to division
+      of small numbers in air regions.
+
+      For segmentation, use UniformDenoised instead.
+
+  UniformDenoised:
+    name: "Denoised"
+    category: "mp2rage"
+    description: "MP2RAGE Uniform Denoised - bias-corrected with clean background."
+    keywords:
+      - "uni - den"
+      - "uni-den"
+      - "uniden"
+      - "uniform denoised"
+      - "denoised uniform"
+      - "uniform weighted"
+    detection:
+      exclusive: is_uniform_denoised
+    requires_derived: true
+    notes: |
+      MP2RAGE Uniform Denoised uses a regularization factor (β):
+      S_UNI-DEN = Re(INV1* · INV2) / (|INV1|² + |INV2|² + β)
+
+      The β term suppresses salt-and-pepper noise in background
+      while preserving T1 contrast in tissue.
+
+      This is the PRIMARY input for automated segmentation pipelines
+      (FreeSurfer, FSL, SPM) as it has a clean dark background.
+
+  # ===========================================================================
+  # SYNTHETIC MRI CONSTRUCTS
+  # ===========================================================================
+  # Generated from quantitative maps (SyMRI, MAGiC)
+  
+  SyntheticT1w:
+    name: "SyntheticT1w"
+    category: "synthetic"
+    description: "Synthetic T1-weighted from quantitative maps."
+    keywords:
+      - "synthetic t1"
+      - "synt t1"
+      - "t1w synthetic"
+    detection:
+      exclusive: has_t1_synthetic
+    requires_derived: true
+    provenance: "SyMRI"
+
+  SyntheticT2w:
+    name: "SyntheticT2w"
+    category: "synthetic"
+    description: "Synthetic T2-weighted from quantitative maps."
+    keywords:
+      - "synthetic t2"
+      - "synt t2"
+      - "t2w synthetic"
+    detection:
+      exclusive: has_t2_synthetic
+    requires_derived: true
+    provenance: "SyMRI"
+
+  SyntheticFLAIR:
+    name: "SyntheticFLAIR"
+    category: "synthetic"
+    description: "Synthetic FLAIR from quantitative maps."
+    keywords:
+      - "synthetic flair"
+      - "synt flair"
+    detection:
+      exclusive: has_flair_synthetic
+    requires_derived: true
+    provenance: "SyMRI"
+
+  SyntheticPDw:
+    name: "SyntheticPDw"
+    category: "synthetic"
+    description: "Synthetic PD-weighted from quantitative maps."
+    keywords:
+      - "synthetic pd"
+      - "synt pd"
+    detection:
+      exclusive: has_pd_synthetic
+    requires_derived: true
+    provenance: "SyMRI"
+
+  MyelinMap:
+    name: "MyelinMap"
+    category: "synthetic"
+    description: "Myelin content / myelin water fraction map."
+    keywords:
+      - "myelin map"
+      - "myelin"
+      - "mwf"
+      - "myelin water fraction"
+    detection:
+      exclusive: has_myelin
+    requires_derived: true
+    provenance: "SyMRI"
+
+  # ===========================================================================
+  # SWI / SUSCEPTIBILITY CONSTRUCTS
+  # ===========================================================================
+  # NOTE: SWI branch (branches/swi.py) handles construct assignment directly.
+  # These definitions are used when ConstructDetector runs (non-SWI provenance).
+  # ===========================================================================
+
+  SWI:
+    name: "SWI"
+    category: "swi"
+    description: "Processed SWI image (magnitude × phase mask^n)."
+    keywords:
+      - "swi processed"
+      - "swi combined"
+      - "swi filtered"
+    detection:
+      combination:
+        - has_swi
+        - is_derived
+    requires_derived: true
+    provenance: "SWIRecon"
+    notes: |
+      The hallmark diagnostic SWI output.
+      Magnitude multiplied by phase mask (typically 4x) for maximum susceptibility sensitivity.
+
+  Phase:
+    name: "Phase"
+    category: "swi"
+    description: "Phase image (wrapped or unwrapped)."
+    keywords:
+      - "phase"
+      - "phase map"
+      - "phasemap"
+      - "phase image"
+    detection:
+      exclusive: has_phase
+    requires_derived: false  # Phase can be original
+    notes: |
+      Phase images contain velocity/susceptibility info.
+      Used for QSM, SWI, phase-contrast flow.
+      Shows iron vs calcium differentiation.
+
+  QSM:
+    name: "QSM"
+    category: "swi"
+    description: "Quantitative Susceptibility Mapping."
+    keywords:
+      - "qsm"
+      - "susceptibility map"
+      - "chi map"
+    detection: null  # Keywords only
+    requires_derived: true
+    notes: |
+      Quantitative map of magnetic susceptibility in ppm.
+      Derived from phase data using dipole inversion.
+
+  # ===========================================================================
+  # PROJECTION / REFORMAT CONSTRUCTS
+  # ===========================================================================
+  
+  MIP:
+    name: "MIP"
+    category: "projection"
+    description: "Maximum Intensity Projection."
+    keywords:
+      - "mip"
+      - "maximum intensity projection"
+      - "max ip"
+    detection:
+      exclusive: is_mip
+    requires_derived: true
+
+  MinIP:
+    name: "MinIP"
+    category: "projection"
+    description: "Minimum Intensity Projection."
+    keywords:
+      - "minip"
+      - "minimum intensity projection"
+      - "min ip"
+    detection:
+      exclusive: is_minip
+    requires_derived: true
+
+  MPR:
+    name: "MPR"
+    category: "projection"
+    description: "Multiplanar Reformation (re-sliced volume)."
+    keywords:
+      # Note: "mpr" removed - too many false positives with "mprage"
+      - "multiplanar reformat"
+      - "reformatted"
+    detection:
+      exclusive: is_mpr
+    requires_derived: true
+
+  # ===========================================================================
+  # FIELD MAP CONSTRUCTS
+  # ===========================================================================
+  
+  B0map:
+    name: "B0map"
+    category: "fieldmap"
+    description: "Static field (off-resonance) map."
+    keywords:
+      - "b0 map"
+      - "b0map"
+      - "field map"
+      - "fieldmap"
+    detection: null  # Keywords only
+    requires_derived: true
+
+  B1map:
+    name: "B1map"
+    category: "fieldmap"
+    description: "RF transmit/receive field map."
+    keywords:
+      - "b1 map"
+      - "b1map"
+      - "b1+"
+      - "b1-"
+    detection: null  # Keywords only
+    requires_derived: true
+
+  # ===========================================================================
+  # COMPLEX IMAGE COMPONENTS
+  # ===========================================================================
+  # These can be ORIGINAL or DERIVED
+  
+  Magnitude:
+    name: "Magnitude"
+    category: "component"
+    description: "Magnitude image from complex data."
+    keywords:
+      - "magnitude image"
+      - "magnitude only"
+    detection:
+      exclusive: null  # Don't use has_magnitude - too common (most images are magnitude)
+    requires_derived: false  # Usually original
+
+  Real:
+    name: "Real"
+    category: "component"
+    description: "Real component of complex data."
+    keywords:
+      - "real image"
+      - "real component"
+    detection:
+      exclusive: has_real
+    requires_derived: false
+
+  Imaginary:
+    name: "Imaginary"
+    category: "component"
+    description: "Imaginary component of complex data."
+    keywords:
+      - "imaginary image"
+      - "imaginary component"
+    detection:
+      exclusive: has_imaginary
+    requires_derived: false
+
+# =============================================================================
+# DETECTION RULES
+# =============================================================================
+
+rules:
+  # Multiple constructs can coexist (e.g., ADC,FA from same DTI)
+  allow_multiple: true
+  
+  # Priority order for detection (more specific first)
+  priority_order:
+    # Diffusion (most specific first)
+    - "ADC"
+    - "eADC"
+    - "FA"
+    - "Trace"
+    - "MD"
+    # Perfusion
+    - "CBF"
+    - "CBV"
+    - "MTT"
+    - "Tmax"
+    - "TTP"
+    # Dixon
+    - "Water"
+    - "Fat"
+    - "InPhase"
+    - "OutPhase"
+    # Quantitative
+    - "T1map"
+    - "T2map"
+    - "R1map"
+    - "R2map"
+    - "PDmap"
+    # Synthetic
+    - "SyntheticT1w"
+    - "SyntheticT2w"
+    - "SyntheticFLAIR"
+    - "SyntheticPDw"
+    - "MyelinMap"
+    # SWI
+    - "SWIProcessed"
+    - "PhaseMap"
+    - "QSM"
+    # Projection
+    - "MIP"
+    - "MinIP"
+    - "MPR"
+    # Field maps
+    - "B0map"
+    - "B1map"
+    # Components
+    - "Magnitude"
+    - "Real"
+    - "Imaginary"
+  
+  # Confidence thresholds
+  confidence_thresholds:
+    exclusive: 0.95     # Single definitive flag
+    keywords: 0.85      # Keyword match in text
+    combination: 0.75   # Multiple flags together
+
+# =============================================================================
+# OUTPUT SPECIFICATION
+# =============================================================================
+# 
+# Output: construct_csv (comma-separated, alphabetically sorted)
+# 
+# Examples:
+#   - "ADC" (ADC map from DWI)
+#   - "ADC,FA" (both from same DTI acquisition)
+#   - "T1map,T2map" (quantitative maps from MDME)
+#   - "SyntheticFLAIR,SyntheticT1w" (synthetic contrasts)
+#   - "Water" (Dixon water-only)
+#   - "MIP" (maximum intensity projection)
+#   - "" (no constructs - original acquisition)
+#
+# =============================================================================

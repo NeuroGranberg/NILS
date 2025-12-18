@@ -1,0 +1,852 @@
+# =============================================================================
+# UNIFIED FLAGS REFERENCE
+# =============================================================================
+# 
+# Version: 1.0.0
+# Last Updated: 2024-12-02
+#
+# This file documents all unified flags available in ClassificationContext.
+# These flags aggregate evidence from multiple DICOM tag parsers using OR logic,
+# providing vendor-agnostic detection for technique classification.
+#
+# Usage in TechniqueDetector:
+#   ctx = ClassificationContext.from_fingerprint(fingerprint)
+#   uf = ctx.unified_flags
+#   if uf["has_se"] and uf["has_ir"] and uf["is_tse"]:
+#       technique = "IR-TSE"
+#
+# =============================================================================
+
+metadata:
+  version: "1.3.0"
+  total_flags: 107
+  categories: 8
+  last_updated: "2025-12-02"
+  changelog: |
+    v1.3.0: Added distortion correction flags:
+      - has_distortion_correction: Any distortion correction (DIS2D or DIS3D)
+      - has_dis2d: 2D distortion correction
+      - has_dis3d: 3D distortion correction
+    v1.2.0: Added has_ir_se for SE-based IR modifier detection:
+      - has_ir_se: SE-based IR (FLAIR, STIR, DIR) - excludes GRE-based IR (MPRAGE)
+    v1.1.0: Added construct-related flags for ConstructDetector:
+      - has_eadc, has_ttp (diffusion/perfusion maps)
+      - has_r1, has_r2 (relaxometry maps)
+      - has_t1_synthetic, has_t2_synthetic, has_pd_synthetic, has_flair_synthetic, has_myelin (synthetic MRI)
+      - has_swi (SWI from ImageType)
+
+# =============================================================================
+# CATEGORY 1: PULSE SEQUENCE PHYSICS
+# =============================================================================
+# What RF/gradient physics is used in the acquisition?
+# These are the fundamental building blocks of MRI sequences.
+
+pulse_sequence_physics:
+  count: 6
+  description: "Fundamental MRI physics - RF pulses and gradients"
+  
+  flags:
+    has_se:
+      description: "Spin Echo - uses 180° refocusing RF pulse"
+      physics: "90° excitation followed by 180° refocusing pulse"
+      sources:
+        - "ScanningSequence contains SE, FSE, or IRFSE"
+        - "ImageType contains M_SE (Philips)"
+        - "SequenceName patterns: *se*, tse*, haste, spc*, etc."
+      examples:
+        - "TSE/FSE sequences"
+        - "HASTE"
+        - "SPACE/CUBE/VISTA"
+        - "SE-EPI (diffusion)"
+    
+    has_gre:
+      description: "Gradient Echo - uses gradient refocusing only (no 180° pulse)"
+      physics: "RF excitation with gradient refocusing, no 180° pulse"
+      sources:
+        - "ScanningSequence contains GR, GE, FE"
+        - "ImageType contains M_FFE (Philips)"
+        - "SequenceName patterns: fl*, tfl*, *gre*, swi*, etc."
+      examples:
+        - "FLASH/SPGR"
+        - "MPRAGE/BRAVO"
+        - "SWI"
+        - "TOF-MRA"
+        - "GRE-EPI (BOLD)"
+    
+    has_epi:
+      description: "Echo Planar Imaging - single-shot or multi-shot EPI readout"
+      physics: "Rapid gradient switching to fill k-space in single TR"
+      sources:
+        - "ScanningSequence contains EP"
+        - "SequenceName patterns: ep_b*, epfid*, epse*, etc."
+      examples:
+        - "DWI/DTI"
+        - "BOLD/fMRI"
+        - "Perfusion (DSC)"
+    
+    has_ir:
+      description: "Inversion Recovery - uses 180° inversion preparation pulse (any physics)"
+      physics: "180° inversion pulse before excitation to null specific tissues"
+      sources:
+        - "ScanningSequence contains IR or IRFSE"
+        - "ImageType contains M_IR (Philips) or DIR"
+        - "ScanOptions contains IR, IR_GEMS, T1FLAIR_GEMS, T2FLAIR_GEMS"
+        - "SequenceName patterns: tir*, spcir*, flair, mprage, etc."
+      examples:
+        - "FLAIR (T2-FLAIR, T1-FLAIR)"
+        - "STIR"
+        - "MPRAGE"
+        - "DIR (Double IR)"
+        - "MP2RAGE"
+      note: "Includes BOTH SE-based IR (FLAIR, STIR) and GRE-based IR (MPRAGE)"
+    
+    has_ir_se:
+      description: "SE-based Inversion Recovery only (for modifier detection)"
+      physics: "IR preparation with SE/TSE readout"
+      sources:
+        - "ScanningSequence: IRFSE"
+        - "SequenceName: is_ir_tse, is_ir_fse, is_space_ir, is_flair_seq"
+        - "SE + IR in ScanningSequence (not EPI)"
+      examples:
+        - "FLAIR (T2-FLAIR, T1-FLAIR)"
+        - "STIR"
+        - "DIR (Double IR)"
+        - "TIRM (Siemens)"
+      excludes:
+        - "MPRAGE (GRE+IR)"
+        - "MP2RAGE (GRE+IR)"
+      note: "Used by ModifierDetector - IR is a modifier for SE, but part of technique for GRE"
+    
+    has_saturation:
+      description: "Saturation pulse - spatial or spectral saturation"
+      physics: "RF pulse to suppress signal from specific region or frequency"
+      sources:
+        - "ScanningSequence contains S (saturation)"
+        - "ScanOptions contains SAT_GEMS, spatial saturation"
+      examples:
+        - "Spatial saturation bands"
+        - "REST slabs in TOF"
+
+# =============================================================================
+# CATEGORY 2: TECHNIQUE INDICATORS
+# =============================================================================
+# Specific MRI techniques identified by sequence name patterns,
+# scan options, or other vendor-specific indicators.
+
+technique_indicators:
+  count: 27
+  description: "Specific MRI acquisition techniques"
+  
+  subcategories:
+    
+    # --- SE Family Techniques ---
+    se_family:
+      description: "Spin Echo based techniques"
+      flags:
+        is_tse:
+          description: "Turbo/Fast Spin Echo - multi-echo SE with segmented k-space"
+          aliases: ["TSE (Siemens)", "FSE (GE)", "TSE (Philips)"]
+          physics: "Multiple 180° refocusing pulses per TR (echo train)"
+          key_differentiator: "has_se + has_segmented_kspace"
+          sources:
+            - "SequenceName: tse*, fse*"
+            - "ScanOptions: FAST_GEMS"
+            - "SequenceVariant: SK (segmented k-space) with SE"
+        
+        is_space:
+          description: "3D Turbo Spin Echo with variable flip angle refocusing"
+          aliases: ["SPACE (Siemens)", "CUBE (GE)", "VISTA (Philips)"]
+          physics: "3D TSE with VFA to reduce SAR and enable long echo trains"
+          sources:
+            - "SequenceName: spc*, spcir*"
+        
+        is_haste:
+          description: "Single-shot TSE - entire k-space in one shot"
+          aliases: ["HASTE (Siemens)", "SSFSE (GE)", "SSH-TSE (Philips)"]
+          physics: "Half-Fourier single-shot TSE"
+          sources:
+            - "SequenceName: h2d*, h3d*, haste*"
+        
+        is_me_se:
+          description: "Multi-echo Spin Echo - multiple echoes with different TE"
+          physics: "Multiple 180° refocusing pulses with separate echoes acquired"
+          sources:
+            - "SequenceName: me2d*, me3d*, *me1*"
+        
+        is_mdme:
+          description: "Multi-Dynamic Multi-Echo - SyMRI acquisition sequence"
+          aliases: ["MDME (SyntheticMR)"]
+          physics: "Quantitative relaxometry sequence for synthetic MRI"
+          sources:
+            - "SequenceName: mdme*"
+        
+        is_qalas:
+          description: "Quantitative ALAS - 3D quantitative mapping"
+          aliases: ["QALAS (GE)", "3D-QALAS"]
+          physics: "Interleaved IR-GRE for T1, T2, PD mapping"
+          sources:
+            - "SequenceName: qalas*"
+    
+    # --- GRE Family Techniques ---
+    gre_family:
+      description: "Gradient Echo based techniques"
+      flags:
+        is_flash:
+          description: "Fast Low Angle Shot - basic spoiled GRE"
+          aliases: ["FLASH (Siemens)", "SPGR (GE)", "T1-FFE (Philips)"]
+          physics: "Low flip angle GRE with RF/gradient spoiling"
+          sources:
+            - "SequenceName: fl1*, fl2d*, fl3d*, fgre*"
+        
+        is_tfl:
+          description: "TurboFLASH - fast spoiled GRE (often with segmented readout)"
+          aliases: ["TurboFLASH (Siemens)", "FSPGR (GE)", "TFE (Philips)"]
+          physics: "Rapid GRE with short TR and segmented acquisition"
+          sources:
+            - "SequenceName: tfl*"
+        
+        is_mprage:
+          description: "Magnetization Prepared Rapid GRE - IR-prepared 3D GRE"
+          aliases: ["MPRAGE (Siemens)", "BRAVO/IR-SPGR (GE)", "3D-TFE (Philips)"]
+          physics: "3D GRE with IR preparation for T1 contrast"
+          key_differentiator: "has_gre + has_ir + is_3d"
+          sources:
+            - "SequenceName: mprage*, bravo*"
+        
+        is_ssfp:
+          description: "Steady-State Free Precession - balanced/unbalanced SSFP"
+          aliases: ["TrueFISP (Siemens)", "FIESTA (GE)", "bFFE (Philips)"]
+          physics: "Fully balanced gradients maintaining steady-state"
+          sources:
+            - "SequenceVariant: SS (steady-state)"
+        
+        is_ciss:
+          description: "Constructive Interference Steady State"
+          aliases: ["CISS (Siemens)", "FIESTA-C (GE)", "3D-DRIVE (Philips)"]
+          physics: "Phase-cycled SSFP with constructive combination"
+          sources:
+            - "SequenceName: ciss*, ci3d*"
+        
+        is_swi:
+          description: "Susceptibility Weighted Imaging"
+          physics: "High-resolution GRE with phase processing for susceptibility"
+          sources:
+            - "SequenceName: swi*, qswi*"
+            - "ImageType: SWI"
+    
+    # --- Angio/Flow Techniques ---
+    angio_flow:
+      description: "Angiography and flow imaging techniques"
+      flags:
+        is_tof:
+          description: "Time-of-Flight MRA - inflow-based angiography"
+          physics: "GRE with flow-related enhancement of fresh spins"
+          sources:
+            - "SequenceName: tfi*, tof*, mra*"
+            - "SequenceVariant: TOF"
+            - "ScanOptions: VASCTOF_GEMS, IFLOW_GEMS"
+        
+        is_pc:
+          description: "Phase Contrast MRA/flow - velocity-encoded imaging"
+          physics: "Bipolar gradients encode velocity in phase"
+          sources:
+            - "SequenceName: pc2d*, pc3d*"
+            - "ImageType: M_PCA (Philips)"
+        
+        is_flair:
+          description: "Fluid Attenuated IR - CSF-suppressed IR sequence"
+          aliases: ["FLAIR (all vendors)", "T2-FLAIR", "T1-FLAIR"]
+          physics: "IR with TI tuned to null CSF (TI ~2000-2500ms at 3T)"
+          key_differentiator: "has_se + has_ir + long TI"
+          sources:
+            - "SequenceName: *flair*"
+            - "ScanOptions: T1FLAIR_GEMS, T2FLAIR_GEMS"
+            - "ImageType: has_flair_synthetic"
+        
+        is_dir:
+          description: "Double Inversion Recovery - two IR pulses"
+          physics: "Two inversion pulses to null two tissue types (e.g., CSF + WM)"
+          sources:
+            - "ImageType: DIR"
+    
+    # --- EPI/Functional Techniques ---
+    epi_functional:
+      description: "EPI-based functional and diffusion techniques"
+      flags:
+        is_dwi:
+          description: "Diffusion Weighted Imaging - diffusion-sensitized EPI"
+          aliases: ["DWI", "DTI", "HARDI", "DSI"]
+          physics: "EPI with diffusion-sensitizing gradients (b-value > 0)"
+          sources:
+            - "SequenceName: ep_b*, re_b* (RESOLVE)"
+            - "ImageType: DIFFUSION"
+            - "mr_diffusion_b_value is not None"
+        
+        is_bold:
+          description: "Blood Oxygen Level Dependent - fMRI"
+          physics: "T2*-weighted EPI sensitive to deoxyhemoglobin"
+          sources:
+            - "SequenceName: epfid* (GRE-EPI)"
+            - "ImageType: FMRI, EPI"
+        
+        is_asl:
+          description: "Arterial Spin Labeling - non-contrast perfusion"
+          physics: "RF labeling of arterial blood water as endogenous tracer"
+          sources:
+            - "ImageType: ASL, PERFUSION_ASL"
+        
+        is_perfusion:
+          description: "Perfusion imaging - DSC or DCE"
+          physics: "Dynamic imaging during contrast bolus passage"
+          sources:
+            - "ImageType: PERFUSION, PWI"
+    
+    # --- Special Techniques ---
+    special_techniques:
+      description: "Specialized acquisition techniques"
+      flags:
+        is_mrf:
+          description: "MR Fingerprinting - dictionary-based quantitative mapping"
+          physics: "Pseudo-random acquisition with dictionary matching"
+          sources:
+            - "ScanOptions: MRF_GEMS"
+        
+        is_radial:
+          description: "Radial k-space trajectory"
+          aliases: ["PROPELLER (GE)", "BLADE (Siemens)", "MultiVane (Philips)"]
+          physics: "Radial spokes through k-space center"
+          sources:
+            - "ScanOptions: PROP_GEMS, PARTL_BLADE_GEMS"
+            - "ImageType: RADIAL"
+        
+        is_spiral:
+          description: "Spiral k-space trajectory"
+          physics: "Spiral readout from k-space center"
+          sources:
+            - "ScanOptions: SPIRAL_GEMS"
+        
+        is_mavric:
+          description: "MAVRIC - metal artifact reduction"
+          aliases: ["MAVRIC (GE)", "SEMAC (Siemens)", "O-MAR (Philips)"]
+          physics: "Multi-spectral imaging to reduce metal susceptibility"
+          sources:
+            - "ImageType: MAVRIC, MAVRIC_COMPOSITE"
+        
+        is_ideal:
+          description: "IDEAL - fat/water separation"
+          aliases: ["IDEAL (GE)", "Dixon variants"]
+          physics: "Multi-echo chemical shift encoding"
+          sources:
+            - "ScanOptions: IDEAL_GEMS"
+        
+        is_cine:
+          description: "Cine imaging - cardiac gated temporal series"
+          physics: "Retrospective or prospective cardiac gating"
+          sources:
+            - "ScanOptions: CINE_GEMS"
+        
+        is_quant_map:
+          description: "Quantitative mapping sequence"
+          aliases: ["qMRI sequences"]
+          physics: "Multi-parametric acquisition for relaxometry"
+          sources:
+            - "SequenceName: qtir*, qtse*, qfl*"
+
+# =============================================================================
+# CATEGORY 3: SEQUENCE VARIANTS / MODIFIERS
+# =============================================================================
+# Modifications to base sequences that affect contrast or acquisition.
+
+sequence_modifiers:
+  count: 12
+  description: "Sequence modifications affecting contrast or acquisition"
+  
+  flags:
+    has_spoiled:
+      description: "RF or gradient spoiling to destroy residual transverse magnetization"
+      physics: "Prevents steady-state buildup, produces T1-weighted contrast in GRE"
+      sources:
+        - "SequenceVariant: SP"
+    
+    has_steady_state:
+      description: "Steady-state acquisition (balanced or unbalanced)"
+      physics: "Maintains transverse magnetization between TRs"
+      sources:
+        - "SequenceVariant: SS"
+    
+    has_segmented_kspace:
+      description: "Segmented k-space (echo train)"
+      physics: "Multiple k-space lines acquired per excitation"
+      sources:
+        - "SequenceVariant: SK"
+    
+    has_mag_prepared:
+      description: "Magnetization preparation (IR, saturation, etc.)"
+      physics: "Preparation module before readout for contrast"
+      sources:
+        - "SequenceVariant: MP"
+        - "ScanOptions: MP_GEMS"
+    
+    has_mtc:
+      description: "Magnetization Transfer Contrast"
+      physics: "Off-resonance RF saturates bound protons, transfers to free water"
+      sources:
+        - "SequenceVariant: MTC"
+        - "ScanOptions: MT"
+    
+    has_oversampling:
+      description: "Oversampling in frequency or phase direction"
+      physics: "Increased sampling to reduce aliasing"
+      sources:
+        - "SequenceVariant: OSP, OS"
+    
+    has_fat_sat:
+      description: "Fat saturation"
+      physics: "Spectral or spatial saturation of fat signal"
+      sources:
+        - "ScanOptions: FS, SFS (not FSE)"
+    
+    has_water_excitation:
+      description: "Water-only excitation"
+      physics: "Binomial or spectral-spatial pulse exciting only water"
+      sources:
+        - "ScanOptions: WE"
+    
+    has_flow_comp:
+      description: "Flow compensation (gradient moment nulling)"
+      physics: "Gradient waveforms designed to null motion-induced phase"
+      sources:
+        - "ScanOptions: FC"
+    
+    has_partial_fourier:
+      description: "Partial Fourier acquisition"
+      physics: "Acquiring less than full k-space, using conjugate symmetry"
+      sources:
+        - "ScanOptions: PFP (phase), PFF (frequency)"
+    
+    has_parallel_imaging:
+      description: "Parallel imaging acceleration"
+      aliases: ["GRAPPA", "SENSE", "ARC", "ASSET"]
+      physics: "Using coil sensitivity to reduce k-space sampling"
+      sources:
+        - "ScanOptions: ACC_GEMS, HYPERSENSE_GEMS, CS_GEMS"
+    
+    has_gating:
+      description: "Cardiac or respiratory gating"
+      physics: "Synchronizing acquisition to physiological motion"
+      sources:
+        - "ScanOptions: CG, RG, PPG, IPG"
+
+# =============================================================================
+# CATEGORY 4: ACQUISITION PROPERTIES
+# =============================================================================
+# Properties derived from acquisition parameters and stack splitting.
+
+acquisition_properties:
+  count: 5
+  description: "Acquisition dimensionality and stack properties"
+  
+  flags:
+    is_3d:
+      description: "3D volumetric acquisition"
+      physics: "Phase encoding in two directions"
+      sources:
+        - "MRAcquisitionType: 3D"
+        - "ImageType: DIS3D"
+    
+    is_2d:
+      description: "2D multi-slice acquisition"
+      physics: "Slice-selective excitation"
+      sources:
+        - "MRAcquisitionType: 2D"
+        - "ImageType: DIS2D"
+    
+    is_multi_echo:
+      description: "Series was split by echo time - indicates multi-echo acquisition"
+      physics: "Multiple echoes acquired at different TE"
+      sources:
+        - "stack_key: multi_echo"
+      note: "From stack splitting logic, not a direct DICOM tag"
+    
+    is_multi_ti:
+      description: "Series was split by inversion time"
+      physics: "Multiple TIs (e.g., MP2RAGE)"
+      sources:
+        - "stack_key: multi_ti"
+    
+    is_multi_fa:
+      description: "Series was split by flip angle"
+      physics: "Variable flip angle acquisition (e.g., VFA T1 mapping)"
+      sources:
+        - "stack_key: multi_flip_angle"
+
+# =============================================================================
+# CATEGORY 5: DERIVED / SYNTHETIC / QUANTITATIVE
+# =============================================================================
+# Flags indicating derived, synthetic, or quantitative map images.
+
+derived_synthetic:
+  count: 14
+  description: "Derived images, synthetic MRI outputs, and quantitative maps"
+  
+  subcategories:
+    core:
+      flags:
+        is_derived:
+          description: "Image is derived (not original acquisition)"
+          sources:
+            - "ImageType value 1: DERIVED"
+        
+        is_synthetic:
+          description: "Synthetic MRI output (SyMRI, MAGiC)"
+          sources:
+            - "ImageType: SYNTHETIC"
+            - "ScanningSequence: SYNTHETIC"
+            - "SequenceVariant: SYNTHETIC"
+            - "ImageType: T1W_SYNTHETIC, T2W_SYNTHETIC, PDW_SYNTHETIC, etc."
+    
+    quantitative_maps:
+      flags:
+        is_qmap:
+          description: "Any quantitative map (T1, T2, R1, R2, PD)"
+          sources:
+            - "ImageType: QMAP, T1MAP, T2MAP, R1, R2"
+            - "ScanningSequence: QMAP"
+        
+        has_t1_map:
+          description: "T1 relaxation time map"
+          sources:
+            - "ImageType: T1MAP, T1 MAP"
+        
+        has_t2_map:
+          description: "T2 relaxation time map"
+          sources:
+            - "ImageType: T2MAP, T2 MAP"
+    
+    diffusion_derived:
+      flags:
+        is_diffusion_derived:
+          description: "Any diffusion-derived map"
+          sources:
+            - "ImageType: ADC, EADC, FA, TRACEW, EXP, CALC_BVALUE"
+        
+        has_adc:
+          description: "Apparent Diffusion Coefficient map"
+          sources:
+            - "ImageType: ADC"
+        
+        has_fa:
+          description: "Fractional Anisotropy map"
+          sources:
+            - "ImageType: FA"
+        
+        has_trace:
+          description: "Trace/isotropic diffusion-weighted image"
+          sources:
+            - "ImageType: TRACEW, ISODWI"
+    
+    perfusion_derived:
+      flags:
+        is_perfusion_derived:
+          description: "Any perfusion-derived map"
+          sources:
+            - "ImageType: CBF, CBV, MTT, TTP, TMAX, OEF, etc."
+        
+        has_cbf:
+          description: "Cerebral Blood Flow map"
+          sources:
+            - "ImageType: CBF, RCBF, RELCBF"
+        
+        has_cbv:
+          description: "Cerebral Blood Volume map"
+          sources:
+            - "ImageType: CBV, RCBV, RELCBV"
+        
+        has_mtt:
+          description: "Mean Transit Time map"
+          sources:
+            - "ImageType: MTT, RELMTT"
+        
+        has_tmax:
+          description: "Time to Maximum map"
+          sources:
+            - "ImageType: TMAX"
+
+# =============================================================================
+# CATEGORY 6: IMAGE TYPE / COMPONENT FLAGS
+# =============================================================================
+# Flags related to image type, components, and reconstruction variants.
+
+image_type_component:
+  count: 15
+  description: "Image type and component information"
+  
+  subcategories:
+    core_image_type:
+      flags:
+        is_original:
+          description: "Original acquisition (not derived)"
+          sources:
+            - "ImageType value 1: ORIGINAL"
+        
+        is_primary:
+          description: "Primary image (main reconstruction)"
+          sources:
+            - "ImageType value 2: PRIMARY"
+        
+        is_secondary:
+          description: "Secondary image (additional reconstruction)"
+          sources:
+            - "ImageType value 2: SECONDARY"
+        
+        is_localizer:
+          description: "Localizer/scout image"
+          sources:
+            - "ImageType: LOCALIZER"
+            - "SequenceName: *scout*, *localizer*"
+            - "ScanOptions: SCOUT MODE"
+    
+    complex_components:
+      description: "Complex image components (magnitude, phase, real, imaginary)"
+      flags:
+        has_magnitude:
+          description: "Magnitude image"
+          sources:
+            - "ImageType: MAGNITUDE, M, M_FFE, M_SE, M_IR"
+        
+        has_phase:
+          description: "Phase image"
+          sources:
+            - "ImageType: PHASE, P, PHASE MAP"
+        
+        has_real:
+          description: "Real component"
+          sources:
+            - "ImageType: REAL, R"
+        
+        has_imaginary:
+          description: "Imaginary component"
+          sources:
+            - "ImageType: IMAGINARY, I"
+    
+    dixon_fat_water:
+      description: "Dixon and fat/water separation outputs"
+      flags:
+        has_dixon:
+          description: "Dixon technique (any variant)"
+          sources:
+            - "ImageType: DIXON"
+            - "ScanOptions: DIXF, DIXW"
+        
+        has_water:
+          description: "Water-only image"
+          sources:
+            - "ImageType: WATER, W"
+        
+        has_fat:
+          description: "Fat-only image"
+          sources:
+            - "ImageType: FAT, F"
+        
+        has_in_phase:
+          description: "In-phase image"
+          sources:
+            - "ImageType: IN_PHASE, IP"
+        
+        has_out_phase:
+          description: "Out-of-phase (opposed-phase) image"
+          sources:
+            - "ImageType: OUT_PHASE, OP, OPP_PHASE"
+    
+    ir_reconstructions:
+      description: "Special IR reconstruction variants"
+      flags:
+        has_psir:
+          description: "Phase-Sensitive IR reconstruction"
+          physics: "Preserves sign of longitudinal magnetization"
+          sources:
+            - "ImageType: PSIR"
+        
+        has_stir:
+          description: "Short TI IR (STIR) - fat-suppressed"
+          note: "Currently only detects synthetic STIR"
+          sources:
+            - "ImageType: T2STIR with SYNTHETIC"
+
+# =============================================================================
+# CATEGORY 7: POST-PROCESSING / RECONSTRUCTION
+# =============================================================================
+# Flags indicating post-processing or reconstruction methods.
+
+post_processing:
+  count: 10
+  description: "Post-processing and reconstruction methods"
+  
+  flags:
+    is_mip:
+      description: "Maximum Intensity Projection"
+      sources:
+        - "ImageType: MIP, MIP_COR, MIP_SAG, MIP_TRA, CSA MIP"
+    
+    is_minip:
+      description: "Minimum Intensity Projection"
+      sources:
+        - "ImageType: MINIP, MNIP, MIN IP"
+    
+    is_projection:
+      description: "Any projection image"
+      sources:
+        - "ImageType: PROJECTION IMAGE"
+    
+    is_mpr:
+      description: "Multiplanar Reconstruction"
+      sources:
+        - "ImageType: MPR, REFORMATTED, MPR THICK"
+    
+    is_subtraction:
+      description: "Subtraction image"
+      sources:
+        - "ImageType: SUB, SUBTRACT, SUBTRACTION"
+    
+    is_mean:
+      description: "Mean/average image"
+      sources:
+        - "ImageType: MEAN"
+    
+    is_composite:
+      description: "Composite/combined image"
+      sources:
+        - "ImageType: MULTIECHOCOMBINED, COMPOSED, COMPOSITE"
+    
+    is_vascular:
+      description: "Vascular processing applied"
+      sources:
+        - "ImageType: VASCULAR"
+    
+    has_moco:
+      description: "Motion correction applied"
+      sources:
+        - "ImageType: MOTIONCORRECTION, MOCO"
+    
+    is_normalized:
+      description: "Intensity normalization applied"
+      sources:
+        - "ImageType: NORM"
+
+# =============================================================================
+# CATEGORY 8: EXCLUSION / QA FLAGS
+# =============================================================================
+# Flags for images that may need special handling or exclusion.
+
+exclusion_qa:
+  count: 5
+  description: "Flags for images requiring special handling"
+  
+  flags:
+    is_error:
+      description: "Error image or error map"
+      sources:
+        - "ImageType: ERROR_MAP, MR ERROR MESSAGE"
+    
+    is_screenshot:
+      description: "Screenshot or pasted image"
+      sources:
+        - "ImageType: SCREENSHOT, PASTED"
+    
+    is_qa:
+      description: "QA/QC image"
+      sources:
+        - "ImageType: CTH, COV, STDDEV_COR, STDDEV_SAG, STDDEV_TRA"
+    
+    is_tune:
+      description: "Tuning or calibration scan"
+      sources:
+        - "SequenceName: tun*, tune*, fi3d1tun"
+    
+    is_wip:
+      description: "Work-in-progress sequence"
+      sources:
+        - "SequenceName: wip*"
+
+# =============================================================================
+# QUICK REFERENCE - TECHNIQUE DETECTION PATTERNS
+# =============================================================================
+# Common flag combinations for technique detection.
+
+technique_patterns:
+  description: "Common flag combinations for technique identification"
+  
+  patterns:
+    SE:
+      required: ["has_se"]
+      excluded: ["has_segmented_kspace", "has_ir", "is_me_se"]
+      notes: "Basic spin echo without echo train"
+    
+    ME-SE:
+      required: ["has_se", "is_me_se"]
+      optional: ["is_multi_echo"]
+      notes: "Multi-echo spin echo"
+    
+    TSE:
+      required: ["has_se", "is_tse"]
+      excluded: ["has_ir"]
+      notes: "Turbo/Fast spin echo"
+    
+    "3D-TSE":
+      required: ["has_se", "is_tse", "is_3d"]
+      optional: ["is_space"]
+      notes: "SPACE/CUBE/VISTA"
+    
+    IR-TSE:
+      required: ["has_se", "has_ir", "is_tse"]
+      excluded: ["is_flair"]
+      notes: "Inversion recovery TSE (TIRM)"
+    
+    FLAIR:
+      required: ["has_se", "has_ir", "is_flair"]
+      notes: "Fluid-attenuated IR"
+    
+    DIR:
+      required: ["has_se", "has_ir", "is_dir"]
+      notes: "Double inversion recovery"
+    
+    MPRAGE:
+      required: ["has_gre", "has_ir", "is_3d"]
+      optional: ["is_mprage", "has_mag_prepared"]
+      notes: "IR-prepared 3D GRE"
+    
+    FLASH:
+      required: ["has_gre", "has_spoiled"]
+      excluded: ["has_ir", "has_steady_state"]
+      optional: ["is_flash"]
+      notes: "Spoiled GRE"
+    
+    bSSFP:
+      required: ["has_gre", "has_steady_state"]
+      excluded: ["has_spoiled"]
+      optional: ["is_ssfp", "is_ciss"]
+      notes: "Balanced SSFP"
+    
+    SWI:
+      required: ["has_gre", "is_swi"]
+      notes: "Susceptibility-weighted imaging"
+    
+    TOF-MRA:
+      required: ["has_gre", "is_tof"]
+      notes: "Time-of-flight angiography"
+    
+    PC-MRA:
+      required: ["has_gre", "is_pc"]
+      notes: "Phase contrast MRA/flow"
+    
+    DWI:
+      required: ["has_epi", "is_dwi"]
+      notes: "Diffusion-weighted EPI"
+    
+    BOLD:
+      required: ["has_epi", "has_gre", "is_bold"]
+      notes: "BOLD fMRI"
+    
+    ASL:
+      required: ["is_asl"]
+      notes: "Arterial spin labeling"

@@ -1,0 +1,89 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.so
+*.egg-info/
+dist/
+build/
+.eggs/
+.pytest_cache/
+.coverage*
+htmlcov/
+.mypy_cache/
+.pytype/
+.dmypy.json
+.cache/
+*.prof
+
+# Environments
+.venv/
+**/.venv/
+venv/
+ENV/
+env/
+.python-version
+
+# uv (Python package manager)
+.uv/
+uv.lock
+
+# Docker
+docker-compose.override.generated.yml
+
+# Jupyter
+.ipynb_checkpoints/
+
+# Environment files
+.env
+.env.*
+!.env.example
+
+# OS
+.DS_Store
+Thumbs.db
+
+# IDE/Editor
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Logs
+*.log
+
+# Misc
+**/__pycache__/
+
+
+sample_data/
+sample_data/** */
+
+# Local database files (keep folder tracked, ignore contents)
+resource/db/*
+resource/db/**/
+resource/db**/
+!resource/db/.gitkeep
+resource/backups/*
+resource/backups/**/
+resource/cache/*
+resource/cache/**/
+resource/cache**
+.factory
+droidz/
+
+# Documentation build (MkDocs)
+site/
+
+# Node modules (frontend)
+node_modules/
+
+# Frontend build artifacts
+frontend/dist/
+
+# Metadata database (runtime data)
+resource/db_metadata/*
+!resource/db_metadata/.gitkeep
+
+# Private files (local-only, never pushed to public repo)
+.private/

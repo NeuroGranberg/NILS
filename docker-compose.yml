@@ -1,0 +1,102 @@
+services:
+  db:
+    image: postgres:16-alpine
+    shm_size: '256m'  # Increased for better query performance
+    environment:
+      POSTGRES_DB: neurotoolkit
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    ports:
+      - "${BIND_ADDRESS:-127.0.0.1}:${DB_PORT:-5432}:5432"
+    volumes:
+      - ${DB_DATA_DIR:-./resource/db}:/var/lib/postgresql/data
+
+  backend:
+    build:
+      context: ./backend
+    entrypoint: ["uv", "run", "neuro-api"]
+    environment:
+      DATABASE_URL: postgresql+psycopg://postgres:postgres@db:5432/neurotoolkit
+      METADATA_DATABASE_URL: postgresql+psycopg://postgres:postgres@metadata-db:5432/neurotoolkit_metadata
+      DATA_ROOT: ${BACKEND_DATA_ROOT:-/app/data}
+    depends_on:
+      - db
+      - metadata-db
+    volumes:
+      - ./backend/src:/app/src
+      - ./backend/pyproject.toml:/app/pyproject.toml
+      - ./backend/tests:/app/tests
+      - ./resource/backups:/app/resource/backups
+      - ./resource/cache:/app/resource/cache
+    ports:
+      - "${BIND_ADDRESS:-127.0.0.1}:8000:8000"
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "-", "http://localhost:8000/api/jobs"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+      start_period: 10s
+
+  metadata-db:
+    image: postgres:16-alpine
+    shm_size: '2g'  # Required for large queries (30M+ instances, 457K stacks)
+    command:
+      - "postgres"
+      - "-c"
+      - "shared_buffers=2GB"
+      - "-c"
+      - "work_mem=256MB"
+      - "-c"
+      - "maintenance_work_mem=512MB"
+      - "-c"
+      - "effective_cache_size=4GB"
+      - "-c"
+      - "max_parallel_workers_per_gather=4"
+      - "-c"
+      - "max_parallel_workers=8"
+    environment:
+      POSTGRES_DB: neurotoolkit_metadata
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    ports:
+      - "${BIND_ADDRESS:-127.0.0.1}:${METADATA_DB_PORT:-5532}:5432"
+    volumes:
+      - ${METADATA_DB_DATA_DIR:-./resource/db_metadata}:/var/lib/postgresql/data
+
+  frontend:
+    build:
+      context: ./frontend
+      target: dev
+    command: npm run dev -- --host 0.0.0.0
+    ports:
+      - "${BIND_ADDRESS:-127.0.0.1}:${FRONTEND_PORT:-5173}:5173"
+    environment:
+      VITE_API_URL: http://localhost:8000
+      VITE_DATA_ROOT: ${FRONTEND_DATA_ROOT:-/data}
+      VITE_USE_REAL_FILES: ${VITE_USE_REAL_FILES:-false}
+      # STABILITY FIX: Use polling mode to avoid inotify issues with Docker bind mounts
+      CHOKIDAR_USEPOLLING: "true"
+      CHOKIDAR_INTERVAL: "1000"
+      NODE_OPTIONS: "--max-old-space-size=1536"
+      APP_ACCESS_TOKEN: ${APP_ACCESS_TOKEN:-}
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules
+    depends_on:
+      backend:
+        condition: service_healthy
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:5173"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+    deploy:
+      resources:
+        limits:
+          memory: 2G
+    ulimits:
+      nofile:
+        soft: 65536
+        hard: 65536

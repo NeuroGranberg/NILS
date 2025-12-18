@@ -1,0 +1,467 @@
+# =============================================================================
+# PROVENANCE DETECTION CONFIGURATION
+# =============================================================================
+#
+# Version: 2.0.0
+# Last Updated: 2025-12-02
+#
+# Purpose: Detect image provenance (processing pipeline) for classification branching.
+# Provenance is detected FIRST, then determines which classification branch to use.
+#
+# DETECTION STRATEGY (three-tier, like TechniqueDetector):
+#   1. exclusive flag → HIGH confidence (0.95) - Single unified_flag
+#   2. keywords match → HIGH confidence (0.85) - Pattern in text_search_blob
+#   3. combination → MEDIUM confidence (0.75) - Multiple unified_flags (AND)
+#
+# BRANCHING:
+#   - SyMRI → symri branch (synthetic MRI, quantitative maps)
+#   - SWIRecon → swi branch (susceptibility-weighted imaging)
+#   - EPIMix → epimix branch (multicontrast EPI)
+#   - Everything else → rawrecon branch (default)
+#
+# UNIFIED FLAGS used (from ClassificationContext.unified_flags v1.3.0):
+#   - is_synthetic, is_derived
+#   - has_t1_synthetic, has_t2_synthetic, has_pd_synthetic, has_flair_synthetic
+#   - is_swi, has_swi
+#   - is_diffusion_derived, has_adc, has_fa, has_trace, has_eadc
+#   - is_perfusion_derived, has_cbf, has_cbv, has_mtt, has_ttp, has_tmax
+#   - is_asl, is_perfusion
+#   - is_bold
+#   - is_mip, is_mpr, is_projection, is_minip
+#   - is_subtraction
+#   - is_localizer
+#   - is_mdme, is_qalas (technique indicators)
+#
+# VALIDATED against 457K fingerprint database.
+# =============================================================================
+
+metadata:
+  version: "2.1.0"
+  detector: "ProvenanceDetector"
+  total_provenances: 11
+  last_updated: "2025-12-10"
+  description: |
+    Provenance detection for classification branching.
+    Uses unified_flags for vendor-agnostic detection.
+    Output is single value (not CSV).
+
+# =============================================================================
+# PROVENANCE DEFINITIONS - Priority order (checked sequentially, first wins)
+# =============================================================================
+
+provenances:
+
+  # ===========================================================================
+  # 1. SYMRI / SYNTHETIC MRI → symri branch
+  # ===========================================================================
+  SyMRI:
+    name: "SyMRI"
+    description: "Synthetic MRI from quantitative acquisition (SyMRI/MAGiC/QALAS)"
+    branch: "symri"
+    
+    detection:
+      # Exclusive: Single flag that definitively identifies
+      exclusive: null  # No single flag - use combination
+      
+      # Keywords in text_search_blob
+      keywords:
+        - "symri"
+        - "magic"
+        - "syntac"
+        - "synthetic mr"
+        - "syntetisk"
+        - "synthetic"
+        - "synt"
+      
+      # Combination: ALL must be true (AND logic)
+      combination:
+        - is_synthetic
+        - is_derived
+    
+    # Alternative detection paths (OR logic between paths)
+    alternative_flags:
+      - has_t1_synthetic
+      - has_t2_synthetic
+      - has_pd_synthetic
+      - has_flair_synthetic
+      - is_mdme
+      - is_qalas
+      - has_multi_qmap  # GE MAGiC bundled T1/T2/PD quantitative maps
+    
+    confidence:
+      exclusive: 0.95
+      keywords: 0.90
+      combination: 0.85
+      alternative: 0.90
+    
+    notes: |
+      SyMRI generates synthetic contrasts from quantitative T1/T2/PD maps.
+      Includes MAGiC (GE), SyMRI (Siemens/Philips), QALAS.
+      Branch: symri (special handling for synthetic outputs)
+
+  # ===========================================================================
+  # 2. SWI RECONSTRUCTION → swi branch
+  # ===========================================================================
+  SWIRecon:
+    name: "SWIRecon"
+    description: "Susceptibility-Weighted Imaging reconstruction"
+    branch: "swi"
+    
+    detection:
+      exclusive: is_swi
+      keywords:
+        - "swi"
+        - "swan"
+        - "fsbb"
+        - "susceptibility"
+      combination:
+        - has_swi
+        - is_derived
+    
+    confidence:
+      exclusive: 0.95
+      keywords: 0.85
+      combination: 0.80
+    
+    notes: |
+      SWI uses phase information to enhance susceptibility contrast.
+      Includes magnitude, phase, processed SWI, and mIP outputs.
+      Branch: swi (special handling for SWI taxonomy)
+
+  # ===========================================================================
+  # 3. EPIMIX/NEUROMIX - Multicontrast EPI → epimix branch
+  # ===========================================================================
+  EPIMix:
+    name: "EPIMix"
+    description: "Multicontrast EPI/NeuroMix sequence (T1/T2-FLAIR, T2w, DWI, ADC, T2*w, SWI)"
+    branch: "epimix"
+
+    detection:
+      # NO exclusive flag - keyword detection only
+      # RM (Research Mode) in scanning_sequence is NOT unique to EPIMix
+      exclusive: null
+
+      keywords:
+        # EPIMix keywords
+        - "epimix"
+        - "ksepimix"
+        - "axepimix"
+        # NeuroMix keywords (evolution of EPIMix with SSFSE/FSE readouts)
+        - "neuromix"
+        - "mix2"
+        - "mix3"
+
+      combination: null
+
+    confidence:
+      keywords: 0.90
+
+    notes: |
+      EPIMix produces 6 contrasts from a single ~1min acquisition:
+      T1-FLAIR, T2-FLAIR, T2-w, isoDWI, ADC, T2*-w.
+      NeuroMix is an evolution with SSFSE/FSE readouts for reduced distortion.
+      Detection relies entirely on text keywords.
+      Branch: epimix (special handling for output type detection)
+
+  # ===========================================================================
+  # 4. DTI / DIFFUSION TENSOR RECONSTRUCTION → rawrecon branch
+  # ===========================================================================
+  DTIRecon:
+    name: "DTIRecon"
+    description: "Diffusion tensor/model reconstruction (ADC, FA, trace maps)"
+    branch: "rawrecon"
+    
+    detection:
+      exclusive: is_diffusion_derived
+      keywords:
+        - "adc map"
+        - "apparent diffusion"
+        - "fractional anisotropy"
+        - "dti"
+        - "tensor"
+      combination: null
+    
+    # Any of these flags triggers detection
+    alternative_flags:
+      - has_adc
+      - has_eadc
+      - has_fa
+      - has_trace
+    
+    confidence:
+      exclusive: 0.95
+      keywords: 0.85
+      alternative: 0.90
+    
+    notes: |
+      DTI-derived maps from diffusion-weighted acquisitions.
+      ADC, eADC, FA, MD, Trace, color FA, etc.
+
+  # ===========================================================================
+  # 5. PERFUSION RECONSTRUCTION (DSC/DCE) → rawrecon branch
+  # ===========================================================================
+  PerfusionRecon:
+    name: "PerfusionRecon"
+    description: "Perfusion parameter maps (DSC, DCE)"
+    branch: "rawrecon"
+    
+    detection:
+      exclusive: is_perfusion_derived
+      keywords:
+        - "cerebral blood flow"
+        - "cerebral blood volume"
+        - "mean transit time"
+        - "time to peak"
+        - "perfusion map"
+      combination: null
+    
+    alternative_flags:
+      - has_cbf
+      - has_cbv
+      - has_mtt
+      - has_ttp
+      - has_tmax
+    
+    confidence:
+      exclusive: 0.95
+      keywords: 0.85
+      alternative: 0.90
+    
+    notes: |
+      Perfusion parameter maps from DSC-MRI or DCE-MRI.
+      CBF, CBV, MTT, TTP, Tmax, etc.
+
+  # ===========================================================================
+  # 6. ASL (Arterial Spin Labeling) → rawrecon branch
+  # ===========================================================================
+  ASLRecon:
+    name: "ASLRecon"
+    description: "Arterial Spin Labeling perfusion"
+    branch: "rawrecon"
+    
+    detection:
+      exclusive: is_asl
+      keywords:
+        - "asl"
+        - "pcasl"
+        - "pasl"
+        - "arterial spin"
+      combination: null
+    
+    confidence:
+      exclusive: 0.95
+      keywords: 0.85
+    
+    notes: |
+      ASL perfusion imaging (non-contrast).
+      pCASL, PASL, pseudo-continuous ASL.
+
+  # ===========================================================================
+  # 7. BOLD / FMRI → rawrecon branch
+  # ===========================================================================
+  BOLDRecon:
+    name: "BOLDRecon"
+    description: "BOLD fMRI timeseries"
+    branch: "rawrecon"
+    
+    detection:
+      exclusive: is_bold
+      keywords:
+        - "bold"
+        - "fmri"
+        - "resting state"
+        - "task fmri"
+        - "functional mri"
+      combination: null
+    
+    confidence:
+      exclusive: 0.90
+      keywords: 0.80
+    
+    notes: |
+      BOLD fMRI timeseries data.
+      Resting-state, task-based, or connectivity studies.
+
+  # ===========================================================================
+  # 8. MIP/MPR DERIVED (Reformatted projections) → rawrecon branch
+  # ===========================================================================
+  ProjectionDerived:
+    name: "ProjectionDerived"
+    description: "MIP/MPR/Reformatted projections"
+    branch: "rawrecon"
+    
+    detection:
+      exclusive: null
+      keywords:
+        - "maximum intensity"
+        - "minimum intensity"
+        - "multiplanar reformat"
+      combination: null
+    
+    alternative_flags:
+      - is_mip
+      - is_minip
+      - is_mpr
+      - is_projection
+    
+    confidence:
+      keywords: 0.85
+      alternative: 0.85
+    
+    notes: |
+      Post-processing reformats: MIP, MinIP, MPR.
+      Common for MRA visualization.
+
+  # ===========================================================================
+  # 9. SUBTRACTION → rawrecon branch
+  # ===========================================================================
+  SubtractionDerived:
+    name: "SubtractionDerived"
+    description: "Pre-post contrast subtraction or difference images"
+    branch: "rawrecon"
+    
+    detection:
+      exclusive: is_subtraction
+      keywords:
+        - "subtraction"
+        - "subtracted"
+        - "difference"
+        - "pre post"
+      combination: null
+    
+    confidence:
+      exclusive: 0.90
+      keywords: 0.80
+    
+    notes: |
+      Subtraction images (pre-post contrast, temporal difference).
+
+  # ===========================================================================
+  # 10. LOCALIZER / SCOUT → rawrecon branch
+  # ===========================================================================
+  Localizer:
+    name: "Localizer"
+    description: "Localizer/scout images for planning"
+    branch: "rawrecon"
+    
+    detection:
+      exclusive: is_localizer
+      keywords:
+        - "localizer"
+        - "scout"
+        - "survey"
+        - "3 plan"
+        - "autoalign"
+        - "calibration"
+        - "locator"
+        # Swedish
+        - "versikt"
+        - "kalibrering"
+      combination: null
+    
+    confidence:
+      exclusive: 0.90
+      keywords: 0.85
+    
+    notes: |
+      Scout/localizer images for scan planning.
+      Typically low resolution, multiple orientations.
+
+  # ===========================================================================
+  # 11. RAW RECONSTRUCTION (Default) → rawrecon branch
+  # ===========================================================================
+  RawRecon:
+    name: "RawRecon"
+    description: "Standard scanner reconstruction (default)"
+    branch: "rawrecon"
+    is_default: true
+    
+    detection:
+      exclusive: null
+      keywords: null
+      combination: null
+    
+    confidence:
+      default: 0.80
+    
+    notes: |
+      Default provenance when no specific match found.
+      Standard scanner-reconstructed images.
+
+# =============================================================================
+# DETECTION RULES
+# =============================================================================
+
+rules:
+  # Priority order for detection (first match wins)
+  # NOTE: EPIMix before SWIRecon because NeuroMix can produce SWI outputs
+  # NOTE: Localizer before ProjectionDerived because scout MPR reformats should
+  #       be classified as localizers (keyword "localizer" in text_search_blob)
+  priority_order:
+    - SyMRI
+    - EPIMix
+    - SWIRecon
+    - DTIRecon
+    - PerfusionRecon
+    - ASLRecon
+    - BOLDRecon
+    - Localizer
+    - ProjectionDerived
+    - SubtractionDerived
+    - RawRecon
+  
+  # Default if no match
+  default_provenance: RawRecon
+  
+  # Confidence thresholds
+  confidence_thresholds:
+    exclusive: 0.95
+    keywords: 0.85
+    combination: 0.75
+    alternative: 0.85
+    default: 0.80
+
+# =============================================================================
+# BRANCH MAPPING
+# =============================================================================
+
+branches:
+  symri:
+    provenances:
+      - SyMRI
+    description: "Synthetic MRI classification branch"
+
+  swi:
+    provenances:
+      - SWIRecon
+    description: "SWI classification branch"
+
+  epimix:
+    provenances:
+      - EPIMix
+    description: "Multicontrast EPI classification branch"
+
+  rawrecon:
+    provenances:
+      - DTIRecon
+      - PerfusionRecon
+      - ASLRecon
+      - BOLDRecon
+      - ProjectionDerived
+      - SubtractionDerived
+      - Localizer
+      - RawRecon
+    description: "Standard classification branch (default)"
+
+# =============================================================================
+# OUTPUT SPECIFICATION
+# =============================================================================
+# 
+# Output: provenance (single value)
+# 
+# Examples:
+#   - "SyMRI" (synthetic T1w from MAGiC)
+#   - "SWIRecon" (processed SWI)
+#   - "DTIRecon" (ADC map)
+#   - "RawRecon" (standard T1 MPRAGE)
+# =============================================================================

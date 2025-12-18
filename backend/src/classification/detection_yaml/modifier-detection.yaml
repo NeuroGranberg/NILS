@@ -1,0 +1,391 @@
+# =============================================================================
+# Modifier Detection Configuration
+# =============================================================================
+# Version: 3.0.0
+# Date: 2025-12-02
+#
+# Purpose: Define modifiers that can be applied to base techniques.
+# Modifiers describe HOW a technique is modified (fat suppression, flow comp, etc.)
+#
+# KEY CONCEPTS:
+# 1. Modifiers are additive (multiple can apply: FLAIR + FatSat)
+# 2. Some modifiers are mutually exclusive within groups (FLAIR vs STIR vs DIR)
+# 3. Output is modifier_csv: comma-separated, alphabetically sorted
+#
+# MUTUAL EXCLUSION GROUPS:
+#   - IR_CONTRAST: FLAIR, STIR, DIR, PSIR (all are IR-based, different TI)
+#   - TRAJECTORY: Radial, Spiral (k-space trajectory)
+#
+# DETECTION: Three-tier like TechniqueDetector
+#   1. exclusive flag → HIGH confidence
+#   2. keywords match → HIGH confidence  
+#   3. combination → MEDIUM confidence
+#
+# UNIFIED FLAGS used (from ClassificationContext.unified_flags):
+#   - is_flair, has_stir, is_dir, has_psir (IR contrast modifiers)
+#   - has_fat_sat, has_water_excitation (fat suppression)
+#   - has_dixon, has_water, has_fat, has_in_phase, has_out_phase (Dixon)
+#   - has_mtc (magnetization transfer)
+#   - has_flow_comp (flow compensation)
+#   - is_radial, is_spiral (trajectory modifiers)
+#   - has_ir (generic IR - only if no specific IR modifier)
+# =============================================================================
+
+meta:
+  version: "3.0.0"
+  description: "Modifier detection for MRI acquisition classification"
+  field: "modifier_csv"
+  search_field: "text_search_blob"
+  output_type: "csv"  # Multiple modifiers can apply
+
+# =============================================================================
+# MUTUAL EXCLUSION GROUPS
+# =============================================================================
+# Within each group, only ONE modifier can be selected (highest priority wins)
+
+exclusion_groups:
+  IR_CONTRAST:
+    description: "IR-based contrast modifiers (mutually exclusive)"
+    members: ["FLAIR", "STIR", "DIR", "PSIR"]
+    fallback: "IR"  # If has_ir but no specific IR modifier
+  
+  TRAJECTORY:
+    description: "K-space trajectory modifiers"
+    members: ["Radial", "Spiral"]
+
+# =============================================================================
+# MODIFIER DEFINITIONS
+# =============================================================================
+
+modifiers:
+  # ===========================================================================
+  # IR CONTRAST MODIFIERS (mutually exclusive within group)
+  # ===========================================================================
+  # Priority: FLAIR > STIR > DIR > PSIR > IR (generic)
+  # These define the TI-based tissue nulling strategy
+  
+  FLAIR:
+    name: "FLAIR"
+    group: "IR_CONTRAST"
+    priority: 1
+    description: "Fluid-attenuated IR; TI tuned to null CSF (~2000-2500ms at 3T)."
+    keywords:
+      - "flair"
+      - "t2 flair"
+      - "t1 flair"
+      - "dark fluid"
+      - "da fl"
+      - "da-fl"
+      - "da - fl"  # Siemens "da-fl" after hyphen normalization (spaces around hyphen)
+    detection:
+      exclusive: is_flair
+    notes: |
+      FLAIR suppresses CSF for better lesion visualization.
+      T2-FLAIR is most common (T2 base + FLAIR modifier).
+      T1-FLAIR is less common but exists.
+
+  STIR:
+    name: "STIR"
+    group: "IR_CONTRAST"
+    priority: 2
+    description: "Short-TI IR; TI tuned to null fat (~150-200ms at 3T)."
+    keywords:
+      - "stir"
+      - "short tau"
+      - "short ti"
+      - "tirm"
+    detection:
+      exclusive: has_stir
+      # NOTE: Removed combination with has_ir - too generic, matches MPRAGE
+      # STIR is detected by keywords or has_stir flag only
+    notes: |
+      STIR provides robust fat suppression regardless of B0 homogeneity.
+      Note: Suppresses all short-T1 tissues including post-Gd enhancement.
+      TIRM is Siemens STIR variant with TSE readout.
+
+  DIR:
+    name: "DIR"
+    group: "IR_CONTRAST"
+    priority: 3
+    description: "Double IR; two TIs to null two tissues (e.g., CSF + WM)."
+    keywords:
+      - "dir"
+      - "double ir"
+      - "dual ir"
+      - "double inversion"
+    detection:
+      exclusive: is_dir
+    notes: |
+      DIR uses two inversion pulses to null two tissue types.
+      Common: CSF + WM nulling for gray matter imaging.
+      Used in MS imaging for cortical lesion detection.
+
+  PSIR:
+    name: "PSIR"
+    group: "IR_CONTRAST"
+    priority: 4
+    description: "Phase-sensitive IR; preserves magnetization sign for better contrast."
+    keywords:
+      - "psir"
+      - "phase sensitive"
+      - "phase-sensitive ir"
+    detection:
+      exclusive: has_psir
+    notes: |
+      PSIR keeps the phase information from IR.
+      Improves gray/white contrast and dynamic range.
+      Often used with MPRAGE for better tissue delineation.
+
+  IR:
+    name: "IR"
+    group: "IR_CONTRAST"
+    priority: 99  # Fallback - only if no specific IR modifier
+    description: "Generic inversion recovery; IR prep without specific tissue nulling."
+    keywords:
+      - "inversion recovery"
+    detection:
+      # Use has_ir_se: SE-based IR only (not MPRAGE/MP2RAGE which are GRE+IR)
+      # IR is a modifier for SE sequences, but part of the technique for GRE
+      exclusive: has_ir_se
+    notes: |
+      Generic IR fallback when no specific variant detected.
+      Should rarely match - FLAIR/STIR/DIR/PSIR are more specific.
+      Uses has_ir_se flag which excludes GRE-based IR (MPRAGE, MP2RAGE).
+
+  # ===========================================================================
+  # FAT SUPPRESSION MODIFIERS (can combine with others)
+  # ===========================================================================
+
+  FatSat:
+    name: "FatSat"
+    group: null  # Can combine with any
+    description: "Frequency-selective fat saturation."
+    keywords:
+      - "fatsat"
+      - "fat sat"
+      - "chemsat"
+      - "chem sat"
+      - "spair"
+      # Note: Removed "fs" (too short, matches many things)
+      # Note: Removed "spir" (matches "spiral")
+      # Note: Removed "special" (too generic)
+    detection:
+      exclusive: has_fat_sat
+    notes: |
+      Spectral saturation pulse at fat frequency before excitation.
+      Vendor names: FatSat (generic), SPIR/SPAIR (Philips), ChemSat.
+      Requires good B0 homogeneity to work well.
+
+  WaterExcitation:
+    name: "WaterExc"
+    group: null  # Can combine with any
+    description: "Water-only excitation (implicit fat suppression)."
+    keywords:
+      - "water excitation"
+      - "water exc"
+      - "proset"
+      - "wex"
+    detection:
+      exclusive: has_water_excitation
+    notes: |
+      Binomial or spectral-spatial pulse that excites only water.
+      Alternative to fat saturation, faster but less robust.
+
+  # ===========================================================================
+  # DIXON / FAT-WATER SEPARATION (can combine with others)
+  # ===========================================================================
+
+  Dixon:
+    name: "Dixon"
+    group: null  # Can combine with any
+    description: "Multi-echo fat-water separation technique."
+    keywords:
+      - "dixon"
+      - "ideal"
+      - "mdixon"
+      - "lava-flex"
+      - "vibe-dixon"
+      - "wfop"
+    detection:
+      exclusive: has_dixon
+      combination:
+        - has_in_phase
+        - has_out_phase
+    notes: |
+      Dixon acquires in-phase and out-of-phase echoes.
+      Produces water-only, fat-only, in-phase, out-of-phase images.
+      IDEAL (GE), mDixon (Philips), Dixon (Siemens).
+
+  # ===========================================================================
+  # MAGNETIZATION TRANSFER (can combine with others)
+  # ===========================================================================
+
+  MT:
+    name: "MT"
+    group: null  # Can combine with any
+    description: "Magnetization Transfer Contrast."
+    keywords:
+      - "magnetization transfer"
+      - "mtc"
+      # Note: Removed "mt" (too short, causes false positives like "4mmtir" → "mt")
+    detection:
+      exclusive: has_mtc
+    notes: |
+      Off-resonance RF pulse saturates bound protons.
+      Transfers saturation to free water, reducing signal.
+      Sensitive to macromolecular content (myelin, collagen).
+
+  # ===========================================================================
+  # FLOW / MOTION MODIFIERS (can combine with others)
+  # ===========================================================================
+
+  FlowComp:
+    name: "FlowComp"
+    group: null  # Can combine with any
+    description: "Flow compensation (gradient moment nulling)."
+    keywords:
+      - "flow comp"
+      - "flowcomp"
+      - "gmn"
+      - "fc"
+    detection:
+      exclusive: has_flow_comp
+    notes: |
+      Gradient waveforms designed to null velocity-induced phase.
+      Reduces flow artifacts in vessels.
+      First-order (velocity) or higher-order compensation.
+
+  # ===========================================================================
+  # TRAJECTORY MODIFIERS (mutually exclusive within group)
+  # ===========================================================================
+
+  Radial:
+    name: "Radial"
+    group: "TRAJECTORY"
+    priority: 1
+    description: "Radial k-space trajectory (PROPELLER/BLADE)."
+    keywords:
+      - "propeller"
+      - "blade"
+      - "multivane"
+      - "radial"
+      - "periodically rotated"
+    detection:
+      exclusive: is_radial
+    notes: |
+      Radial spokes through k-space center.
+      Motion-robust due to oversampled center.
+      GE: PROPELLER, Siemens: BLADE, Philips: MultiVane.
+
+  Spiral:
+    name: "Spiral"
+    group: "TRAJECTORY"
+    priority: 2
+    description: "Spiral k-space trajectory."
+    keywords:
+      - "spiral"
+    detection:
+      exclusive: is_spiral
+    notes: |
+      Spiral readout from k-space center.
+      Efficient but sensitive to off-resonance artifacts.
+
+  # ===========================================================================
+  # BLOOD SIGNAL MODIFIERS (can combine with others)
+  # ===========================================================================
+
+  BlackBlood:
+    name: "BlackBlood"
+    group: null
+    description: "Blood signal suppression."
+    keywords:
+      - "black blood"
+      - "blackblood"
+      - "dark blood"
+      - "blood null"
+    detection: null  # Keywords only
+    notes: |
+      Double IR or motion-sensitizing prep to null blood.
+      Used for vessel wall imaging, cardiac imaging.
+
+  BrightBlood:
+    name: "BrightBlood"
+    group: null
+    description: "Bright blood enhancement (TOF-like)."
+    keywords:
+      - "bright blood"
+      - "brightblood"
+    detection: null  # Keywords only
+    notes: |
+      Inflow enhancement makes arterial blood bright.
+      Typically used in cardiac or angio imaging.
+
+  # ===========================================================================
+  # MOTION CORRECTION MODIFIERS (can combine with others)
+  # ===========================================================================
+
+  MoCo:
+    name: "MoCo"
+    group: null  # Can combine with any
+    description: "Motion correction applied (retrospective or prospective)."
+    keywords:
+      - "moco"
+      - "mocoseries"
+      - "motion correct"
+      - "motioncorrect"
+    detection:
+      exclusive: has_moco
+    notes: |
+      Motion correction applied to the image data.
+      Can be retrospective (post-processing) or prospective (PACE).
+      Common in fMRI and diffusion imaging.
+      Often indicated in ImageType as "MOCO" or "MOTIONCORRECTION".
+
+# =============================================================================
+# DETECTION RULES
+# =============================================================================
+
+rules:
+  # Priority order for detection (within each group)
+  # More specific modifiers checked before generic ones
+  
+  priority_order:
+    # IR_CONTRAST group (mutually exclusive)
+    - "FLAIR"
+    - "STIR"
+    - "DIR"
+    - "PSIR"
+    - "IR"
+    # TRAJECTORY group (mutually exclusive)
+    - "Radial"
+    - "Spiral"
+    # Independent modifiers (can all apply)
+    - "FatSat"
+    - "WaterExcitation"
+    - "Dixon"
+    - "MT"
+    - "FlowComp"
+    - "BlackBlood"
+    - "BrightBlood"
+    - "MoCo"
+  
+  # Confidence thresholds
+  confidence_thresholds:
+    exclusive: 0.95     # Single definitive flag
+    keywords: 0.85      # Keyword match in text
+    combination: 0.75   # Multiple flags together
+
+# =============================================================================
+# OUTPUT SPECIFICATION
+# =============================================================================
+# 
+# Output: modifier_csv (comma-separated, alphabetically sorted)
+# 
+# Examples:
+#   - "FLAIR" (T2-FLAIR has FLAIR modifier)
+#   - "FLAIR,FatSat" (T2-FLAIR with additional fat saturation)
+#   - "Dixon,Radial" (Dixon with PROPELLER trajectory)
+#   - "STIR" (STIR sequence)
+#   - "FatSat,FlowComp,MT" (multiple independent modifiers)
+#
+# =============================================================================

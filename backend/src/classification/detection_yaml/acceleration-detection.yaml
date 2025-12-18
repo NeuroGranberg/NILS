@@ -1,0 +1,364 @@
+# =============================================================================
+# ACCELERATION DETECTION CONFIGURATION
+# =============================================================================
+#
+# Version: 1.0.0
+# Last Updated: 2025-12-02
+#
+# This file defines acceleration methods detection logic.
+# Accelerations answer: "How did we SPEED UP or economize k-space acquisition?"
+#
+# These are ADDITIVE: a sequence can use multiple acceleration methods
+# simultaneously (e.g., GRAPPA + Partial Fourier + SMS).
+#
+# Database Coverage Analysis:
+#   - Partial Fourier Phase (PFP): 98,118 stacks
+#   - Partial Fourier Freq (PFF): 35,041 stacks
+#   - Parallel Imaging (ACC_GEMS, GRAPPA): 80,746 stacks
+#   - Multiband/SMS: 37,982 stacks (in text_search_blob)
+#   - HyperSense: 12,969 stacks
+#   - SENSE/ASSET: 12,879 stacks (mr_parallel_acquisition_technique)
+#   - Compressed Sensing: ~200 stacks
+#   - View Sharing (TWIST/TRICKS): ~20 stacks
+#
+# UNIFIED FLAGS used:
+#   - has_parallel_imaging (ACC_GEMS, HYPERSENSE_GEMS, CS_GEMS)
+#   - has_partial_fourier (PFP or PFF)
+#   - has_oversampling
+#
+# PARSED SCAN_OPTIONS used:
+#   - has_parallel_gems (ACC_GEMS)
+#   - has_hypersense (HYPERSENSE_GEMS)
+#   - has_cs_gems (CS_GEMS)
+#   - has_partial_fourier_phase (PFP)
+#   - has_partial_fourier_freq (PFF)
+#
+# =============================================================================
+
+metadata:
+  version: "1.0.0"
+  detector: "AccelerationDetector"
+  total_accelerations: 5
+  last_updated: "2025-12-02"
+  description: |
+    Acceleration methods are k-space economization strategies that reduce
+    acquisition time. Multiple accelerations can be applied simultaneously.
+    Output is a list of detected acceleration methods.
+
+# =============================================================================
+# ACCELERATION TYPES
+# =============================================================================
+
+accelerations:
+  
+  # ===========================================================================
+  # 1. PARALLEL IMAGING
+  # ===========================================================================
+  ParallelImaging:
+    name: "ParallelImaging"
+    abbreviation: "PI"
+    description: "Coil-sensitivity-based acceleration using multiple receiver coils"
+    aliases:
+      siemens: ["GRAPPA", "mSENSE", "iPAT"]
+      ge: ["ARC", "ASSET"]
+      philips: ["SENSE", "SPEEDER"]
+      canon: ["SPEEDER"]
+    physics: |
+      Uses spatial sensitivity profiles of multiple receiver coils to reduce
+      the number of phase-encoding steps required. The missing k-space data
+      is reconstructed using coil sensitivity information.
+    
+    detection:
+      # Primary: unified_flags
+      unified_flags:
+        - has_parallel_imaging
+      
+      # Secondary: parsed_scan_options for vendor-specific
+      scan_options_flags:
+        - has_parallel_gems      # GE ACC_GEMS
+        - has_hypersense         # GE HyperSense (combines PI + CS-like)
+      
+      # Tertiary: mr_parallel_acquisition_technique DICOM tag
+      dicom_tag:
+        tag: "(0018,9078)"
+        name: "MR Parallel Acquisition Technique"
+        values:
+          - "SENSE"
+          - "GRAPPA"
+          - "SPEEDER"
+          - "CSENSE"
+      
+      # Keywords in text_search_blob
+      keywords:
+        - "grappa"
+        - "sense"
+        - "asset"
+        - " arc "        # space-bounded to avoid matching "search", etc.
+        - "_arc_"
+        - "arc["         # ARC[2x1] format
+        - "ipat"
+        - "speedup"
+        - "msense"
+        - "accelerat"    # matches acceleration, accelerated
+      
+      # Keywords to EXCLUDE (false positives)
+      exclude_keywords:
+        - "hypersense"   # Separate category
+    
+    confidence:
+      exclusive_flag: 0.95
+      scan_options: 0.90
+      dicom_tag: 0.90
+      keywords: 0.80
+    
+    notes: |
+      - Parallel imaging is vendor-agnostic despite different names
+      - Typical acceleration factors: R=2-4
+      - Requires multi-channel coil arrays
+      - Can be combined with other accelerations
+
+  # ===========================================================================
+  # 2. SIMULTANEOUS MULTI-SLICE (SMS / Multiband)
+  # ===========================================================================
+  SimultaneousMultiSlice:
+    name: "SimultaneousMultiSlice"
+    abbreviation: "SMS"
+    aliases: ["Multiband", "MB", "SMS-EPI", "HyperBand"]
+    description: "Exciting multiple slices simultaneously with multiband RF pulses"
+    physics: |
+      Uses composite RF pulses to excite multiple slices at once, with
+      subsequent separation using coil sensitivity encoding (similar to PI).
+      Reduces acquisition time by factor equal to multiband factor.
+    
+    detection:
+      # Keywords in text_search_blob or series description
+      keywords:
+        - "multiband"
+        - "multib"
+        - "_mb"
+        - " mb"
+        - "mb["          # MB[3] format
+        - "mb="
+        - " sms"
+        - "_sms"
+        - "hyperband"
+        - "simultaneous"  # Combined with "slice" or "multi"
+      
+      # Sequence name patterns
+      sequence_name_patterns:
+        - "ep_b.*mb"     # EPI multiband
+        - "cmrr"         # CMRR MB sequences
+        - "hyperband"
+      
+      # Keywords to EXCLUDE (false positives)
+      exclude_keywords:
+        - "combat"       # "combat" contains "mb"
+        - "ambig"        # "ambiguous" contains "mb"
+        - "membrane"
+        - "chamber"
+        - "number"
+    
+    confidence:
+      sequence_pattern: 0.90
+      keywords: 0.80
+    
+    notes: |
+      - Primarily used with EPI sequences (DWI, fMRI)
+      - Typical multiband factors: 2-8
+      - Requires post-processing to separate slices
+      - Trade-off with SNR and slice cross-talk
+
+  # ===========================================================================
+  # 3. PARTIAL FOURIER
+  # ===========================================================================
+  PartialFourier:
+    name: "PartialFourier"
+    abbreviation: "PF"
+    aliases: ["Half-Fourier", "PFP", "PFF", "5/8", "6/8", "7/8"]
+    description: "Acquiring only a fraction of k-space and inferring the rest"
+    physics: |
+      Exploits Hermitian symmetry of k-space (for real-valued images) to
+      reduce acquisition by sampling only slightly more than half of k-space.
+      Missing data is estimated using homodyne/POCS reconstruction.
+    
+    detection:
+      # Primary: unified_flags
+      unified_flags:
+        - has_partial_fourier
+      
+      # Secondary: specific scan_options flags
+      scan_options_flags:
+        - has_partial_fourier_phase  # PFP
+        - has_partial_fourier_freq   # PFF
+      
+      # Keywords
+      keywords:
+        - "partial fourier"
+        - "partial_fourier"
+        - "half fourier"
+        - "half-fourier"
+        - " pf "         # Standalone PF
+        - "5/8"
+        - "6/8"
+        - "7/8"
+        - "0.5 pf"
+        - "0.6 pf"
+    
+    confidence:
+      exclusive_flag: 0.95
+      scan_options: 0.90
+      keywords: 0.75
+    
+    subtypes:
+      phase:
+        description: "Partial Fourier in phase-encoding direction"
+        flag: has_partial_fourier_phase
+        scan_option: "PFP"
+      frequency:
+        description: "Partial Fourier in frequency-encoding direction"
+        flag: has_partial_fourier_freq
+        scan_option: "PFF"
+    
+    notes: |
+      - PFP (phase) more common than PFF (frequency)
+      - Reduces scan time by ~20-40%
+      - Some SNR penalty due to reconstruction
+      - Essential for HASTE/SS-FSE
+
+  # ===========================================================================
+  # 4. COMPRESSED SENSING
+  # ===========================================================================
+  CompressedSensing:
+    name: "CompressedSensing"
+    abbreviation: "CS"
+    aliases: ["CS-SENSE", "Sparse MRI", "Wave-CAIPI"]
+    description: "Random/structured undersampling with sparsity-based reconstruction"
+    physics: |
+      Exploits sparsity of MR images in transform domains (wavelets, etc.)
+      to reconstruct from highly undersampled, incoherently sampled k-space.
+      Uses iterative nonlinear reconstruction algorithms.
+    
+    detection:
+      # Scan options
+      scan_options_flags:
+        - has_cs_gems           # GE CS_GEMS
+      
+      # Keywords
+      keywords:
+        - "compressed sensing"
+        - "compressed_sensing"
+        - "compressedsense"
+        - " cs "                # Standalone CS (careful with false positives)
+        - "_cs_"
+        - "cs["
+        - "sparse"
+        - "wave-caipi"
+        - "wave caipi"
+        - "caipi"
+      
+      # Sequence name patterns
+      sequence_name_patterns:
+        - ".*cs.*"              # Contains CS
+        - ".*sparse.*"
+    
+    confidence:
+      scan_options: 0.90
+      keywords: 0.75
+      sequence_pattern: 0.70
+    
+    notes: |
+      - Relatively new technology (clinically ~2015+)
+      - Higher acceleration factors possible (R=4-10+)
+      - Computationally intensive reconstruction
+      - Often combined with parallel imaging
+
+  # ===========================================================================
+  # 5. VIEW SHARING / KEYHOLE
+  # ===========================================================================
+  ViewSharing:
+    name: "ViewSharing"
+    abbreviation: "VS"
+    aliases: ["Keyhole", "TWIST", "TRICKS", "4D-TRAK", "DISCO"]
+    description: "Reusing low-frequency k-space data across temporal frames"
+    physics: |
+      Updates only central (low-frequency) k-space frequently while reusing
+      peripheral (high-frequency) data from adjacent time frames. Enables
+      high temporal resolution for dynamic imaging.
+    
+    detection:
+      # Keywords
+      keywords:
+        - "twist"
+        - "tricks"
+        - "keyhole"
+        - "view sharing"
+        - "viewsharing"
+        - "disco"
+        - "4d-trak"
+        - "4dtrak"
+        - "time-resolved"
+        - "differential subsampling"
+      
+      # Sequence name patterns
+      sequence_name_patterns:
+        - ".*twist.*"
+        - ".*tricks.*"
+        - ".*fldyn.*"           # Dynamic with view sharing
+    
+    confidence:
+      keywords: 0.85
+      sequence_pattern: 0.80
+    
+    notes: |
+      - Primarily for dynamic/DCE imaging
+      - Trades spatial for temporal resolution
+      - Important for MR angiography (time-resolved MRA)
+      - Often combined with parallel imaging
+
+# =============================================================================
+# DETECTION PRIORITY
+# =============================================================================
+# When multiple evidence sources exist, use this priority:
+#
+# 1. unified_flags (pre-computed from multiple sources) - highest confidence
+# 2. scan_options_flags (vendor-specific DICOM tags) - high confidence
+# 3. dicom_tag (MR Parallel Acquisition Technique) - high confidence
+# 4. keywords (text matching) - medium-high confidence
+# 5. sequence_name_patterns (regex) - medium confidence
+
+detection_priority:
+  - unified_flags
+  - scan_options_flags
+  - dicom_tag
+  - keywords
+  - sequence_name_patterns
+
+# =============================================================================
+# CONFIDENCE THRESHOLDS
+# =============================================================================
+
+confidence_thresholds:
+  unified_flag: 0.95
+  scan_options: 0.90
+  dicom_tag: 0.90
+  keywords: 0.80
+  sequence_pattern: 0.75
+  fallback: 0.50
+
+# =============================================================================
+# OUTPUT FORMAT
+# =============================================================================
+# AccelerationDetector returns a LIST of accelerations (can be empty or multiple)
+# 
+# Example outputs:
+#   - [] (no acceleration detected)
+#   - ["ParallelImaging"]
+#   - ["ParallelImaging", "PartialFourier"]
+#   - ["SimultaneousMultiSlice", "ParallelImaging", "PartialFourier"]
+#
+# Each acceleration includes:
+#   - name: The acceleration type
+#   - confidence: Detection confidence (0.0-1.0)
+#   - detection_method: How it was detected
+#   - evidence: Supporting evidence
+# =============================================================================

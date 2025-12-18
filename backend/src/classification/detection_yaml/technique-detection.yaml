@@ -1,0 +1,865 @@
+# =============================================================================
+# Technique Detection Configuration
+# =============================================================================
+# Version: 3.2.0
+# Date: 2025-12-02
+#
+# Purpose: Define unified_flags patterns and keyword pools for MRI acquisition
+# technique detection.
+#
+# UNIFIED FLAGS: This file now uses unified_flags from ClassificationContext
+# which aggregate evidence from all DICOM tag parsers. See:
+#   backend/src/classification/detection_yaml/unified-flags-reference.yaml
+#
+# PHYSICS-BASED GROUPING:
+#   - SE: Uses 180° refocusing pulse (spin echo physics)
+#   - GRE: Uses gradient refocusing only (no 180° pulse)
+#   - EPI: Uses echo planar readout (pure EPI)
+#   - MIXED: Combines SE+GRE or SE+EPI physics
+#
+# VALIDATED against 400K+ fingerprint database.
+#
+# Output: technique (single value)
+# =============================================================================
+
+meta:
+  version: "3.2.0"
+  description: "Technique detection for MRI pulse sequence classification"
+  field: "technique"
+  search_field: "text_search_blob"
+  output_type: "single"
+
+# =============================================================================
+# TECHNIQUE DEFINITIONS
+# =============================================================================
+
+techniques:
+  # ===========================================================================
+  # SE FAMILY - Spin Echo Physics (uses 180° refocusing pulse)
+  # ===========================================================================
+  # 
+  # DETECTION LOGIC (sequential, first match wins):
+  #   1. exclusive  - Single definitive flag → HIGH confidence
+  #   2. keywords   - Text search match → HIGH confidence  
+  #   3. combination - Multiple flags together → MEDIUM confidence
+  #
+  # PRIORITY ORDER matters! More specific techniques checked first.
+  # By the time we reach "SE", all specific SE variants have been ruled out.
+  #
+  # See unified-flags-reference.yaml for flag definitions.
+  # ===========================================================================
+  
+  MDME:
+    name: "MDME"
+    family: "SE"
+    description: "Multi-dynamic multi-echo 2D TSE/FSE acquisition for quantitative/synthetic MRI pipelines (SyMRI)."
+    keywords:
+      - "mdme"
+      - "multi dynamic multi echo"
+      - "multi-dynamic multi-echo"
+      - "symri"
+      - "magic"
+    detection:
+      exclusive: is_mdme        # Definitive: SyMRI/MAGiC sequence name pattern
+    notes: |
+      MDME is the acquisition sequence for SyMRI/MAGiC synthetic MRI.
+      Acquires multiple echoes at multiple TRs/saturation times.
+      Outputs are used for T1, T2, PD mapping and synthetic contrasts.
+
+  3D-TSE:
+    name: "SPACE"
+    family: "SE"
+    description: "3D turbo SE; 3D volume TSE (SPACE/CUBE/VISTA-type) for isotropic imaging."
+    keywords:
+      - "space"
+      - "cube"
+      - "vista"
+      - "3d tse"
+      - "3d fse"
+      - "fase3d"
+      - "mvox"
+      - "isofse"
+    detection:
+      exclusive: is_space       # Definitive: SPACE/CUBE/VISTA sequence name
+      combination:              # Alternative: TSE + 3D acquisition
+        - is_tse
+        - is_3d
+    notes: |
+      3D-TSE enables isotropic high-resolution imaging.
+      Siemens: SPACE, GE: CUBE, Philips: VISTA.
+      Uses variable flip angle refocusing to reduce SAR.
+
+  SS-TSE:
+    name: "HASTE"
+    family: "SE"
+    description: "Single-shot TSE/RARE; whole k-space in one shot, motion-robust but blurring."
+    keywords:
+      - "haste"
+      - "ssfse"
+      - "ss-tse"
+      - "sstse"
+      - "single shot tse"
+      - "single shot fse"
+      - "fase"
+    detection:
+      exclusive: is_haste       # Definitive: HASTE/SSFSE sequence name
+    notes: |
+      Single-shot TSE acquires entire k-space in one TR.
+      Siemens: HASTE, GE: SSFSE, Philips: SSH-TSE.
+      Very fast, motion-robust, but has T2 blurring.
+
+  IR-TSE:
+    name: "TIRM"
+    family: "SE"
+    description: "Inversion-recovery turbo spin echo; IR-prepped TSE with magnitude recon (TIRM, STIR)."
+    keywords:
+      - "tirm"
+      - "stir"
+      - "ir-tse"
+      - "ir tse"
+      - "ir-fse"
+      - "ir fse"
+    detection:
+      combination:              # IR + TSE = IR-TSE
+        - has_ir
+        - is_tse
+    notes: |
+      IR-TSE combines inversion recovery with TSE readout.
+      Used for STIR (fat suppression), TIRM, and other IR variants.
+      Siemens: TIRM, GE: IR-FSE, Philips: IR-TSE.
+      FLAIR is a modifier, not a technique (detected in ModifierDetector).
+
+  ME-SE:
+    name: "MESE"
+    family: "SE"
+    description: "Multi-echo spin echo; multiple spin echoes for T2 mapping."
+    keywords:
+      - "mese"
+      - "me-se"
+      - "multi echo se"
+      - "multi-echo se"
+      - "dual echo se"
+      - "memp"
+    detection:
+      exclusive: is_me_se       # Definitive: Multi-echo SE sequence name
+      combination:              # Alternative: multi-echo + SE (but not TSE)
+        - is_multi_echo
+        - has_se
+    notes: |
+      ME-SE acquires multiple echoes at different TEs from single excitation.
+      Used for T2 mapping, proton density estimation.
+      Different from TSE: ME-SE has separate echoes, TSE has echo train.
+      Combination requires is_multi_echo (stack_key) + SE physics.
+
+  VFA-TSE:
+    name: "RESTORE"
+    family: "SE"
+    description: "Variable-flip-angle TSE with driven equilibrium; optimized T2 contrast."
+    keywords:
+      - "restore"
+      - "frfse"
+      - "drive"
+      - "de-fse"
+      - "de-fir"
+      - "t2 plus"
+      - "hyperecho"
+    # No detection block - VFA within echo train not detectable from DICOM tags
+    # Detected by keywords only (restore, frfse, drive in series description)
+    notes: |
+      VFA-TSE uses variable flip angles within the echo train.
+      RESTORE/DRIVE adds driven equilibrium for better T2 contrast.
+      Siemens: RESTORE, GE: FRFSE, Philips: DRIVE.
+      VFA within echo train is not directly detectable from DICOM tags.
+
+  TSE:
+    name: "TSE"
+    family: "SE"
+    description: "Turbo/Fast spin echo; echo train of refocusing pulses."
+    keywords:
+      - "tse"
+      - "fse"
+      - "turbo spin echo"
+      - "fast spin echo"
+      - "turbo se"
+      - "fast se"
+      - "rare"
+    detection:
+      exclusive: is_tse         # Definitive: TSE/FSE indicator
+    notes: |
+      TSE/FSE is the workhorse of clinical MRI.
+      Siemens: TSE, GE: FSE, Philips: TSE.
+      By priority order, 3D-TSE/HASTE/IR-TSE checked before this.
+
+  SE:
+    name: "SE"
+    family: "SE"
+    description: "Basic spin echo; 90°-180° pair, single echo."
+    keywords:
+      - "spin-echo"
+    detection:
+      exclusive: has_se         # Fallback: Any SE physics
+    notes: |
+      Basic SE is the fallback for SE family.
+      By priority order, all specific SE variants checked first.
+      If we reach here, it's a basic SE or unrecognized SE variant.
+
+  # ===========================================================================
+  # GRE FAMILY - Gradient Echo Physics (gradient refocusing only, no 180°)
+  # ===========================================================================
+  #
+  # Detection uses unified_flags. Priority order: specific → generic.
+  # GRE is the fallback (last in GRE family priority).
+  #
+  # Key flags for GRE family:
+  #   has_gre           - Gradient echo physics
+  #   is_flash          - FLASH/SPGR indicator
+  #   is_tfl            - TurboFLASH/TFE indicator
+  #   is_mprage         - MPRAGE/BRAVO indicator
+  #   is_ssfp           - Steady-state (bSSFP/FIESTA)
+  #   is_ciss           - CISS/FIESTA-C indicator
+  #   is_swi            - SWI indicator
+  #   is_tof            - TOF-MRA indicator
+  #   is_pc             - Phase contrast indicator
+  #   is_radial         - Radial trajectory (PROPELLER/BLADE)
+  #   is_spiral         - Spiral trajectory
+  #   has_ir            - Inversion recovery (for MPRAGE)
+  #   has_spoiled       - RF/gradient spoiling
+  #   has_steady_state  - SSFP variants
+  #   is_3d / is_2d     - Acquisition dimensionality
+  #   is_multi_echo     - Series split by echo time
+  #   is_multi_fa       - Series split by flip angle
+  # ===========================================================================
+
+  # --- Quantitative/Special (highest priority) ---
+  
+  QALAS:
+    name: "QALAS"
+    family: "GRE"
+    description: "3D QALAS multiparametric mapping for T1, T2, PD quantification."
+    keywords:
+      - "qalas"
+      - "3d qalas"
+    detection:
+      exclusive: is_qalas       # Definitive: QALAS sequence name
+    notes: |
+      GE's 3D-QALAS for quantitative mapping.
+      Interleaved IR-GRE acquisition.
+
+  MP2RAGE:
+    name: "MP2RAGE"
+    family: "GRE"
+    description: "Two-inversion MPRAGE; two TIs for bias-reduced T1 mapping."
+    keywords:
+      - "mp2rage"
+    detection:
+      combination:              # Multi-TI + GRE + IR + 3D
+        - is_multi_ti
+        - has_gre
+        - has_ir
+        - is_3d
+    notes: |
+      MP2RAGE uses two inversion times for T1 mapping.
+      Detected by multi-TI stack splitting + IR-GRE.
+
+  MEMPRAGE:
+    name: "MEMPRAGE"
+    family: "GRE"
+    description: "Multi-echo MPRAGE; MPRAGE with multiple GRE echoes."
+    keywords:
+      - "memprage"
+      - "me-mprage"
+      - "multi echo mprage"
+      - "multi-echo mprage"
+    detection:
+      combination:              # Multi-echo + MPRAGE characteristics
+        - is_multi_echo
+        - has_ir
+        - has_gre
+        - is_3d
+    notes: |
+      MEMPRAGE adds multiple echoes to standard MPRAGE.
+      Detected by multi-echo splitting + IR-GRE-3D.
+
+  MPRAGE:
+    name: "MPRAGE"
+    family: "GRE"
+    description: "Mag-prepared rapid GRE; IR-prepped 3D T1w (standard structural T1)."
+    keywords:
+      - "mprage"
+      - "bravo"
+      - "3d tfe"
+      - "ir-fspgr"
+      - "ir spgr"
+    detection:
+      exclusive: is_mprage      # Definitive: MPRAGE/BRAVO sequence name
+      combination:              # Alternative: IR + GRE + 3D
+        - has_ir
+        - has_gre
+        - is_3d
+    notes: |
+      MPRAGE is the standard 3D T1-weighted structural sequence.
+      Siemens: MPRAGE, GE: BRAVO/IR-SPGR, Philips: 3D-TFE.
+
+  # --- MRA/Flow ---
+  
+  TOF-MRA:
+    name: "TOF"
+    family: "GRE"
+    description: "Time-of-flight MRA; inflow-based bright-blood angiography."
+    keywords:
+      - "tof"
+      - "time of flight"
+      - "tof-mra"
+      - "inhance inflow"
+    detection:
+      exclusive: is_tof         # Definitive: TOF indicator
+    notes: |
+      TOF-MRA uses inflow enhancement for bright-blood imaging.
+      Spoiled GRE with short TR for fresh spin saturation.
+
+  PC-MRA:
+    name: "PC"
+    family: "GRE"
+    description: "Phase-contrast MRA; velocity-encoded flow imaging."
+    keywords:
+      - "pc-mra"
+      - "phase contrast"
+      - "pc flow"
+      - "velocity"
+    detection:
+      exclusive: is_pc          # Definitive: Phase contrast indicator
+    notes: |
+      PC-MRA uses bipolar gradients to encode velocity.
+      Can be 2D (single slice) or 3D/4D flow.
+
+  # --- Multi-echo GRE (must be before SSFP flag-based detection) ---
+  # MERGE/MEDIC have SS (steady-state) flag but are NOT balanced SSFP.
+  # They must be detected by keyword BEFORE the is_ssfp flag triggers FIESTA.
+
+  comb-ME-GRE:
+    name: "MEDIC"
+    family: "GRE"
+    description: "Combined multi-echo GRE; fused echoes for T2*/SWI (MEDIC/MERGE)."
+    keywords:
+      - "medic"
+      - "merge"
+      - "mffe"
+    implied_base:
+      base: "T2*w"
+      confidence: 0.85
+    notes: |
+      Combined ME-GRE fuses multiple echoes.
+      Siemens: MEDIC, GE: MERGE, Philips: mFFE.
+
+  ME-GRE:
+    name: "MEGRE"
+    family: "GRE"
+    description: "Multi-echo GRE; multiple gradient echoes for T2*, QSM, Dixon."
+    keywords:
+      - "megre"
+      - "me-gre"
+      - "multi echo gre"
+      - "multi-echo gre"
+    implied_base:
+      base: "T2*w"
+      confidence: 0.80
+    detection:
+      combination:              # Multi-echo + GRE (not SE)
+        - is_multi_echo
+        - has_gre
+    notes: |
+      ME-GRE acquires multiple echoes at different TEs.
+      Used for T2* mapping, QSM, Dixon fat/water.
+
+  # --- SSFP variants ---
+
+  CISS:
+    name: "CISS"
+    family: "GRE"
+    description: "Constructive interference steady-state; 3D high-SNR for cisterns, cranial nerves."
+    keywords:
+      - "ciss"
+      - "fiesta-c"
+      - "fiesta c"
+      - "3d drive"
+    detection:
+      exclusive: is_ciss        # Definitive: CISS sequence name
+    notes: |
+      CISS is phase-cycled bSSFP for high-SNR imaging.
+      Siemens: CISS, GE: FIESTA-C, Philips: 3D-DRIVE.
+
+  bSSFP:
+    name: "FIESTA"
+    family: "GRE"
+    description: "Balanced SSFP; fully refocused gradients, high SNR, mixed T2/T1."
+    keywords:
+      - "bssfp"
+      - "truefisp"
+      - "true fisp"
+      - "fiesta"
+      - "balanced ffe"
+      - "b-ffe"
+      - "trufi"
+    detection:
+      exclusive: is_ssfp        # SSFP indicator (from has_steady_state)
+      combination:
+        - has_steady_state
+        - has_gre
+    notes: |
+      bSSFP has fully balanced gradients for high SNR.
+      Siemens: TrueFISP, GE: FIESTA, Philips: bFFE.
+
+  DESS:
+    name: "DESS"
+    family: "GRE"
+    description: "Dual-echo SSFP; provides two echoes for phase/T2* analysis."
+    keywords:
+      - "dess"
+      - "mensa"
+    # No exclusive flag - keywords only
+    notes: |
+      DESS combines FID and echo signals.
+      Used in musculoskeletal imaging for cartilage.
+
+  SSFP:
+    name: "PSIF"
+    family: "GRE"
+    description: "Steady-state free precession; generic SSFP (unbalanced)."
+    keywords:
+      - "ssfp"
+      - "psif"
+      - "t2-ffe"
+      - "ce-fast"
+    detection:
+      combination:
+        - has_steady_state
+        - has_gre
+    notes: |
+      Generic SSFP - checked after bSSFP/CISS.
+      PSIF uses reversed echo (T2-like contrast).
+
+  # --- SWI REMOVED ---
+  # SWI is NOT a technique - it's a provenance/processing method.
+  # The actual acquisition technique is GRE or EPI.
+  # SWI is captured in provenance="SWIRecon" (see provenance-detection.yaml)
+  # Removing this entry allows technique detector to return GRE or EPI for SWI acquisitions.
+
+  # NOTE: Radial and Spiral are TRAJECTORY MODIFIERS, not techniques.
+  # They are defined in modifier-detection.yaml (Radial, Spiral).
+  # A Radial GRE is just GRE + Radial modifier, not a separate technique.
+
+  # --- VFA/Mapping ---
+  
+  VFA-GRE:
+    name: "VFA-GRE"
+    family: "GRE"
+    description: "Variable-flip-angle 3D GRE; multiple flip angles for T1 mapping."
+    keywords:
+      - "vfa"
+      - "despot"
+      - "variable flip angle"
+    detection:
+      combination:              # Multi-FA + 3D GRE
+        - is_multi_fa
+        - has_gre
+        - is_3d
+    notes: |
+      VFA uses multiple flip angles for T1 quantification.
+      Detected by multi-FA stack splitting.
+
+  # --- 3D volumetric ---
+  
+  VI-GRE:
+    name: "VIBE"
+    family: "GRE"
+    description: "3D volumetric spoiled GRE; high-res T1 (VIBE/LAVA/THRIVE)."
+    keywords:
+      - "vibe"
+      - "lava"
+      - "thrive"
+      - "fame"
+    detection:
+      combination:              # Spoiled + 3D + GRE
+        - has_spoiled
+        - is_3d
+        - has_gre
+    notes: |
+      VI-GRE is 3D spoiled GRE for volumetric T1 imaging.
+      Siemens: VIBE, GE: LAVA, Philips: THRIVE.
+
+  # --- Fast spoiled GRE ---
+  
+  FSP-GRE:
+    name: "TurboFLASH"
+    family: "GRE"
+    description: "Fast spoiled GRE; rapid T1-weighted for dynamic imaging."
+    keywords:
+      - "turboflash"
+      - "turbo flash"
+      - "tfe"
+      - "fspgr"
+      - "fgre"
+    detection:
+      exclusive: is_tfl         # Definitive: TurboFLASH/TFE sequence name
+    notes: |
+      TurboFLASH is fast spoiled GRE for dynamic imaging.
+      Siemens: TurboFLASH, GE: FSPGR, Philips: TFE.
+
+  # --- Basic spoiled GRE ---
+  
+  SP-GRE:
+    name: "FLASH"
+    family: "GRE"
+    description: "Spoiled GRE; spoils transverse magnetization for pure T1 contrast."
+    keywords:
+      - "flash"
+      - "spgr"
+      - "t1-ffe"
+    detection:
+      exclusive: is_flash       # Definitive: FLASH/SPGR sequence name
+      combination:              # Alternative: Spoiled + GRE
+        - has_spoiled
+        - has_gre
+    notes: |
+      SP-GRE uses RF/gradient spoiling for T1 contrast.
+      Siemens: FLASH, GE: SPGR, Philips: T1-FFE.
+
+  # --- Single-shot GRE ---
+  
+  SS-GRE:
+    name: "FISP"
+    family: "GRE"
+    description: "Single-shot GRE; very fast for perfusion or survey scans."
+    keywords:
+      - "fisp"
+      - "grass"
+      - "ss-gre"
+      - "single shot gre"
+    # Keywords only
+    notes: |
+      FISP is fast GRE with FID signal.
+      Siemens: FISP, GE: GRASS.
+
+  # --- Generic GRE (fallback) ---
+  
+  GRE:
+    name: "GRE"
+    family: "GRE"
+    description: "Generic gradient echo; single RF and gradient refocusing."
+    keywords:
+      - "gre"
+      - "gradient-echo"
+      - "ffe"
+    detection:
+      exclusive: has_gre        # Fallback: Any GRE physics
+    notes: |
+      Generic GRE is the fallback for GRE family.
+      By priority order, all specific GRE variants checked first.
+
+  # ===========================================================================
+  # EPI FAMILY - Echo Planar Imaging (pure EPI readout)
+  # ===========================================================================
+  #
+  # Detection uses unified_flags. Priority order: specific → generic.
+  # EPI is the fallback (last in EPI family priority).
+  #
+  # Key flags for EPI family:
+  #   has_epi           - EPI readout physics
+  #   has_segmented_kspace - Multi-shot/segmented acquisition
+  #
+  # NOTE: Spiral is a TRAJECTORY MODIFIER, not a technique.
+  # Spiral + EPI = EPI technique with Spiral modifier.
+  # ===========================================================================
+
+  # --- Multi-shot ---
+  
+  MS-EPI:
+    name: "RESOLVE"
+    family: "EPI"
+    description: "Multi-shot EPI; splits k-space over several shots for higher resolution."
+    keywords:
+      - "resolve"
+      - "muse"
+      - "fase"
+      - "multishot epi"
+      - "multi-shot epi"
+      - "segmented epi"
+    detection:
+      exclusive: is_epi_diff_resolve  # Definitive: RESOLVE sequence name pattern (*re_b*)
+      combination:              # Alternative: Segmented + EPI
+        - has_segmented_kspace
+        - has_epi
+    notes: |
+      MS-EPI splits k-space for reduced distortion.
+      Siemens: RESOLVE, GE: MUSE.
+      Detected by sequence name pattern (*re_b*) or segmented k-space + EPI flags.
+
+  # --- Generic (fallback) ---
+  
+  EPI:
+    name: "EPI"
+    family: "EPI"
+    description: "Echo planar imaging (generic); ultra-fast k-space traversal."
+    keywords:
+      - "epi"
+      - "echo planar"
+    detection:
+      exclusive: has_epi        # Fallback: Any EPI physics
+    notes: |
+      Generic EPI is the fallback for EPI family.
+      By priority order, specific EPI variants checked first.
+
+  # ===========================================================================
+  # MIXED FAMILY - Combines SE+GRE or SE+EPI physics
+  # ===========================================================================
+  #
+  # Detection uses unified_flags. Priority order: specific → generic.
+  # MIXED family has no generic fallback - techniques require specific combinations.
+  #
+  # Key flags for MIXED family:
+  #   has_epi           - EPI readout
+  #   has_se            - SE refocusing (180°)
+  #   has_gre           - GRE readout
+  #   is_dwi            - Diffusion-weighted imaging
+  #   is_bold           - BOLD fMRI
+  #   is_asl            - Arterial spin labeling
+  #   is_mrf            - MR fingerprinting
+  # ===========================================================================
+
+  # --- Diffusion (highest priority in MIXED) ---
+  
+  DWI-EPI:
+    name: "DWI-EPI"
+    family: "MIXED"
+    description: "Diffusion-weighted SE-EPI; standard DWI/DTI/HARDI backbone."
+    keywords:
+      - "dwi"
+      - "dti"
+      - "diffusion"
+      - "hardi"
+      - "dsi"
+    detection:
+      exclusive: is_dwi         # Definitive: Diffusion indicator
+    notes: |
+      DWI-EPI is the standard diffusion acquisition.
+      SE-EPI with diffusion-sensitizing gradients.
+
+  DWI-STEAM:
+    name: "DWI-STEAM"
+    family: "MIXED"
+    description: "Diffusion with STEAM preparation; stimulated echo mode."
+    keywords:
+      - "steam"
+      - "dwi-steam"
+      - "diffusion steam"
+    # Keywords only - STEAM not reliably tagged
+    notes: |
+      DWI-STEAM uses stimulated echo for diffusion.
+      Less common, research protocol.
+
+  # --- Functional/Perfusion ---
+  
+  BOLD-EPI:
+    name: "BOLD"
+    family: "MIXED"
+    description: "Blood oxygen level-dependent EPI; fMRI backbone."
+    keywords:
+      - "bold"
+      - "fmri"
+      - "functional"
+      - "resting state"
+      - "task"
+    detection:
+      exclusive: is_bold        # Definitive: BOLD/fMRI indicator
+    notes: |
+      BOLD-EPI is the standard fMRI sequence.
+      GRE-EPI sensitive to deoxyhemoglobin.
+
+  ASL-EPI:
+    name: "ASL"
+    family: "MIXED"
+    description: "Arterial spin labeling EPI; non-contrast perfusion."
+    keywords:
+      - "asl"
+      - "pcasl"
+      - "pasl"
+      - "casl"
+      - "arterial spin"
+    detection:
+      exclusive: is_asl         # Definitive: ASL indicator
+    notes: |
+      ASL uses RF labeling for non-contrast perfusion.
+      pCASL is most common clinical variant.
+
+  Perfusion-EPI:
+    name: "Perfusion"
+    family: "MIXED"
+    description: "Dynamic susceptibility contrast (DSC) or DCE perfusion."
+    keywords:
+      - "perfusion"
+      - "dsc"
+      - "dce"
+      - "pwi"
+    detection:
+      exclusive: is_perfusion   # Definitive: Perfusion indicator
+    notes: |
+      DSC-MRI uses contrast bolus with GRE-EPI.
+      DCE uses T1-weighted dynamic imaging.
+
+  # --- Hybrid physics ---
+  
+  GRASE:
+    name: "GRASE"
+    family: "MIXED"
+    description: "Gradient-and-spin-echo hybrid; SE refocusing with GRE readouts."
+    keywords:
+      - "grase"
+      - "turbogse"
+      - "tgse"
+    detection:
+      combination:              # SE + GRE (hybrid)
+        - has_se
+        - has_gre
+    notes: |
+      GRASE combines SE refocusing with GRE readouts.
+      Faster than pure TSE, less T2* than EPI.
+
+  SE-EPI:
+    name: "SE-EPI"
+    family: "MIXED"
+    description: "Spin-echo EPI; SE preparation with EPI readout, less T2* contamination."
+    keywords:
+      - "se-epi"
+      - "spin echo epi"
+    detection:
+      combination:              # SE + EPI
+        - has_se
+        - has_epi
+    notes: |
+      SE-EPI uses 180° refocusing before EPI readout.
+      Less T2* artifact than GRE-EPI.
+
+  GRE-EPI:
+    name: "GRE-EPI"
+    family: "MIXED"
+    description: "Gradient-echo EPI; GRE preparation with EPI readout."
+    keywords:
+      - "gre-epi"
+      - "epi-gre"
+    detection:
+      combination:              # GRE + EPI
+        - has_gre
+        - has_epi
+    notes: |
+      GRE-EPI is the backbone for BOLD and DSC.
+      Sensitive to T2* effects.
+
+  # --- Special ---
+  
+  MRF:
+    name: "MRF"
+    family: "MIXED"
+    description: "MR fingerprinting; pseudo-randomized parameters for quantitative mapping."
+    keywords:
+      - "mrf"
+      - "fingerprinting"
+    detection:
+      exclusive: is_mrf         # Definitive: MRF indicator
+    notes: |
+      MRF uses dictionary matching for T1/T2 mapping.
+      Pseudo-random acquisition defies traditional categories.
+
+# =============================================================================
+# FAMILY SUMMARY (v3.2.0)
+# =============================================================================
+# 
+# SE (8 techniques): Uses 180° refocusing pulse
+#   Priority: MDME → 3D-TSE → SS-TSE → IR-TSE → ME-SE → VFA-TSE → TSE → SE
+#
+# GRE (18 techniques): Uses gradient refocusing only
+#   Priority: QALAS → MP2RAGE → MEMPRAGE → MPRAGE → TOF-MRA → PC-MRA →
+#             comb-ME-GRE → ME-GRE → CISS → bSSFP → DESS → SSFP → VFA-GRE →
+#             VI-GRE → FSP-GRE → SP-GRE → SS-GRE → GRE
+#   NOTE: SWI removed (provenance, not technique), Radial/Spiral are modifiers
+#   NOTE: Multi-echo GRE (MEDIC/MERGE) must be before SSFP (FIESTA) because
+#         MERGE has SS flag but is NOT balanced SSFP
+#
+# EPI (2 techniques): Pure EPI readout
+#   Priority: MS-EPI → EPI
+#   NOTE: Spiral is a modifier, not a technique
+#
+# MIXED (9 techniques): Hybrid physics or application-specific
+#   Priority: DWI-EPI → DWI-STEAM → BOLD-EPI → ASL-EPI → Perfusion-EPI →
+#             GRASE → SE-EPI → GRE-EPI → MRF
+#
+# =============================================================================
+# 
+# Detection Logic (three-tier, sequential - first match wins):
+#   1. exclusive flag   → HIGH confidence (single definitive flag)
+#   2. keywords match   → HIGH confidence (text search in series description)
+#   3. combination (AND) → MEDIUM confidence (all flags True)
+#
+# =============================================================================
+
+# =============================================================================
+# DETECTION RULES
+# =============================================================================
+rules:
+  # Detection priority (techniques checked in this order)
+  # More specific techniques checked before generic ones within each family
+  #
+  # IMPORTANT: Specific named techniques (RESOLVE, MUSE) must be checked BEFORE
+  # generic functional categories (DWI-EPI, BOLD-EPI) to ensure proper classification.
+  priority_order:
+    # SPECIFIC NAMED TECHNIQUES - check first (sequence name patterns)
+    - "MS-EPI"       # RESOLVE/MUSE - multi-shot EPI (has is_epi_diff_resolve flag)
+    # MIXED - application-specific with definitive markers
+    - "DWI-EPI"      # Generic diffusion EPI (fallback for DWI without specific technique)
+    - "DWI-STEAM"
+    - "BOLD-EPI"
+    - "ASL-EPI"
+    - "Perfusion-EPI"
+    - "GRASE"
+    - "SE-EPI"
+    - "GRE-EPI"
+    - "MRF"
+    # SE - quantitative/specific first, generic last
+    - "MDME"
+    - "3D-TSE"
+    - "SS-TSE"
+    - "IR-TSE"
+    - "ME-SE"
+    - "VFA-TSE"
+    - "TSE"
+    - "SE"
+    # GRE - quantitative → MRA → multi-echo → SSFP → volumetric → fast → basic → generic
+    # NOTE: Multi-echo GRE (MEDIC/MERGE) before SSFP (FIESTA) - MERGE has SS flag but is NOT bSSFP
+    - "QALAS"
+    - "MP2RAGE"
+    - "MEMPRAGE"
+    - "MPRAGE"
+    - "TOF-MRA"
+    - "PC-MRA"
+    - "comb-ME-GRE"
+    - "ME-GRE"
+    - "CISS"
+    - "bSSFP"
+    - "DESS"
+    - "SSFP"
+    # NOTE: SWI removed (provenance, not technique), Radial/Spiral are modifiers
+    - "VFA-GRE"
+    - "VI-GRE"
+    - "FSP-GRE"
+    - "SP-GRE"
+    - "SS-GRE"
+    - "GRE"
+    # EPI - generic (fallback)
+    # NOTE: Spiral is a modifier, not a technique
+    - "EPI"
+  
+  default_technique: null
+  
+  confidence_thresholds:
+    high: 0.90      # exclusive flag or exact keyword match
+    medium: 0.75    # combination of flags
+    low: 0.50       # partial match or fallback

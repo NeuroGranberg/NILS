@@ -1,0 +1,164 @@
+# =============================================================================
+# Contrast Detection Configuration
+# =============================================================================
+# Version: 2.3.0
+# Date: 2025-12-01
+#
+# Purpose: Detect contrast agent administration in neuroimaging series.
+#
+# TWO DATA SOURCES:
+# 1. contrast_search_blob: If NOT NULL → post_contrast = 1
+# 2. text_search_blob: Pattern matching (negative first, then positive)
+#    NOTE: + and - are now preserved in normalization for contrast notation
+#
+# Output: post_contrast: 1 (yes), 0 (no), null (unknown)
+# =============================================================================
+
+meta:
+  version: "2.3.0"
+  description: "Contrast agent detection for MRI neuroimaging"
+  field: "post_contrast"
+  output_type: "three_state"
+
+# =============================================================================
+# STRUCTURED SOURCE: contrast_search_blob
+# =============================================================================
+# If NOT NULL → post_contrast = 1 (n=118,361 in database)
+# Examples: "agent:applied", "agent:yes route:iv", "agent:dotarem dose:0.0"
+# =============================================================================
+
+structured:
+  field: "contrast_search_blob"
+  rule: "not_null_means_positive"
+
+# =============================================================================
+# TEXT SOURCE: text_search_blob
+# =============================================================================
+# + and - are preserved in normalization
+# NEGATIVE patterns checked FIRST (override positive)
+# Then POSITIVE patterns
+# =============================================================================
+
+# NEGATIVE KEYWORDS - post_contrast = 0
+# Database validated: utan_gd(2795), ej_gd(1111), nativ(252), -K(44 standalone), -C(157)
+# NOTE: Use space before -k/-gd/-c to avoid matching "med-kontrast" (which is positive!)
+negative_keywords:
+  # Swedish
+  - "utan gd"
+  - "utan_gd"         # underscore variant (n=2795)
+  - "ej gd"
+  - "utan kontrast"
+  - "ej kontrast"
+  - "utan k"
+  - "ej k"
+  - "ingen gd"
+  - "ingen k"
+  # Swedish/Scandinavian -K/-Gd/-C notation (standalone, n=44 for -K)
+  # Use space prefix to avoid matching "med-kontrast"
+  - " -k"
+  - " -gd"
+  - " -c"
+  # English
+  - "pre gd"
+  - "pre-gd"
+  - "pre contrast"
+  - "pre-contrast"
+  - "without contrast"
+  - "no contrast"
+  - "non-contrast"
+  - "non contrast"
+  - "no gd"
+  # German
+  - "ohne gd"
+  - "ohne kontrast"
+  - "ohne km"
+  - "nativ"
+  - "kein gd"
+  # French
+  - "sans gd"
+  - "sans contraste"
+  - "sans gado"
+  # Italian
+  - "senza gd"
+  - "senza contrasto"
+  # Norwegian/Danish
+  - "uten gd"
+  - "uden gd"
+  # Dutch
+  - "zonder gd"
+  - "geen gd"
+
+# POSITIVE KEYWORDS - post_contrast = 1
+# Database validated: dotarem(10196), magnevist(9741), omniscan(4969),
+# med_gd(2345), clariscan(1596), +K(13884), +Gd(4560), +C(108)
+positive_keywords:
+  # Contrast agents (brand names)
+  - "dotarem"
+  - "clariscan"
+  - "omniscan"
+  - "magnevist"
+  - "gadovist"
+  - "prohance"
+  - "multihance"
+  - "optimark"
+  - "eovist"
+  - "primovist"
+  - "gadavist"
+  # Generic gadolinium
+  - "gadolinium"
+  - "gadobutrol"
+  - "gadoterate"
+  - "gadoteridol"
+  - "gadobenate"
+  - "gadoxetate"
+  # Standalone gd suffix (Swedish/Scandinavian protocol naming: T1W_3D_TFE_gd, T1W gd)
+  # Space/underscore prefix avoids mid-word matches
+  - " gd"             # "t1w 3d tfe gd" (n=3730+ undetected)
+  - "_gd"             # "t1w_3d_tfe_gd" variant
+  # Swedish/Scandinavian +K/+Gd/+C notation (n=28417 for +k, n=25869 for +gd)
+  - "+k"
+  - "+gd"
+  - "+c"
+  - "+ gd"            # with space (n=7588)
+  - "+ k"
+  - "k+"              # reversed notation (n=42)
+  - "+contrast"       # English variant (n=9)
+  # Swedish positive
+  - "med gd"
+  - "med kontrast"
+  - "med-kontrast"    # hyphenated variant (n=77)
+  - "med_kontrast"    # underscore variant (n=345)
+  - "med k"
+  - "efter kontrast"  # "after contrast" in Swedish (n=5)
+  - "spruta kontrast" # "inject contrast" in Swedish (n=52)
+  - "gd direkt"       # "Gd directly" in Swedish (n=2611)
+  # English positive
+  - "post gd"
+  - "post-gd"
+  - "post contrast"
+  - "post-contrast"
+  - "with contrast"
+  - "after contrast"
+  - "contrast enhanced"
+  # German positive
+  - "mit gd"
+  - "mit kontrast"
+  - "nach gd"
+  - "nach km"
+  # French positive
+  - "avec gd"
+  - "avec contraste"
+
+# =============================================================================
+# DETECTION LOGIC
+# =============================================================================
+# 1. IF contrast_search_blob IS NOT NULL → post_contrast = 1
+# 2. ELSE check text_search_blob:
+#    a. IF NEGATIVE keyword matches → post_contrast = 0
+#    b. ELSE IF POSITIVE keyword matches → post_contrast = 1
+#    c. ELSE → post_contrast = null
+# =============================================================================
+
+detection:
+  negative_overrides_positive: true
+  structured_overrides_text: true

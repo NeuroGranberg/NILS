@@ -1,0 +1,434 @@
+/* NILS Design System - Clean, Fast, Professional */
+
+:root {
+  /* Core Typography */
+  font-family: 'Inter', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  
+  /* Color Palette - Clean flat colors, no gradients */
+  --nils-bg-primary: #0d1117;
+  --nils-bg-secondary: #161b22;
+  --nils-bg-tertiary: #21262d;
+  --nils-bg-elevated: #30363d;
+  
+  --nils-border: #30363d;
+  --nils-border-subtle: #21262d;
+  
+  --nils-text-primary: #f0f6fc;
+  --nils-text-secondary: #8b949e;
+  --nils-text-tertiary: #6e7681;
+  
+  /* Accent Colors - Medical/Scientific feel */
+  --nils-accent-primary: #58a6ff;
+  --nils-accent-secondary: #388bfd;
+  --nils-accent-hover: #79c0ff;
+  
+  /* Status Colors - Flat and clear */
+  --nils-success: #3fb950;
+  --nils-warning: #d29922;
+  --nils-error: #f85149;
+  --nils-info: #58a6ff;
+  
+  /* Semantic Colors for Pipeline Stages */
+  --nils-stage-idle: #6e7681;
+  --nils-stage-pending: #a371f7;
+  --nils-stage-running: #58a6ff;
+  --nils-stage-completed: #3fb950;
+  --nils-stage-failed: #f85149;
+  --nils-stage-paused: #d29922;
+  --nils-stage-blocked: #484f58;
+  
+  /* Spacing Scale */
+  --nils-space-xs: 4px;
+  --nils-space-sm: 8px;
+  --nils-space-md: 16px;
+  --nils-space-lg: 24px;
+  --nils-space-xl: 32px;
+  --nils-space-2xl: 48px;
+  
+  /* Border Radius - Subtle, modern */
+  --nils-radius-sm: 4px;
+  --nils-radius-md: 8px;
+  --nils-radius-lg: 12px;
+  
+  /* Shadows - Minimal, clean */
+  --nils-shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.3);
+  --nils-shadow-md: 0 4px 12px rgba(0, 0, 0, 0.4);
+  --nils-shadow-lg: 0 8px 24px rgba(0, 0, 0, 0.5);
+  
+  /* Transitions */
+  --nils-transition-fast: 150ms ease;
+  --nils-transition-normal: 250ms ease;
+}
+
+/* Reset and Base */
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+}
+
+body {
+  margin: 0;
+  background-color: var(--nils-bg-primary);
+  color: var(--nils-text-primary);
+  font-size: 14px;
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* Scrollbar Styling */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: var(--nils-bg-secondary);
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--nils-border);
+  border-radius: var(--nils-radius-sm);
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--nils-text-tertiary);
+}
+
+/* Focus Styles */
+:focus-visible {
+  outline: 2px solid var(--nils-accent-primary);
+  outline-offset: 2px;
+}
+
+/* Selection */
+::selection {
+  background-color: var(--nils-accent-primary);
+  color: var(--nils-bg-primary);
+}
+
+/* NILS Custom Components */
+
+/* Logo/Brand Text */
+.nils-logo {
+  font-weight: 700;
+  font-size: 18px;
+  letter-spacing: -0.02em;
+  color: var(--nils-text-primary);
+}
+
+.nils-logo-accent {
+  color: var(--nils-accent-primary);
+}
+
+/* Card Enhancements */
+.nils-card {
+  background: var(--nils-bg-secondary);
+  border: 1px solid var(--nils-border-subtle);
+  border-radius: var(--nils-radius-lg);
+  transition: border-color var(--nils-transition-fast);
+}
+
+.nils-card:hover {
+  border-color: var(--nils-border);
+}
+
+.nils-card-elevated {
+  background: var(--nils-bg-tertiary);
+}
+
+/* Stats Display */
+.nils-stat {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nils-space-xs);
+}
+
+.nils-stat-label {
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--nils-text-tertiary);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.nils-stat-value {
+  font-size: 24px;
+  font-weight: 600;
+  color: var(--nils-text-primary);
+  line-height: 1.2;
+}
+
+/* Pipeline Stage Indicator */
+.nils-stage-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.nils-stage-dot-idle { background: var(--nils-stage-idle); }
+.nils-stage-dot-pending { background: var(--nils-stage-pending); }
+.nils-stage-dot-running { background: var(--nils-stage-running); animation: pulse 2s infinite; }
+.nils-stage-dot-completed { background: var(--nils-stage-completed); }
+.nils-stage-dot-failed { background: var(--nils-stage-failed); }
+.nils-stage-dot-paused { background: var(--nils-stage-paused); }
+.nils-stage-dot-blocked { background: var(--nils-stage-blocked); }
+
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.5; }
+}
+
+/* Progress Bar Enhancements */
+.nils-progress {
+  background: var(--nils-bg-tertiary);
+  border-radius: var(--nils-radius-sm);
+  overflow: hidden;
+}
+
+.nils-progress-bar {
+  height: 100%;
+  background: var(--nils-accent-primary);
+  border-radius: var(--nils-radius-sm);
+  transition: width var(--nils-transition-normal);
+}
+
+/* Table Enhancements */
+.nils-table {
+  font-size: 13px;
+}
+
+.nils-table th {
+  font-weight: 600;
+  text-transform: uppercase;
+  font-size: 11px;
+  letter-spacing: 0.05em;
+  color: var(--nils-text-tertiary);
+}
+
+/* Empty State */
+.nils-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: var(--nils-space-2xl);
+  text-align: center;
+}
+
+.nils-empty-icon {
+  color: var(--nils-text-tertiary);
+  margin-bottom: var(--nils-space-md);
+}
+
+.nils-empty-title {
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--nils-text-primary);
+  margin-bottom: var(--nils-space-sm);
+}
+
+.nils-empty-description {
+  font-size: 14px;
+  color: var(--nils-text-secondary);
+  max-width: 320px;
+}
+
+/* Code/Path Display */
+.nils-code {
+  font-family: 'SF Mono', Monaco, Menlo, Consolas, monospace;
+  font-size: 12px;
+  background: var(--nils-bg-tertiary);
+  padding: 2px 6px;
+  border-radius: var(--nils-radius-sm);
+  color: var(--nils-text-secondary);
+}
+
+/* Sidebar Navigation Enhancement */
+.nils-nav-item {
+  border-radius: var(--nils-radius-md);
+  transition: background-color var(--nils-transition-fast);
+}
+
+.nils-nav-item:hover {
+  background: var(--nils-bg-tertiary);
+}
+
+.nils-nav-item-active {
+  background: var(--nils-bg-tertiary);
+  border-left: 2px solid var(--nils-accent-primary);
+}
+
+/* Header Enhancements */
+.nils-header {
+  background: var(--nils-bg-secondary);
+  border-bottom: 1px solid var(--nils-border-subtle);
+}
+
+/* Section Titles */
+.nils-section-title {
+  font-size: 20px;
+  font-weight: 600;
+  color: var(--nils-text-primary);
+  margin-bottom: var(--nils-space-xs);
+}
+
+.nils-section-description {
+  font-size: 14px;
+  color: var(--nils-text-secondary);
+}
+
+/* Badge Variants */
+.nils-badge {
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+/* Button Enhancements - Flat style */
+.nils-btn-primary {
+  background: var(--nils-accent-primary);
+  color: var(--nils-bg-primary);
+  border: none;
+  font-weight: 600;
+}
+
+.nils-btn-primary:hover {
+  background: var(--nils-accent-hover);
+}
+
+.nils-btn-secondary {
+  background: var(--nils-bg-tertiary);
+  color: var(--nils-text-primary);
+  border: 1px solid var(--nils-border);
+}
+
+.nils-btn-secondary:hover {
+  background: var(--nils-bg-elevated);
+}
+
+/* Form Input Enhancements */
+.nils-input {
+  background: var(--nils-bg-primary);
+  border: 1px solid var(--nils-border);
+  border-radius: var(--nils-radius-md);
+  color: var(--nils-text-primary);
+}
+
+.nils-input:focus {
+  border-color: var(--nils-accent-primary);
+}
+
+/* Tooltip/Popover */
+.nils-tooltip {
+  background: var(--nils-bg-elevated);
+  border: 1px solid var(--nils-border);
+  border-radius: var(--nils-radius-md);
+  box-shadow: var(--nils-shadow-md);
+  font-size: 12px;
+}
+
+/* Loading/Skeleton */
+.nils-skeleton {
+  background: var(--nils-bg-tertiary);
+  border-radius: var(--nils-radius-md);
+  animation: shimmer 1.5s infinite;
+}
+
+@keyframes shimmer {
+  0% { opacity: 1; }
+  50% { opacity: 0.6; }
+  100% { opacity: 1; }
+}
+
+/* Metadata Table Container Styling */
+.metadata-table-container {
+  background: var(--nils-bg-secondary);
+  border-radius: var(--nils-radius-md);
+  padding: var(--nils-space-md);
+}
+
+/* DataTables Override for NILS theme */
+.dataTable {
+  color: var(--nils-text-primary) !important;
+  border-collapse: separate !important;
+  border-spacing: 0 !important;
+}
+
+.dataTable thead th {
+  background: var(--nils-bg-tertiary) !important;
+  color: var(--nils-text-secondary) !important;
+  border-bottom: 1px solid var(--nils-border) !important;
+  font-weight: 600 !important;
+  text-transform: uppercase !important;
+  font-size: 11px !important;
+  letter-spacing: 0.05em !important;
+}
+
+.dataTable tbody tr {
+  background: var(--nils-bg-secondary) !important;
+}
+
+.dataTable tbody tr:hover {
+  background: var(--nils-bg-tertiary) !important;
+}
+
+.dataTable tbody td {
+  border-bottom: 1px solid var(--nils-border-subtle) !important;
+  color: var(--nils-text-primary) !important;
+}
+
+.dataTables_wrapper .dataTables_length,
+.dataTables_wrapper .dataTables_filter,
+.dataTables_wrapper .dataTables_info,
+.dataTables_wrapper .dataTables_paginate {
+  color: var(--nils-text-secondary) !important;
+}
+
+.dataTables_wrapper .dataTables_filter input,
+.dataTables_wrapper .dataTables_length select {
+  background: var(--nils-bg-primary) !important;
+  border: 1px solid var(--nils-border) !important;
+  border-radius: var(--nils-radius-sm) !important;
+  color: var(--nils-text-primary) !important;
+  padding: 4px 8px !important;
+}
+
+.dataTables_wrapper .dataTables_paginate .paginate_button {
+  color: var(--nils-text-secondary) !important;
+  border: 1px solid var(--nils-border) !important;
+  border-radius: var(--nils-radius-sm) !important;
+  background: var(--nils-bg-tertiary) !important;
+}
+
+.dataTables_wrapper .dataTables_paginate .paginate_button:hover {
+  background: var(--nils-bg-elevated) !important;
+  color: var(--nils-text-primary) !important;
+  border-color: var(--nils-border) !important;
+}
+
+.dataTables_wrapper .dataTables_paginate .paginate_button.current {
+  background: var(--nils-accent-primary) !important;
+  color: var(--nils-bg-primary) !important;
+  border-color: var(--nils-accent-primary) !important;
+}
+
+/* Utilities */
+.text-dimmed { color: var(--nils-text-secondary); }
+.text-muted { color: var(--nils-text-tertiary); }
+.text-accent { color: var(--nils-accent-primary); }
+
+.bg-elevated { background: var(--nils-bg-tertiary); }
+.bg-secondary { background: var(--nils-bg-secondary); }
+
+.border-subtle { border-color: var(--nils-border-subtle); }
+.border-default { border-color: var(--nils-border); }

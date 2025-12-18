@@ -1,0 +1,162 @@
+# =============================================================================
+# Body Part Detection Configuration
+# =============================================================================
+# Version: 2.0.0
+# Date: 2025-12-01
+#
+# Purpose: Detect if imaging includes spinal cord (for classification branching).
+#
+# Output: spinal_cord: 1 (yes), 0 (no), null (unknown)
+#
+# Detection approach:
+#   - Check text_search_blob for spine-related keywords
+#   - Multilingual support (English, Swedish, German)
+#
+# Database validated counts:
+#   - spine: n=52,308
+#   - spine neck: n=43,550
+#   - rygg (Swedish): n=10,104
+#   - ryggmärg (spinal cord): n=2,105
+#   - halsrygg (cervical): n=1,317
+#   - Brain only (no spine): n=399,339
+# =============================================================================
+
+meta:
+  version: "2.0.0"
+  description: "Spinal cord detection for neuroimaging classification"
+  field: "spinal_cord"
+  output_type: "three_state"  # 1/0/null
+
+# =============================================================================
+# SPINAL CORD POSITIVE PATTERNS
+# =============================================================================
+# If ANY of these patterns match → spinal_cord = 1
+# Database validated: Total spine/rygg present: n=54,920
+# =============================================================================
+
+positive_keywords:
+  # English - general spine
+  - "spine"           # n=52,308
+  - "spinal"          # n=996
+  - "spinal cord"     # n=2
+
+  # English - specific regions
+  - "cervical"        # n=45
+  - "thoracic"        # n=30
+  - "lumbar"          # n=10
+  - "c-spine"         # n=18
+  - "t-spine"         # n=26
+  - "l-spine"
+
+  # English - anatomy
+  - "vertebral"
+  - "vertebra"
+  - "cord"            # Note: could be "umbilical cord" but rare in neuro
+  - "medulla"         # n=12
+
+  # Swedish
+  - "rygg"            # n=10,104 (back/spine)
+  - "ryggm rg"        # n=2,105 (spinal cord - märg normalized)
+  - "halsrygg"        # n=1,317 (cervical spine)
+  - "br strygg"       # thoracic spine (bröstrygg normalized)
+  - "brostrygg"
+  - "l ndrygg"        # lumbar spine (ländrygg normalized)
+  - "lumbalrygg"
+  - "nacke"           # neck
+  - "hals"            # n=4,122 (neck) - but can be "hals" in other contexts
+
+  # German
+  - "wirbel"          # vertebra
+  - "hws"             # n=14 (Halswirbelsäule - cervical)
+  - "bws"             # n=15 (Brustwirbelsäule - thoracic)
+  - "lws"             # Lendenwirbelsäule - lumbar
+  - "wirbels ule"     # Wirbelsäule - spine
+
+  # French
+  - "rachis"          # n=14
+  - "cervicale"
+  - "dorsale"
+  - "lombaire"
+  - "moelle"          # spinal cord
+
+  # Pathology indicators (always spinal)
+  - "myelit"          # myelitis
+  - "myelopathy"
+  - "syringomyelia"
+
+# =============================================================================
+# BRAIN-SPECIFIC NEGATIVE PATTERNS
+# =============================================================================
+# If BOTH a positive keyword AND a brain-specific keyword match,
+# we flag for manual review instead of auto-setting spinal_cord=1.
+# This prevents false positives when body_part_examined incorrectly says "SPINE"
+# but the series_description indicates brain imaging.
+# =============================================================================
+
+brain_only_keywords:
+  # Functional MRI indicators (always brain)
+  - "fmri"
+  - "bold"
+  - "resting state"
+  - "rs-fmri"
+  - "task-fmri"
+  - "rest-fmri"
+  - "rsfmri"
+  - "rfmri"
+
+  # Brain-specific anatomical terms
+  - "hippocampus"
+  - "amygdala"
+  - "thalamus"
+  - "putamen"
+  - "caudate"
+  - "cortex"
+  - "cortical"
+  - "subcortical"
+  - "white matter"
+  - "gray matter"
+  - "grey matter"
+  - "corpus callosum"
+  - "cerebral"
+  - "cerebellum"
+  - "cerebellar"
+  - "frontal"
+  - "parietal"
+  - "temporal"
+  - "occipital"
+  - "brainstem"
+  - "midbrain"
+  - "pons"
+
+  # Brain imaging protocols
+  - "brain"
+  - "head"
+  - "neuro"
+  - "hcp"             # Human Connectome Project (always brain)
+  - "adni"            # Alzheimer's Disease Neuroimaging Initiative
+  - "abcd"            # ABCD Study (brain development)
+
+# =============================================================================
+# DETECTION LOGIC
+# =============================================================================
+# 1. IF spine_keyword matches AND brain_keyword matches → conflict (review)
+# 2. IF only spine_keyword matches → spinal_cord = 1
+# 3. IF only brain_keyword matches → spinal_cord = 0 (brain only)
+# 4. ELSE → spinal_cord = null (unknown)
+#
+# Note: body_part_examined field can be unreliable; series_description
+# and protocol_name are more trustworthy indicators.
+# =============================================================================
+
+detection:
+  # Field priority for detection
+  field_priority:
+    - "text_search_blob"  # Contains series_description, protocol_name, body_part
+
+  # Spine detection triggers manual review
+  spine_triggers_review: true
+  review_reason: "bodypart:spine_detected"
+
+  # Conflict handling (spine + brain keywords both match)
+  conflict_triggers_review: true
+  conflict_review_reason: "bodypart:spine_brain_conflict"

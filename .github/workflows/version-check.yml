@@ -1,0 +1,38 @@
+name: Version Check
+
+on:
+  pull_request:
+    branches: [main]
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Verify versions match
+        run: |
+          ROOT_VERSION=$(cat VERSION | tr -d '[:space:]')
+          BACKEND_VERSION=$(grep 'version = ' backend/pyproject.toml | head -1 | cut -d'"' -f2)
+          FRONTEND_VERSION=$(node -p "require('./frontend/package.json').version")
+
+          echo "VERSION file: $ROOT_VERSION"
+          echo "Backend (pyproject.toml): $BACKEND_VERSION"
+          echo "Frontend (package.json): $FRONTEND_VERSION"
+
+          if [ "$ROOT_VERSION" != "$BACKEND_VERSION" ]; then
+            echo "::error::Version mismatch! VERSION ($ROOT_VERSION) != backend ($BACKEND_VERSION)"
+            exit 1
+          fi
+
+          if [ "$ROOT_VERSION" != "$FRONTEND_VERSION" ]; then
+            echo "::error::Version mismatch! VERSION ($ROOT_VERSION) != frontend ($FRONTEND_VERSION)"
+            exit 1
+          fi
+
+          echo "✓ All versions match: $ROOT_VERSION"

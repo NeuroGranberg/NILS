@@ -1,0 +1,48 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Get version from tag
+        id: version
+        run: echo "VERSION=${GITHUB_REF#refs/tags/v}" >> $GITHUB_OUTPUT
+
+      - name: Create release archive
+        run: |
+          mkdir -p dist
+          git archive --format=zip --prefix=NILS-${{ steps.version.outputs.VERSION }}/ \
+            -o dist/NILS-${{ steps.version.outputs.VERSION }}.zip HEAD
+          git archive --format=tar.gz --prefix=NILS-${{ steps.version.outputs.VERSION }}/ \
+            -o dist/NILS-${{ steps.version.outputs.VERSION }}.tar.gz HEAD
+
+      - name: Extract changelog for this version
+        id: changelog
+        run: |
+          # Extract changelog section for current version
+          VERSION=${{ steps.version.outputs.VERSION }}
+          # Get content between this version header and the next version header (or end of relevant content)
+          sed -n "/## \[$VERSION\]/,/## \[/p" CHANGELOG.md | head -n -1 > release_notes.md
+          # If empty, create a default message
+          if [ ! -s release_notes.md ]; then
+            echo "Release $VERSION" > release_notes.md
+          fi
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v1
+        with:
+          body_path: release_notes.md
+          files: |
+            dist/NILS-${{ steps.version.outputs.VERSION }}.zip
+            dist/NILS-${{ steps.version.outputs.VERSION }}.tar.gz
+          generate_release_notes: false

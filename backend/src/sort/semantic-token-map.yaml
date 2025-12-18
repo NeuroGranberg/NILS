@@ -1,0 +1,192 @@
+# =============================================================================
+# Semantic Token Map
+# =============================================================================
+# Version: 1.3.0
+# Date: 2025-12-04
+#
+# Purpose: Define character and token replacements for text_search_blob
+# normalization. This ensures EXACT keyword matching works reliably by
+# expanding ambiguous short tokens into unambiguous canonical forms.
+#
+# IMPORTANT: Only include tokens that are NOT already meaningful keywords
+# in the detection YAMLs (modifier-detection.yaml, technique-detection.yaml, etc.)
+#
+# Processing Order:
+#   0. Raw removals (remove literal substrings before any normalization)
+#   1. Character replacements (meaningful → text, separators → space, noise → remove)
+#   2. Lowercase
+#   3. Tokenize (split by space and underscore)
+#   4. Deduplicate (make set)
+#   5. Token replacements (unconditional)
+#   6. Conditional token replacements (context-aware)
+#   7. Join with spaces
+#
+# PRESERVED KEYWORDS (DO NOT add to token_replacements):
+#   From modifier-detection.yaml:
+#     - flair, stir, tirm, dir, psir (IR modifiers - each has specific meaning)
+#     - fatsat, spair, chemsat (fat suppression)
+#     - dixon, ideal, mdixon (Dixon methods)
+#     - propeller, blade, multivane, radial, spiral (trajectories)
+#     - mtc (magnetization transfer - but NOT "mt" which is ambiguous)
+#   From technique-detection.yaml:
+#     - tse, fse, haste, space, cube, vista (SE family)
+#     - flash, spgr, vibe, lava, thrive (GRE family)
+#     - mprage, bravo (structural)
+#     - dwi, dti, bold, asl, swi, tof (functional/special)
+#     - epi, grase, ciss, fiesta (others)
+#   From base-detection.yaml:
+#     - t1w, t2w, pdw, t2star (contrast keywords)
+#   From construct-detection.yaml:
+#     - adc, fa, cbf, cbv, mtt, tmax, ttp (derived maps)
+#     - mip, minip, qsm (projections/processing)
+#   From provenance-detection.yaml:
+#     - symri, magic, syntac (synthetic MRI)
+#     - localizer, scout, survey (localizers)
+# =============================================================================
+
+meta:
+  version: "1.3.0"
+  description: "Semantic token normalization for reliable keyword matching"
+
+# =============================================================================
+# RAW REMOVALS (applied before any normalization)
+# =============================================================================
+# Case-sensitive substrings removed directly from the concatenated text blob.
+# Use this to strip vendor/user phrases that would otherwise distort tokens.
+# =============================================================================
+
+raw_removals:
+  - "RÖR PÅ DXSIN SE PÄRM"
+
+# =============================================================================
+# CHARACTER REPLACEMENTS (applied to raw text, before tokenization)
+# =============================================================================
+
+character_replacements:
+  # Meaningful characters → replace with text (becomes part of token)
+  # Example: "T2*" → "T2star" (single token)
+  meaningful:
+    "*": "star"
+  
+  # Separators → replace with space (will split into separate tokens)
+  to_space:
+    - "/"
+    - "\\"
+    - "("
+    - ")"
+    - "["
+    - "]"
+    - ","
+    - ";"
+    - ":"
+    - "^"
+    - "="
+  
+  # Noise → remove entirely
+  remove:
+    - "'"
+    - "\""
+
+  # KEEP as-is (not listed here):
+  # + and - are meaningful for contrast notation: +gd, -k, +c, -c
+
+# =============================================================================
+# TOKEN REPLACEMENTS (applied after tokenization, unconditional)
+# =============================================================================
+# Format: canonical_term: [tokens_to_replace]
+#
+# These tokens are ALWAYS replaced, regardless of context.
+# Only include tokens that are ambiguous on their own and could cause
+# false positive matches due to being substrings of other tokens.
+#
+# RULE: If a token is a keyword in any detection YAML, do NOT replace it.
+# =============================================================================
+
+token_replacements:
+  inversion-recovery:
+    - ir
+  proton-density:
+    - pd
+    - pdw
+  spin-echo:
+    - se
+  gradient-echo:
+    - gre
+  flow-compensation:
+    - fc
+  magnetization-transfer:
+    - mt
+  t1w:
+    - t1
+  t2w:
+    - t2
+    - +t2
+    - -t2
+  proton-density-t2w:
+    - pdt2
+    - pd-t2
+    - pd+t2
+    - 'pd +t2'
+    - 'pd+ t2'
+  localizer:
+    - loc
+    - surv
+    - SURV
+    - SUR
+    - sur
+    - 3-pl
+    - 3pl
+    - surv
+    - -sikt
+    - scout
+    - versikt   # Swedish for "overview" (localizer)
+  propeller:
+    - prop      # PROPELLER/BLADE radial trajectory
+  # SWI component abbreviations
+  phase:
+    - pha       # "swi_pha" → "swi phase"
+  magnitude:
+    - mag       # "swi_mag" → "swi magnitude"
+  grappa:
+    - sense
+  resolve:
+    - fase
+
+
+# =============================================================================
+# TOKEN REMOVALS (applied after tokenization/deduplication)
+# =============================================================================
+# Tokens listed here are removed entirely from the normalized blob. Use this for
+# boilerplate words that add no semantic value (e.g., "protocol", "sequence").
+# =============================================================================
+
+token_removals:
+  - "RÖR PÅ DXSIN SE PÄRM"
+  - EPILEPSI
+  - eplipsi
+  - hjärtsekvens
+  - Startsekvens
+  - ENCEPHALIT
+  - swift       # Siemens SWIFT technology - NOT related to SWI (susceptibility-weighted imaging)
+  - brain
+  - BRAIN
+  - HEAD
+  - head
+  - Direkt
+  - direct
+  - direkt
+  - MESEMS
+  - SistaTestet
+  - faser
+
+
+
+conditional_replacements:
+# when_has_any: [context_tokens]  # Replace if ANY of these are present
+# when_has_all: [context_tokens]  # Replace if ALL of these are present
+  mprage:
+    replace: mpr
+    when_has_all:
+      - 3d
+      - t1
+

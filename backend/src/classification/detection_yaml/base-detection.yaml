@@ -1,0 +1,527 @@
+# =============================================================================
+# Base Contrast Detection Configuration
+# =============================================================================
+# Version: 3.0.0
+# Date: 2025-12-02
+#
+# Purpose: Detect the fundamental tissue contrast weighting of an MRI series.
+# Base contrast answers: "What physical contrast is this series about?"
+#
+# DETECTION STRATEGY (priority order):
+#   1. Technique inference - Some techniques ALWAYS imply a base (MPRAGE → T1w)
+#   2. Exclusive flags - Definitive unified_flags (has_adc → DWI)
+#   3. Keywords - Text search matches ("t1w" → T1w)
+#   4. Physics ranges - TR/TE/TI thresholds by technique family (edge cases)
+#
+# IMPORTANT NOTES:
+#   - FLAIR can be T1-FLAIR or T2-FLAIR (differentiated by TE)
+#   - PD+T2 dual-echo series are stack-split by TE
+#   - Physics thresholds are family-specific (SE vs GRE vs EPI)
+#   - Modifiers (FLAIR, STIR) are on a separate axis
+#
+# UNIFIED FLAGS used (from ClassificationContext.unified_flags):
+#   - is_dwi, is_asl, is_perfusion (acquisition types)
+#   - is_swi, is_tof (specialized techniques)
+#   - has_adc, has_fa, has_trace (diffusion-derived)
+#   - has_cbf, has_cbv, has_mtt, has_tmax, has_ttp (perfusion-derived)
+#   - has_mtc (magnetization transfer)
+#   - has_t1_synthetic, has_t2_synthetic, has_flair_synthetic, has_pd_synthetic (synthetic MRI)
+#   - has_t1_map, has_t2_map, has_r1, has_r2 (quantitative maps)
+#   - is_flair, has_ir_se (IR detection)
+#
+# Database validation: 400K+ fingerprints analyzed for physics thresholds.
+# =============================================================================
+
+meta:
+  version: "3.0.0"
+  description: "Base tissue contrast detection for MRI classification"
+  field: "base"
+  search_field: "text_search_blob"
+  output_type: "single"  # Exactly one base per series
+
+# =============================================================================
+# BASE CONTRAST DEFINITIONS
+# =============================================================================
+# 
+# Each base defines:
+#   - keywords: Text patterns to search in series description
+#   - exclusive_flags: unified_flags that definitively indicate this base
+#   - physics: Optional TR/TE/TI ranges for fallback detection
+#   - notes: Clinical/physics context
+#
+# Detection priority is defined in rules.priority_order below.
+# =============================================================================
+
+bases:
+  # ===========================================================================
+  # PRIMARY TISSUE CONTRASTS
+  # ===========================================================================
+  
+  T1w:
+    name: "T1w"
+    description: "T1-weighted; short TR/TE, white matter bright, good for anatomy and Gd enhancement."
+    keywords:
+      - "t1w"
+      - "t1 w"
+      - "t1-w"
+      - "t1 weighted"
+      - "t1-weighted"
+    detection:
+      # No exclusive flag - inferred from technique or physics
+      combination: null
+    physics:
+      # SE family: TR < 1000ms AND TE < 30ms
+      # GRE family: TE < 10ms (TR varies widely)
+      se:
+        tr_max: 1000
+        te_max: 30
+      gre:
+        te_max: 10
+    notes: |
+      T1w is the most common structural contrast.
+      Short TR emphasizes T1 differences (WM > GM > CSF).
+      Short TE minimizes T2 contamination.
+      Enhanced with Gadolinium for lesion detection.
+
+  T2w:
+    name: "T2w"
+    description: "T2-weighted; long TR/TE, fluid bright (CSF/edema), sensitive to pathology."
+    keywords:
+      - "t2w"
+      - "t2 w"
+      - "t2-w"
+      - "t2 weighted"
+      - "t2-weighted"
+    detection:
+      combination: null
+    physics:
+      # SE family: TR > 2000ms AND TE > 50ms
+      se:
+        tr_min: 2000
+        te_min: 50
+    notes: |
+      T2w is the primary pathology-sensitive contrast.
+      Long TR allows full T1 recovery (removes T1 contrast).
+      Long TE emphasizes T2 differences (CSF >> GM > WM).
+      Edema, tumors, MS lesions appear bright.
+
+  PDw:
+    name: "PDw"
+    description: "Proton-density weighted; long TR, short TE, contrast mostly from proton density."
+    keywords:
+      - "pdw"
+      - "pd w"
+      - "pd-w"
+      - "pd weighted"
+      - "proton density"
+      - "proton-density"
+      - "qmap pd"
+      - "pd map"
+    detection:
+      combination: null
+    physics:
+      # SE family: TR > 2000ms AND TE < 30ms
+      se:
+        tr_min: 2000
+        te_max: 30
+    notes: |
+      PDw has minimal T1 and T2 weighting.
+      Long TR removes T1 contrast.
+      Short TE minimizes T2 contrast.
+      Contrast depends on tissue hydrogen density.
+      Often acquired as first echo in PD+T2 dual-echo.
+
+  T2starw:
+    name: "T2*w"
+    description: "T2-star weighted; GRE sensitivity to microscopic field inhomogeneity (blood, iron, calcium)."
+    keywords:
+      - "t2*"
+      - "t2star"
+      - "t2 star"
+      - "t2*w"
+      - "t2*-w"
+    detection:
+      combination: null
+    physics:
+      # GRE family: TE > 15ms (for susceptibility sensitivity)
+      gre:
+        te_min: 15
+    notes: |
+      T2*w is GRE-specific (no 180° refocusing).
+      Sensitive to local field inhomogeneities.
+      Blood products, iron, calcium appear dark.
+      Basis for SWI and BOLD fMRI.
+
+  # ===========================================================================
+  # SPECIALIZED CONTRASTS
+  # ===========================================================================
+
+  DWI:
+    name: "DWI"
+    description: "Diffusion-weighted; contrast from random water motion (b-value dependent)."
+    keywords:
+      - "dwi"
+      - "diffusion"
+      - "dti"
+      - "diff "
+      - "hardi"
+    detection:
+      # Exclusive: definitive indicators
+      exclusive_flags:
+        - is_dwi
+        - has_adc
+        - has_fa
+        - has_trace
+      # Also from diffusion b-value presence
+      has_b_value: true
+    notes: |
+      DWI contrast depends on water molecule movement.
+      High b-value = more diffusion weighting.
+      Restricted diffusion (stroke) appears bright.
+      ADC, FA, MD are derived DWI maps.
+
+  PWI:
+    name: "PWI"
+    description: "Perfusion-weighted; contrast from blood flow/volume/transit time."
+    keywords:
+      - "pwi"
+      - "perfusion"
+      - "dsc"
+      - "dce"
+      - "perf "
+    detection:
+      exclusive_flags:
+        - is_perfusion
+        - is_asl
+        - has_cbf
+        - has_cbv
+        - has_mtt
+        - has_tmax
+        - has_ttp
+    notes: |
+      PWI measures hemodynamic parameters.
+      DSC: Dynamic susceptibility contrast (T2*-based).
+      DCE: Dynamic contrast-enhanced (T1-based).
+      ASL: Arterial spin labeling (non-contrast).
+      Outputs: CBF, CBV, MTT, Tmax, TTP.
+
+  SWI:
+    name: "SWI"
+    description: "Susceptibility-weighted; T2*/phase-based sensitivity to local susceptibility (veins, iron, calcium)."
+    keywords:
+      - "swi"
+      - "swan"
+      - "susceptibility weighted"
+      - "venobold"
+    detection:
+      exclusive_flags:
+        - is_swi
+        - has_swi
+    notes: |
+      SWI combines magnitude and phase information.
+      Enhanced sensitivity to paramagnetic substances.
+      Venous blood, hemorrhage, iron appear dark.
+      Requires high-resolution GRE with long TE.
+
+  MTw:
+    name: "MTw"
+    description: "Magnetization-transfer weighted; contrast from bound vs free protons (myelin-sensitive)."
+    keywords:
+      - "mtw"
+      - "mt w"
+      - "magnetization transfer"
+      - "magnetization-transfer"
+      - "mt weighted"
+    detection:
+      exclusive_flags:
+        - has_mtc
+    notes: |
+      MTw applies off-resonance RF to saturate bound protons.
+      Saturation transfers to free water pool.
+      Tissues with bound protons (myelin) show signal loss.
+      Used for MS lesion characterization.
+
+  T1rho:
+    name: "T1rho"
+    description: "T1-rho weighted; spin-lock preparation, sensitive to slow molecular interactions."
+    keywords:
+      - "t1rho"
+      - "t1 rho"
+      - "t1ρ"
+      - "spin lock"
+      - "spinlock"
+    detection:
+      combination: null
+    notes: |
+      T1rho uses spin-lock RF pulse.
+      Sensitive to slow molecular motions.
+      Applications: cartilage, liver fibrosis.
+      Less common in routine neuroimaging.
+
+  T2rho:
+    name: "T2rho"
+    description: "T2-rho weighted; sensitive to slow transverse relaxation processes."
+    keywords:
+      - "t2rho"
+      - "t2 rho"
+      - "t2ρ"
+    detection:
+      combination: null
+    notes: |
+      T2rho is less common than T1rho.
+      Sensitive to slow T2 processes.
+      Research applications primarily.
+
+  # ===========================================================================
+  # FALLBACK
+  # ===========================================================================
+
+  Unknown:
+    name: "Unknown"
+    description: "Base contrast could not be determined."
+    keywords: []
+    detection:
+      combination: null
+    notes: |
+      Used when no detection method yields a confident result.
+      May indicate novel sequence or missing metadata.
+
+# =============================================================================
+# TECHNIQUE-TO-BASE INFERENCE RULES
+# =============================================================================
+# 
+# Some techniques have physics-locked base contrast.
+# These are checked FIRST before any other detection method.
+# 
+# Format: technique_id: [base, confidence]
+# =============================================================================
+
+technique_inference:
+  # === T1-weighted techniques ===
+  # IR-prepared 3D GRE (always T1w by physics)
+  MPRAGE: ["T1w", 0.95]
+  MEMPRAGE: ["T1w", 0.95]
+  MP2RAGE: ["T1w", 0.95]
+  
+  # TOF MRA (T1 by inflow enhancement)
+  TOF-MRA: ["T1w", 0.90]
+  
+  # === T2/T2* techniques ===
+  # Multi-echo GRE → T2*
+  ME-GRE: ["T2*w", 0.85]
+  comb-ME-GRE: ["T2*w", 0.90]
+  
+  # SWI → SWI
+  SWI: ["SWI", 0.95]
+  
+  # === Diffusion techniques ===
+  DWI-EPI: ["DWI", 0.95]
+  
+  # === Perfusion techniques ===
+  ASL-EPI: ["PWI", 0.95]
+  DSC-EPI: ["PWI", 0.90]
+  
+  # === Functional (no tissue contrast) ===
+  # BOLD-EPI returns null - handled separately
+  
+  # === Quantitative (no tissue contrast) ===
+  # MDME, QALAS, MRF, VFA-GRE → null (quantitative mapping)
+
+# =============================================================================
+# FLAIR SPECIAL HANDLING
+# =============================================================================
+# 
+# FLAIR can be T1-FLAIR or T2-FLAIR.
+# Differentiated by TE (database validated):
+#   T1-FLAIR: TE < 40ms (median ~23ms)
+#   T2-FLAIR: TE > 80ms (median ~132ms)
+#
+# Note: The FLAIR modifier is detected separately.
+# Here we only determine the underlying base contrast.
+# =============================================================================
+
+flair_rules:
+  # TE threshold to distinguish T1-FLAIR from T2-FLAIR
+  te_threshold: 40  # ms
+  
+  # If TE < threshold → T1-FLAIR base is T1w
+  t1_flair:
+    te_max: 40
+    base: "T1w"
+    confidence: 0.85
+  
+  # If TE >= threshold → T2-FLAIR base is T2w
+  t2_flair:
+    te_min: 40
+    base: "T2w"
+    confidence: 0.85
+  
+  # Default if TE unknown
+  default:
+    base: "T2w"  # Most FLAIR is T2-FLAIR
+    confidence: 0.70
+
+# =============================================================================
+# DUAL-ECHO SPECIAL HANDLING
+# =============================================================================
+# 
+# PD+T2 dual-echo series have both contrasts in one acquisition.
+# Stack splitting separates them by TE.
+# We use TE to determine which echo this stack represents.
+#
+# Database validated thresholds:
+#   PD echo: TE < 40ms (median 16ms)
+#   T2 echo: TE >= 40ms (median 93ms)
+# =============================================================================
+
+dual_echo_rules:
+  # ROBUST DUAL-ECHO DETECTION:
+  # Instead of enumerating all combinations (pd+t2, pd/t2, proton-density + t2w, etc.),
+  # detect dual-echo by checking if BOTH PD-related AND T2-related keywords appear.
+  # This handles any separator or ordering automatically.
+
+  # PD-related keywords (any of these indicates proton density)
+  pd_keywords:
+    - "pd"
+    - "proton density"
+    - "proton-density"
+
+  # T2-related keywords (any of these indicates T2)
+  t2_keywords:
+    - "t2"
+
+  # TE threshold to separate PD from T2 echo
+  te_threshold: 40  # ms
+
+  pd_echo:
+    te_max: 40
+    base: "PDw"
+    confidence: 0.85
+
+  t2_echo:
+    te_min: 40
+    base: "T2w"
+    confidence: 0.85
+
+# =============================================================================
+# PHYSICS-BASED INFERENCE (EDGE CASES)
+# =============================================================================
+# 
+# Used when keywords and technique inference fail.
+# Thresholds are technique-family-specific.
+# Confidence is lower than keyword/technique methods.
+#
+# Database-validated ranges (p05-p95):
+#   SE T1w:  TR 400-865ms,  TE 7-21ms
+#   SE T2w:  TR 1000-7000ms, TE 61-388ms
+#   SE PDw:  TR > 2000ms,   TE < 30ms
+#   GRE T1w: TE 2-4ms
+#   GRE T2*: TE 7-40ms
+#   EPI DWI: TR 3800-8000ms, TE 66-120ms
+# =============================================================================
+
+physics_rules:
+  # === SE FAMILY (Spin Echo) ===
+  se:
+    t1w:
+      tr_max: 1000
+      te_max: 30
+      confidence: 0.70
+    t2w:
+      tr_min: 2000
+      te_min: 50
+      confidence: 0.70
+    pdw:
+      tr_min: 2000
+      te_max: 30
+      confidence: 0.65
+  
+  # === GRE FAMILY (Gradient Echo) ===
+  gre:
+    t1w:
+      te_max: 10
+      confidence: 0.70
+    t2starw:
+      te_min: 15
+      confidence: 0.70
+  
+  # === IR FAMILY (Inversion Recovery) ===
+  # TI determines nulling target
+  ir:
+    # Short TI nulls fat (STIR-like → T2w base)
+    stir_like:
+      ti_max: 300
+      base: "T2w"
+      confidence: 0.75
+    
+    # Long TI nulls CSF (FLAIR-like)
+    # Use TE to determine T1-FLAIR vs T2-FLAIR
+    flair_like:
+      ti_min: 1500
+      # See flair_rules for TE-based differentiation
+    
+    # Medium TI → standard IR (T1w)
+    standard_ir:
+      ti_min: 300
+      ti_max: 1500
+      base: "T1w"
+      confidence: 0.70
+  
+  # === EPI FAMILY ===
+  epi:
+    # DWI detected by b-value or is_dwi flag
+    # If not DWI, likely BOLD (no tissue contrast)
+    pass
+
+# =============================================================================
+# DETECTION RULES
+# =============================================================================
+
+rules:
+  # Only one base contrast per series
+  allow_multiple: false
+  
+  # Priority order for keyword-based detection
+  # More specific bases checked first
+  priority_order:
+    # Specialized (most specific)
+    - "DWI"
+    - "PWI"
+    - "SWI"
+    - "MTw"
+    - "T1rho"
+    - "T2rho"
+    # Primary tissue contrasts
+    - "T2starw"  # Dict key for T2*w (asterisk not allowed in YAML keys)
+    - "T2w"
+    - "PDw"
+    - "T1w"
+    # Fallback
+    - "Unknown"
+  
+  # Confidence thresholds
+  confidence_thresholds:
+    technique_inference: 0.95  # Technique strongly implies base
+    exclusive_flag: 0.90       # Definitive unified_flag
+    keywords: 0.85             # Text search match
+    physics: 0.70              # TR/TE/TI inference
+    fallback: 0.50             # Unknown/default
+
+# =============================================================================
+# OUTPUT SPECIFICATION
+# =============================================================================
+# 
+# Output: base (single value)
+# 
+# Examples:
+#   - "T1w" (MPRAGE, spoiled GRE, short TR/TE TSE)
+#   - "T2w" (TSE with long TR/TE, T2-FLAIR base)
+#   - "PDw" (first echo in PD+T2 dual-echo)
+#   - "T2*w" (multi-echo GRE, long TE GRE)
+#   - "DWI" (diffusion-weighted EPI)
+#   - "PWI" (perfusion, ASL)
+#   - "SWI" (susceptibility-weighted)
+#   - "MTw" (magnetization transfer)
+#   - "Unknown" (could not determine)
+#
+# =============================================================================

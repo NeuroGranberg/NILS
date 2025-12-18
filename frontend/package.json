@@ -1,0 +1,76 @@
+{
+  "name": "nils-frontend",
+  "private": true,
+  "version": "0.1.0",
+  "description": "Frontend for NILS - Neuroimaging Intelligent Linked System",
+  "author": {
+    "name": "Nima Chamyani",
+    "email": "nima.chamyani@ki.se"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/NeuroGranberg/NILS.git"
+  },
+  "license": "MIT",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc -b && vite build",
+    "lint": "eslint .",
+    "preview": "vite preview",
+    "test": "vitest"
+  },
+  "dependencies": {
+    "@cornerstonejs/core": "^4.13.5",
+    "@cornerstonejs/dicom-image-loader": "^4.13.5",
+    "@cornerstonejs/tools": "^4.13.5",
+    "@mantine/core": "^7.16.1",
+    "@mantine/hooks": "^7.16.1",
+    "@mantine/notifications": "^7.16.1",
+    "@tabler/icons-react": "^3.23.0",
+    "@tanstack/react-query": "^5.62.3",
+    "comlink": "^4.4.2",
+    "datatables.net": "^2.0.10",
+    "datatables.net-dt": "^2.0.10",
+    "datatables.net-fixedcolumns": "^5.0.5",
+    "datatables.net-fixedcolumns-dt": "^5.0.5",
+    "dicom-parser": "^1.8.21",
+    "luxon": "^3.5.0",
+    "react": "^19.1.1",
+    "react-dom": "^19.1.1",
+    "react-router-dom": "^7.1.3",
+    "zustand": "^5.0.2"
+  },
+  "devDependencies": {
+    "@eslint/js": "^9.36.0",
+    "@originjs/vite-plugin-commonjs": "^1.0.3",
+    "@testing-library/jest-dom": "^6.6.3",
+    "@testing-library/react": "^16.2.0",
+    "@testing-library/user-event": "^14.6.1",
+    "@types/luxon": "^3.7.1",
+    "@types/node": "^24.6.0",
+    "@types/react": "^19.1.16",
+    "@types/react-dom": "^19.1.9",
+    "@vitejs/plugin-react": "^4.3.4",
+    "eslint": "^9.36.0",
+    "eslint-plugin-react-hooks": "^5.2.0",
+    "eslint-plugin-react-refresh": "^0.4.22",
+    "globals": "^16.4.0",
+    "jsdom": "^25.0.1",
+    "msw": "^2.6.6",
+    "playwright": "^1.56.1",
+    "typescript": "~5.9.3",
+    "typescript-eslint": "^8.45.0",
+    "vite": "^5.4.10",
+    "vitest": "^2.1.8"
+  },
+  "msw": {
+    "workerDirectory": [
+      "public"
+    ]
+  },
+  "overrides": {
+    "glob": "^10.4.5",
+    "rimraf": "^6.0.1"
+  }
+}
