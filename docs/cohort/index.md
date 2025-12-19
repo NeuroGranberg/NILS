@@ -1,11 +1,15 @@
 # Cohort Operations
 
-A **Cohort** is a managed group of subjects with associated imaging data. This section covers the four main cohort operations:
+A **Cohort** is a managed group of subjects with associated imaging data. This section covers the four main cohort operations.
 
-1. [**Extraction**](extraction.md) - Import DICOM metadata into the database
-2. [**Sorting**](sorting.md) - Classify all series using the 4-step pipeline
-3. [**Anonymization**](anonymization.md) - De-identify patient data
-4. [**Export**](export.md) - Generate BIDS-compliant output
+## Pipeline Stages
+
+The pipeline runs in a fixed order (anonymization is optional):
+
+1. [**Anonymization**](anonymization.md) - Remove PHI from DICOM headers *(optional)*
+2. [**Extraction**](extraction.md) - Parse DICOM metadata into the staging catalog
+3. [**Sorting**](sorting.md) - Label, group, and QC imaging sequences
+4. [**BIDS Export**](export.md) - Organize outputs into BIDS or flat layouts
 
 ---
 
@@ -20,7 +24,7 @@ A cohort represents a dataset you want to process. It contains:
 | `description` | Human-readable description |
 | `owner` | Creator/owner of the cohort |
 | `tags` | Categorization tags (JSON array) |
-| `anonymization_enabled` | Whether to run anonymization |
+| `anonymization_enabled` | Whether to run anonymization stage |
 
 ### Cohort Status
 
@@ -45,30 +49,90 @@ Progress metrics are tracked:
 
 ```mermaid
 flowchart TB
-    subgraph extraction["EXTRACTION"]
-        e1["Scan DICOM files → Parse metadata → Insert into database"]
-        e2["Output: Subject, Study, Series, Instance, SeriesStack"]
+    subgraph anonymize["1. ANONYMIZATION (optional)"]
+        a1["Remove PHI from DICOM headers"]
+        a2["Remap patient IDs via folder structure"]
+        a3["Generate encrypted audit logs"]
     end
 
-    subgraph sorting["SORTING"]
-        s1["Step 1: Checkup → Step 2: Fingerprint → Step 3: Classify"]
+    subgraph extract["2. EXTRACTION"]
+        e1["Scan DICOM files recursively"]
+        e2["Parse metadata into staging catalog"]
+        e3["Create Subject, Study, Series, Instance records"]
+    end
+
+    subgraph sort["3. SORTING (4 sub-steps)"]
+        s1["Checkup → Stack Fingerprint → Classification → Completion"]
         s2["Output: StackFingerprint, SeriesClassificationCache"]
     end
 
-    subgraph anonymization["ANONYMIZATION"]
-        a1["Scrub DICOM tags → Remap patient IDs → Map study dates"]
-        a2["Output: Anonymized DICOM files, audit logs"]
+    subgraph bids["4. BIDS EXPORT"]
+        b1["Filter by intent and provenance"]
+        b2["Convert to DICOM or NIfTI"]
+        b3["Generate BIDS or flat structure"]
     end
 
-    subgraph export["EXPORT"]
-        x1["Filter by intent → Convert format → Generate BIDS structure"]
-        x2["Output: BIDS dataset with dcm/nii files"]
-    end
-
-    extraction --> sorting
-    sorting --> anonymization
-    anonymization --> export
+    anonymize --> extract
+    extract --> sort
+    sort --> bids
 ```
+
+---
+
+## Stage Details
+
+### 1. Anonymization (Optional)
+
+Runs first when enabled. Removes Protected Health Information (PHI) from DICOM headers before any metadata is extracted.
+
+| Configuration | Description |
+|--------------|-------------|
+| `patient_id.strategy` | How to derive new patient IDs (`folder`, `hash`, `sequential`) |
+| `study_dates.enabled` | Whether to shift study dates |
+| `audit_export.format` | Audit log format (`encrypted_excel`, `csv`) |
+| `anonymize_categories` | DICOM tag categories to scrub |
+
+### 2. Extraction
+
+Scans the source directory and parses DICOM metadata into the database.
+
+| Configuration | Description |
+|--------------|-------------|
+| `process_pool_workers` | Parallel processes for parsing |
+| `scan_thread_workers` | Threads for file scanning |
+| `folder_thread_workers` | Threads for folder traversal |
+
+**Output tables:** Subject, Study, Series, Instance, SeriesStack
+
+### 3. Sorting
+
+A multi-step stage that classifies all series using the detection infrastructure.
+
+| Step | Description |
+|------|-------------|
+| **Checkup** | Verify cohort scope and data integrity |
+| **Stack Fingerprint** | Build classification features for each stack |
+| **Classification** | Apply detection rules (10-stage pipeline) |
+| **Completion** | Fill gaps and flag for manual review |
+
+| Configuration | Description |
+|--------------|-------------|
+| `profile` | Detection profile (`standard`, `research`) |
+| `selectedModalities` | Modalities to process (`MR`, `CT`, `PT`) |
+| `skipClassified` | Skip already-classified stacks |
+| `forceReprocess` | Force re-classification of all stacks |
+
+### 4. BIDS Export
+
+Generates the final output in BIDS or flat directory structure.
+
+| Configuration | Description |
+|--------------|-------------|
+| `outputModes` | Output formats (`dcm`, `nii`, `nii.gz`) |
+| `layout` | Directory structure (`bids`, `flat`) |
+| `includeIntents` | BIDS intents to include (`anat`, `dwi`, `func`, `fmap`, `perf`) |
+| `includeProvenance` | Provenance types to include (`SyMRI`, `SWIRecon`, `EPIMix`) |
+| `groupSyMRI` | Group SyMRI outputs in subdirectory |
 
 ---
 
@@ -80,19 +144,22 @@ flowchart TB
    - **Name**: Unique identifier (e.g., "MS_Study_2024")
    - **Source Path**: Path to DICOM data (e.g., `/data/raw/ms_study`)
    - **Description**: Study description
+   - **Anonymization**: Enable if processing PHI data
 4. Click **Create**
 
-The cohort is now ready for extraction.
+The cohort is now ready for processing.
 
 ---
 
 ## Operation Order
 
-Operations must be run in order:
+Stages must run in sequence:
 
-1. **Extraction** must complete before Sorting
-2. **Sorting** must complete before Export
-3. **Anonymization** can run after Extraction (before or after Sorting)
+1. **Anonymization** (if enabled) must complete before Extraction
+2. **Extraction** must complete before Sorting
+3. **Sorting** must complete before BIDS Export
+
+Each stage depends on the output of the previous stage.
 
 ---
 
@@ -111,7 +178,7 @@ View jobs in the **Jobs** tab of the web interface.
 
 ## Next Steps
 
-- [Extraction](extraction.md) - Import DICOM data
+- [Anonymization](anonymization.md) - Remove PHI from DICOM data
+- [Extraction](extraction.md) - Import DICOM metadata
 - [Sorting](sorting.md) - Classify series
-- [Anonymization](anonymization.md) - De-identify data
-- [Export](export.md) - Generate BIDS output
+- [BIDS Export](export.md) - Generate output
