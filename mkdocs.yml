@@ -76,6 +76,8 @@ extra:
 
 nav:
   - Home: index.md
+  - Presentation: presentation/index.md
+
   - Getting Started:
     - Installation: getting-started/installation.md
     - Quick Start: getting-started/quick-start.md

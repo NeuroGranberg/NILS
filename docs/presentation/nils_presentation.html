@@ -1,0 +1,941 @@
+<!doctype html>
+<html lang="en">
+
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+
+    <title>NILS - Neuroimaging Intelligent Linked System</title>
+
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/reveal.js/5.1.0/reset.min.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/reveal.js/5.1.0/reveal.min.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/reveal.js/5.1.0/theme/white.min.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+
+    <style>
+        :root {
+            --ki-plum: #4F0433;
+            --ki-plum-light: #8c1c5a;
+            --ki-silver: #e0e0e0;
+            --ki-grey: #f5f5f5;
+            --text-color: #333333;
+            --code-bg: #f4f4f4;
+        }
+
+        body {
+            background-color: white;
+            color: var(--text-color);
+        }
+
+        .reveal {
+            color: var(--text-color);
+            font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif;
+        }
+
+        .reveal .controls { color: var(--ki-plum); }
+        .reveal .progress { color: var(--ki-plum); }
+        .reveal .progress span { background-color: var(--ki-plum); }
+
+        .reveal h1, .reveal h2, .reveal h3, .reveal h4, .reveal h5, .reveal h6 {
+            color: var(--ki-plum);
+            text-transform: none;
+            font-weight: 600;
+            margin-bottom: 20px;
+        }
+
+        .reveal h1 {
+            font-size: 2.8em;
+            border-bottom: 3px solid var(--ki-plum-light);
+            display: inline-block;
+            padding-bottom: 10px;
+        }
+
+        .reveal h2 { font-size: 2em; }
+        .reveal h3 { font-size: 1.4em; color: #555; }
+
+        .accent { color: var(--ki-plum-light); font-weight: 600; }
+        .muted { color: #666; font-weight: 400; }
+
+        /* Grid layouts */
+        .grid-2 {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 40px;
+            align-items: start;
+            text-align: left;
+        }
+
+        .grid-3 {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 25px;
+        }
+
+        .grid-6 {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            grid-template-rows: repeat(2, 1fr);
+            gap: 20px;
+        }
+
+        /* Cards */
+        .card {
+            background: white;
+            border: 1px solid var(--ki-silver);
+            border-radius: 8px;
+            padding: 20px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+            text-align: center;
+        }
+
+        .card:hover {
+            border-color: var(--ki-plum-light);
+            box-shadow: 0 4px 12px rgba(79,4,51,0.1);
+        }
+
+        .card .icon {
+            font-size: 2em;
+            color: var(--ki-plum);
+            margin-bottom: 10px;
+        }
+
+        .card h4 {
+            margin: 10px 0 5px;
+            font-size: 1em;
+        }
+
+        .card p {
+            font-size: 0.75em;
+            color: #666;
+            margin: 0;
+        }
+
+        /* Code blocks */
+        .code-block {
+            background: var(--code-bg);
+            border-left: 4px solid var(--ki-plum);
+            border-radius: 4px;
+            padding: 15px 20px;
+            text-align: left;
+            font-family: 'Consolas', 'Monaco', monospace;
+            font-size: 0.7em;
+            line-height: 1.5;
+        }
+
+        /* Tables */
+        .reveal table {
+            font-size: 0.7em;
+            border-collapse: collapse;
+            width: 100%;
+        }
+
+        .reveal table th {
+            background: var(--ki-plum);
+            color: white;
+            padding: 10px 15px;
+            text-align: left;
+        }
+
+        .reveal table td {
+            padding: 8px 15px;
+            border-bottom: 1px solid var(--ki-silver);
+        }
+
+        .reveal table tr:nth-child(even) { background: var(--ki-grey); }
+
+        /* Flowchart style boxes */
+        .flow-box {
+            background: white;
+            border: 2px solid var(--ki-plum);
+            border-radius: 6px;
+            padding: 12px 20px;
+            display: inline-block;
+            margin: 5px;
+        }
+
+        .flow-box.highlight {
+            background: var(--ki-plum);
+            color: white;
+        }
+
+        .flow-arrow {
+            color: var(--ki-plum);
+            font-size: 1.5em;
+            margin: 0 10px;
+        }
+
+        /* Lists */
+        .reveal ul { margin-left: 0; }
+        .reveal ul li {
+            margin-bottom: 12px;
+            list-style: none;
+            padding-left: 25px;
+            position: relative;
+        }
+
+        .reveal ul li::before {
+            content: "\f00c";
+            font-family: "Font Awesome 6 Free";
+            font-weight: 900;
+            position: absolute;
+            left: 0;
+            color: var(--ki-plum);
+            font-size: 0.8em;
+        }
+
+        /* Tags/badges */
+        .tag {
+            display: inline-block;
+            background: var(--ki-grey);
+            border: 1px solid var(--ki-silver);
+            border-radius: 4px;
+            padding: 3px 10px;
+            font-size: 0.7em;
+            margin: 2px;
+        }
+
+        .tag.primary {
+            background: var(--ki-plum);
+            color: white;
+            border-color: var(--ki-plum);
+        }
+
+        /* Images */
+        .clean-img {
+            border: none;
+            background: none;
+            box-shadow: none;
+            max-height: 400px;
+        }
+
+
+        /* Fragment animation */
+        .reveal .fragment.fade-up {
+            opacity: 0;
+            transform: translateY(20px);
+        }
+
+        .reveal .fragment.fade-up.visible {
+            opacity: 1;
+            transform: translateY(0);
+        }
+
+        /* Stats */
+        .stat-number {
+            font-size: 2.5em;
+            font-weight: 700;
+            color: var(--ki-plum);
+            display: block;
+        }
+
+        .stat-label {
+            font-size: 0.8em;
+            color: #666;
+        }
+
+        /* Pipeline step */
+        .pipeline-step {
+            display: flex;
+            align-items: center;
+            gap: 15px;
+            padding: 15px;
+            background: white;
+            border-left: 4px solid var(--ki-plum);
+            margin-bottom: 10px;
+        }
+
+        .pipeline-step .step-num {
+            color: var(--ki-plum);
+            font-size: 1.4em;
+            font-weight: 700;
+            min-width: 30px;
+            text-align: center;
+            flex-shrink: 0;
+        }
+
+        .pipeline-step .step-icon {
+            color: var(--ki-plum);
+            font-size: 1.2em;
+            min-width: 30px;
+            text-align: center;
+            flex-shrink: 0;
+        }
+
+        .pipeline-step .step-content h4 {
+            margin: 0;
+            font-size: 0.9em;
+        }
+
+        .pipeline-step .step-content p {
+            margin: 3px 0 0;
+            font-size: 0.7em;
+            color: #666;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="reveal">
+        <!-- Fixed logos -->
+        <div style="position: absolute; top: 20px; right: 20px; z-index: 100;">
+            <img src="assets/nils-logo.svg" style="height: 50px; border:none; box-shadow:none;">
+        </div>
+        <div style="position: absolute; bottom: 20px; left: 20px; z-index: 100;">
+            <img src="assets/ki_digital_logo_rgb-custom20221016133426.jpg" alt="Karolinska Institutet"
+                style="height: 60px; border:none; box-shadow:none;">
+        </div>
+
+        <div class="slides">
+
+            <!-- ========== SLIDE 1: TITLE ========== -->
+            <section>
+                <div class="grid-2" style="align-items: center;">
+                    <div>
+                        <h1>NILS</h1>
+                        <h3 class="muted">Neuroimaging Intelligent<br>Linked System</h3>
+                        <p style="margin-top: 30px; font-size: 1.1em; line-height: 1.6;">
+                            <span class="accent">Intelligent Classification</span><br>
+                            <span class="muted">Automated Anonymization</span><br>
+                            <span class="muted">BIDS Export</span>
+                        </p>
+                    </div>
+                    <div style="text-align: center;">
+                        <img src="assets/nils_hero_clean.png" alt="NILS" class="clean-img">
+                    </div>
+                </div>
+            </section>
+
+            <!-- ========== SLIDE 2: THE PROBLEM (with vertical) ========== -->
+            <section>
+                <section>
+                    <h2><i class="fas fa-exclamation-triangle" style="color: var(--ki-plum-light);"></i> The Challenge</h2>
+                    <div class="grid-2" style="margin-top: 40px;">
+                        <div style="text-align: center;">
+                            <i class="fas fa-folder-open" style="font-size: 4em; color: #999;"></i>
+                            <h3 style="margin-top: 20px;">Raw DICOM Chaos</h3>
+                            <p style="color: #666;">
+                                Inconsistent naming<br>
+                                Vendor variations<br>
+                                No standard structure
+                            </p>
+                        </div>
+                        <div style="text-align: center;">
+                            <i class="fas fa-sitemap" style="font-size: 4em; color: var(--ki-plum);"></i>
+                            <h3 style="margin-top: 20px;">Research Ready</h3>
+                            <p style="color: var(--ki-plum);">
+                                BIDS compliant<br>
+                                Consistent classification<br>
+                                Automated pipeline
+                            </p>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- Vertical: Why is this hard? -->
+                <section>
+                    <h2>Why Classification is Hard</h2>
+                    <div style="margin-top: 30px;">
+                        <div class="pipeline-step fragment fade-up">
+                            <div class="step-icon"><i class="fas fa-tags"></i></div>
+                            <div class="step-content">
+                                <h4>DICOM Tags Are Unreliable</h4>
+                                <p>SeriesDescription varies by site, operator, and vendor</p>
+                            </div>
+                        </div>
+                        <div class="pipeline-step fragment fade-up">
+                            <div class="step-icon"><i class="fas fa-industry"></i></div>
+                            <div class="step-content">
+                                <h4>Vendor-Specific Implementations</h4>
+                                <p>Siemens, GE, Philips encode the same sequence differently</p>
+                            </div>
+                        </div>
+                        <div class="pipeline-step fragment fade-up">
+                            <div class="step-icon"><i class="fas fa-layer-group"></i></div>
+                            <div class="step-content">
+                                <h4>Multi-Output Acquisitions</h4>
+                                <p>SyMRI produces 20+ outputs from one 5-minute scan</p>
+                            </div>
+                        </div>
+                        <div class="pipeline-step fragment fade-up">
+                            <div class="step-icon"><i class="fas fa-question"></i></div>
+                            <div class="step-content">
+                                <h4>Derived vs Source Ambiguity</h4>
+                                <p>ADC maps, synthetic contrasts, and reformats need special handling</p>
+                            </div>
+                        </div>
+                    </div>
+                </section>
+            </section>
+
+            <!-- ========== SLIDE 3: SIX-AXIS CLASSIFICATION (with verticals) ========== -->
+            <section>
+                <section>
+                    <h2><i class="fas fa-cube"></i> Six-Axis Classification</h2>
+                    <p class="muted">Orthogonal dimensions for complete MRI characterization</p>
+                    <img src="assets/six_axes_clean.png" class="clean-img" style="margin-top: 20px; max-height: 350px;">
+                </section>
+
+                <!-- Vertical: The 6 axes detail -->
+                <section>
+                    <h2>The Six Axes</h2>
+                    <div class="grid-6" style="font-size: 0.8em; margin-top: 20px;">
+                        <div class="card">
+                            <div class="icon"><i class="fas fa-eye"></i></div>
+                            <h4>Base</h4>
+                            <p>T1w, T2w, DWI, SWI</p>
+                        </div>
+                        <div class="card">
+                            <div class="icon"><i class="fas fa-wave-square"></i></div>
+                            <h4>Technique</h4>
+                            <p>TSE, MPRAGE, EPI</p>
+                        </div>
+                        <div class="card">
+                            <div class="icon"><i class="fas fa-sliders-h"></i></div>
+                            <h4>Modifier</h4>
+                            <p>FLAIR, FatSat, 3D</p>
+                        </div>
+                        <div class="card">
+                            <div class="icon"><i class="fas fa-layer-group"></i></div>
+                            <h4>Construct</h4>
+                            <p>ADC, FA, T1map</p>
+                        </div>
+                        <div class="card">
+                            <div class="icon"><i class="fas fa-code-branch"></i></div>
+                            <h4>Provenance</h4>
+                            <p>SyMRI, SWI, Raw</p>
+                        </div>
+                        <div class="card">
+                            <div class="icon"><i class="fas fa-bolt"></i></div>
+                            <h4>Acceleration</h4>
+                            <p>GRAPPA, SMS, CS</p>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- Vertical: Example output -->
+                <section>
+                    <h2>Classification Output</h2>
+                    <div class="code-block" style="font-size: 0.8em; max-width: 600px; margin: 30px auto;">
+<pre style="margin: 0;">{
+  "base": "T1w",
+  "technique": "MPRAGE",
+  "modifier_csv": "3D",
+  "construct_csv": null,
+  "provenance": "RawRecon",
+  "acceleration_csv": "GRAPPA",
+  "directory_type": "anat"
+}</pre>
+                    </div>
+                    <p class="muted" style="font-size: 0.8em; margin-top: 20px;">
+                        <i class="fas fa-arrow-right"></i> Maps directly to BIDS structure
+                    </p>
+                </section>
+            </section>
+
+            <!-- ========== SLIDE 4: DETECTION INFRASTRUCTURE (with verticals) ========== -->
+            <section>
+                <section>
+                    <h2><i class="fas fa-microchip"></i> Detection Infrastructure</h2>
+                    <p class="muted">Multi-layer vendor-agnostic detection</p>
+                    <div style="margin-top: 40px; display: flex; justify-content: center; align-items: center; flex-wrap: wrap; gap: 10px;">
+                        <div class="flow-box">DICOM Tags</div>
+                        <i class="fas fa-arrow-right flow-arrow"></i>
+                        <div class="flow-box">5 Parsers</div>
+                        <i class="fas fa-arrow-right flow-arrow"></i>
+                        <div class="flow-box highlight">107 Unified Flags</div>
+                        <i class="fas fa-arrow-right flow-arrow"></i>
+                        <div class="flow-box">6 Axis Detectors</div>
+                    </div>
+                </section>
+
+                <!-- Vertical: The 5 Parsers -->
+                <section>
+                    <h2>DICOM Tag Parsers</h2>
+                    <table style="margin-top: 20px;">
+                        <thead>
+                            <tr>
+                                <th>Parser</th>
+                                <th>DICOM Tag</th>
+                                <th>Detects</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td><strong>ImageType</strong></td>
+                                <td>(0008,0008)</td>
+                                <td>ORIGINAL, DERIVED, ADC, PHASE, SWI...</td>
+                            </tr>
+                            <tr>
+                                <td><strong>ScanningSequence</strong></td>
+                                <td>(0018,0020)</td>
+                                <td>SE, GR, IR, EP physics</td>
+                            </tr>
+                            <tr>
+                                <td><strong>SequenceVariant</strong></td>
+                                <td>(0018,0021)</td>
+                                <td>SK, SP, MP modifiers</td>
+                            </tr>
+                            <tr>
+                                <td><strong>ScanOptions</strong></td>
+                                <td>(0018,0022)</td>
+                                <td>FS, FC, parallel imaging</td>
+                            </tr>
+                            <tr>
+                                <td><strong>SequenceName</strong></td>
+                                <td>(0018,0024)</td>
+                                <td>*tfl3d, *ep_b patterns</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </section>
+
+                <!-- Vertical: Unified Flags -->
+                <section>
+                    <h2>107 Unified Flags</h2>
+                    <p class="muted" style="margin-bottom: 20px;">Vendor-agnostic boolean detection flags</p>
+                    <div class="grid-3" style="font-size: 0.75em; text-align: left;">
+                        <div>
+                            <h4><i class="fas fa-wave-square" style="color: var(--ki-plum);"></i> Physics</h4>
+                            <span class="tag">has_se</span>
+                            <span class="tag">has_gre</span>
+                            <span class="tag">has_epi</span>
+                            <span class="tag">has_ir</span>
+                        </div>
+                        <div>
+                            <h4><i class="fas fa-cogs" style="color: var(--ki-plum);"></i> Technique</h4>
+                            <span class="tag">is_tse</span>
+                            <span class="tag">is_mprage</span>
+                            <span class="tag">is_dwi</span>
+                            <span class="tag">is_bold</span>
+                        </div>
+                        <div>
+                            <h4><i class="fas fa-flask" style="color: var(--ki-plum);"></i> Derived</h4>
+                            <span class="tag">has_adc</span>
+                            <span class="tag">has_fa</span>
+                            <span class="tag">is_synthetic</span>
+                            <span class="tag">is_qmap</span>
+                        </div>
+                    </div>
+                    <div style="margin-top: 30px; background: var(--ki-grey); padding: 15px; border-radius: 6px; font-size: 0.8em;">
+                        <i class="fas fa-info-circle" style="color: var(--ki-plum);"></i>
+                        Flags aggregate evidence from all parsers using OR logic
+                    </div>
+                </section>
+
+                <!-- Vertical: Three-Tier Detection -->
+                <section>
+                    <h2>Three-Tier Detection</h2>
+                    <div style="margin-top: 30px; text-align: left; max-width: 700px; margin-left: auto; margin-right: auto;">
+                        <div class="pipeline-step">
+                            <div class="step-num">1</div>
+                            <div class="step-content">
+                                <h4>Exclusive Flag <span class="tag primary">95%</span></h4>
+                                <p>Single unified flag definitively identifies the value</p>
+                            </div>
+                        </div>
+                        <div class="pipeline-step">
+                            <div class="step-num">2</div>
+                            <div class="step-content">
+                                <h4>Alternative Flags / Keywords <span class="tag primary">75-90%</span></h4>
+                                <p>Any matching condition triggers detection (OR logic)</p>
+                            </div>
+                        </div>
+                        <div class="pipeline-step">
+                            <div class="step-num">3</div>
+                            <div class="step-content">
+                                <h4>Combination / Fallback <span class="tag primary">50-75%</span></h4>
+                                <p>Multiple conditions must match (AND logic)</p>
+                            </div>
+                        </div>
+                    </div>
+                </section>
+            </section>
+
+            <!-- ========== SLIDE 5: PROVENANCE-FIRST BRANCHING (with verticals) ========== -->
+            <section>
+                <section>
+                    <h2><i class="fas fa-code-branch"></i> Provenance-First Branching</h2>
+                    <p class="muted">Route to specialized logic based on data origin</p>
+                    <div style="margin-top: 40px; display: flex; justify-content: center; align-items: center; gap: 20px;">
+                        <div class="flow-box highlight">Provenance</div>
+                        <i class="fas fa-arrow-right flow-arrow"></i>
+                        <div style="display: flex; flex-direction: column; gap: 10px;">
+                            <div class="flow-box">SyMRI Branch <span class="tag">17+ types</span></div>
+                            <div class="flow-box">SWI Branch <span class="tag">6 types</span></div>
+                            <div class="flow-box">EPIMix Branch <span class="tag">12 types</span></div>
+                            <div class="flow-box">RawRecon Branch</div>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- Vertical: Why Branches? -->
+                <section>
+                    <h2>The Multi-Output Problem</h2>
+                    <p class="muted">Modern sequences produce multiple series from one acquisition</p>
+                    <table style="margin-top: 20px; font-size: 0.8em;">
+                        <thead>
+                            <tr>
+                                <th>Technology</th>
+                                <th>Time</th>
+                                <th>Outputs</th>
+                                <th>Challenge</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td><strong>SyMRI/MAGiC</strong></td>
+                                <td>~5 min</td>
+                                <td>1-20+ series</td>
+                                <td>Maps vs synthetic contrasts</td>
+                            </tr>
+                            <tr>
+                                <td><strong>SWI</strong></td>
+                                <td>~4 min</td>
+                                <td>2-6 series</td>
+                                <td>Mag vs phase vs processed</td>
+                            </tr>
+                            <tr>
+                                <td><strong>EPIMix</strong></td>
+                                <td>~1 min</td>
+                                <td>5-9 series</td>
+                                <td>6 contrasts, same source</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                    <div style="margin-top: 20px; font-size: 0.75em;">
+                        <i class="fas fa-exclamation-circle" style="color: var(--ki-plum);"></i>
+                        All outputs share the same sequence name &mdash; standard detectors fail
+                    </div>
+                </section>
+
+                <!-- Vertical: SyMRI Branch -->
+                <section>
+                    <h2>SyMRI Branch</h2>
+                    <p class="muted">Quantitative vs synthetic: a physics distinction</p>
+                    <div class="grid-2" style="font-size: 0.75em; margin-top: 20px;">
+                        <div>
+                            <h4 style="color: var(--ki-plum);"><i class="fas fa-chart-line"></i> Quantitative Maps</h4>
+                            <p><strong>base = NULL</strong> (no tissue contrast)</p>
+                            <p>T1map, T2map, PDmap, MyelinMap</p>
+                            <p style="color: #666;">Pixel value = measurement in ms or %</p>
+                        </div>
+                        <div>
+                            <h4 style="color: var(--ki-plum);"><i class="fas fa-image"></i> Synthetic Weighted</h4>
+                            <p><strong>base = T1w/T2w/PDw</strong></p>
+                            <p>SyntheticT1w, SyntheticFLAIR, SyntheticDIR</p>
+                            <p style="color: #666;">Simulated contrast-weighted images</p>
+                        </div>
+                    </div>
+                    <div style="margin-top: 25px; background: var(--ki-grey); padding: 12px; border-radius: 6px; font-size: 0.75em;">
+                        <i class="fas fa-key" style="color: var(--ki-plum);"></i>
+                        <strong>Key insight:</strong> T1 map pixel "800" means 800 ms &mdash; not T1-weighted contrast
+                    </div>
+                </section>
+
+                <!-- Vertical: SWI Branch -->
+                <section>
+                    <h2>SWI Branch</h2>
+                    <p class="muted">Susceptibility contrast from magnitude + phase</p>
+                    <div style="margin-top: 20px; display: flex; justify-content: center; gap: 10px; flex-wrap: wrap; font-size: 0.8em;">
+                        <div class="flow-box" style="text-align: center;">
+                            <small>Magnitude</small><br>
+                            <span style="color: #666; font-size: 0.8em;">T2* anatomy</span>
+                        </div>
+                        <div class="flow-box" style="text-align: center;">
+                            <small>Phase</small><br>
+                            <span style="color: #666; font-size: 0.8em;">Iron vs calcium</span>
+                        </div>
+                        <div class="flow-box highlight" style="text-align: center;">
+                            <small>SWI</small><br>
+                            <span style="font-size: 0.8em;">Mag × Phase<sup>4</sup></span>
+                        </div>
+                        <div class="flow-box" style="text-align: center;">
+                            <small>MinIP</small><br>
+                            <span style="color: #666; font-size: 0.8em;">Venogram</span>
+                        </div>
+                        <div class="flow-box" style="text-align: center;">
+                            <small>QSM</small><br>
+                            <span style="color: #666; font-size: 0.8em;">Quantitative (ppm)</span>
+                        </div>
+                    </div>
+                    <div style="margin-top: 25px; font-size: 0.75em; color: #666;">
+                        <i class="fas fa-info-circle" style="color: var(--ki-plum);"></i>
+                        All outputs have <strong>base=SWI</strong>; construct differentiates output type
+                    </div>
+                </section>
+
+                <!-- Vertical: EPIMix Branch -->
+                <section>
+                    <h2>EPIMix/NeuroMix Branch</h2>
+                    <p class="muted">Complete brain exam in ~1 minute</p>
+                    <div class="grid-2" style="font-size: 0.7em; margin-top: 15px;">
+                        <div>
+                            <h4><i class="fas fa-clock" style="color: var(--ki-plum);"></i> EPIMix (55-75s)</h4>
+                            <table style="font-size: 0.9em;">
+                                <tr><td>T1-FLAIR</td><td>SE-EPI</td></tr>
+                                <tr><td>T2-FLAIR</td><td>SE-EPI</td></tr>
+                                <tr><td>T2w</td><td>b=0 from DWI</td></tr>
+                                <tr><td>isoDWI / ADC</td><td>SE-EPI</td></tr>
+                                <tr><td>T2*w</td><td>GRE-EPI</td></tr>
+                            </table>
+                        </div>
+                        <div>
+                            <h4><i class="fas fa-plus-circle" style="color: var(--ki-plum);"></i> NeuroMix adds</h4>
+                            <table style="font-size: 0.9em;">
+                                <tr><td>T2-FLAIR</td><td>SSFSE <span class="tag">no distortion</span></td></tr>
+                                <tr><td>T2w</td><td>SSFSE</td></tr>
+                                <tr><td>T1w 3D</td><td>3D-EPI</td></tr>
+                                <tr><td>SWI 3D</td><td>3D-EPI</td></tr>
+                            </table>
+                        </div>
+                    </div>
+                    <div style="margin-top: 20px; font-size: 0.7em; color: #666;">
+                        <i class="fas fa-university" style="color: var(--ki-plum);"></i>
+                        Developed at Karolinska Institutet (Skare, Sprenger et al.)
+                    </div>
+                </section>
+            </section>
+
+            <!-- ========== SLIDE 6: COHORT PIPELINE (with verticals) ========== -->
+            <section>
+                <section>
+                    <h2><i class="fas fa-project-diagram"></i> Cohort Pipeline</h2>
+                    <p class="muted">Four-stage processing workflow</p>
+                    <div style="margin-top: 40px; display: flex; justify-content: center; align-items: center; gap: 15px; flex-wrap: wrap;">
+                        <div class="flow-box">
+                            <i class="fas fa-user-secret"></i><br>
+                            <small>Anonymize</small>
+                        </div>
+                        <i class="fas fa-arrow-right flow-arrow"></i>
+                        <div class="flow-box">
+                            <i class="fas fa-database"></i><br>
+                            <small>Extract</small>
+                        </div>
+                        <i class="fas fa-arrow-right flow-arrow"></i>
+                        <div class="flow-box highlight">
+                            <i class="fas fa-tags"></i><br>
+                            <small>Sort</small>
+                        </div>
+                        <i class="fas fa-arrow-right flow-arrow"></i>
+                        <div class="flow-box">
+                            <i class="fas fa-file-export"></i><br>
+                            <small>BIDS Export</small>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- Vertical: Sorting Steps -->
+                <section>
+                    <h2>Sorting: 4-Step Process</h2>
+                    <div style="margin-top: 20px; text-align: left; max-width: 650px; margin-left: auto; margin-right: auto;">
+                        <div class="pipeline-step fragment fade-up">
+                            <div class="step-icon"><i class="fas fa-clipboard-check"></i></div>
+                            <div class="step-content">
+                                <h4>1. Checkup</h4>
+                                <p>Verify cohort scope, validate data integrity, repair dates</p>
+                            </div>
+                        </div>
+                        <div class="pipeline-step fragment fade-up">
+                            <div class="step-icon"><i class="fas fa-fingerprint"></i></div>
+                            <div class="step-content">
+                                <h4>2. Stack Fingerprint</h4>
+                                <p>Build classification features with Polars (450K stacks in ~60s)</p>
+                            </div>
+                        </div>
+                        <div class="pipeline-step fragment fade-up">
+                            <div class="step-icon"><i class="fas fa-tags"></i></div>
+                            <div class="step-content">
+                                <h4>3. Classification</h4>
+                                <p>10-stage pipeline with provenance branching</p>
+                            </div>
+                        </div>
+                        <div class="pipeline-step fragment fade-up">
+                            <div class="step-icon"><i class="fas fa-check-double"></i></div>
+                            <div class="step-content">
+                                <h4>4. Completion</h4>
+                                <p>Fill gaps, flag for manual review</p>
+                            </div>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- Vertical: 10-Stage Classification -->
+                <section>
+                    <h2>10-Stage Classification</h2>
+                    <div class="grid-2" style="font-size: 0.75em; margin-top: 20px;">
+                        <div>
+                            <div class="pipeline-step" style="padding: 8px 12px;">
+                                <div class="step-num" style="font-size: 1em; min-width: 24px;">0</div>
+                                <div class="step-content"><h4 style="font-size: 0.85em; margin: 0;">Exclusion Check</h4></div>
+                            </div>
+                            <div class="pipeline-step" style="padding: 8px 12px;">
+                                <div class="step-num" style="font-size: 1em; min-width: 24px;">1</div>
+                                <div class="step-content"><h4 style="font-size: 0.85em; margin: 0;">Provenance Detection</h4></div>
+                            </div>
+                            <div class="pipeline-step" style="padding: 8px 12px;">
+                                <div class="step-num" style="font-size: 1em; min-width: 24px;">2</div>
+                                <div class="step-content"><h4 style="font-size: 0.85em; margin: 0;">Technique Detection</h4></div>
+                            </div>
+                            <div class="pipeline-step" style="padding: 8px 12px;">
+                                <div class="step-num" style="font-size: 1em; min-width: 24px;">3</div>
+                                <div class="step-content"><h4 style="font-size: 0.85em; margin: 0;">Branch Logic</h4></div>
+                            </div>
+                            <div class="pipeline-step" style="padding: 8px 12px;">
+                                <div class="step-num" style="font-size: 1em; min-width: 24px;">4</div>
+                                <div class="step-content"><h4 style="font-size: 0.85em; margin: 0;">Modifier Detection</h4></div>
+                            </div>
+                        </div>
+                        <div>
+                            <div class="pipeline-step" style="padding: 8px 12px;">
+                                <div class="step-num" style="font-size: 1em; min-width: 24px;">5</div>
+                                <div class="step-content"><h4 style="font-size: 0.85em; margin: 0;">Acceleration Detection</h4></div>
+                            </div>
+                            <div class="pipeline-step" style="padding: 8px 12px;">
+                                <div class="step-num" style="font-size: 1em; min-width: 24px;">6</div>
+                                <div class="step-content"><h4 style="font-size: 0.85em; margin: 0;">Contrast Agent Detection</h4></div>
+                            </div>
+                            <div class="pipeline-step" style="padding: 8px 12px;">
+                                <div class="step-num" style="font-size: 1em; min-width: 24px;">7</div>
+                                <div class="step-content"><h4 style="font-size: 0.85em; margin: 0;">Body Part Detection</h4></div>
+                            </div>
+                            <div class="pipeline-step" style="padding: 8px 12px;">
+                                <div class="step-num" style="font-size: 1em; min-width: 24px;">8</div>
+                                <div class="step-content"><h4 style="font-size: 0.85em; margin: 0;">Intent Synthesis (BIDS)</h4></div>
+                            </div>
+                            <div class="pipeline-step" style="padding: 8px 12px;">
+                                <div class="step-num" style="font-size: 1em; min-width: 24px;">9</div>
+                                <div class="step-content"><h4 style="font-size: 0.85em; margin: 0;">Review Flag Aggregation</h4></div>
+                            </div>
+                        </div>
+                    </div>
+                </section>
+            </section>
+
+            <!-- ========== SLIDE 7: ARCHITECTURE ========== -->
+            <section>
+                <h2><i class="fas fa-server"></i> Architecture</h2>
+                <div class="grid-2" style="margin-top: 30px;">
+                    <div style="text-align: left;">
+                        <div style="margin-bottom: 25px;">
+                            <span class="tag primary">Frontend</span>
+                            <p style="margin: 5px 0 0; font-size: 0.9em;">React + Vite + TypeScript</p>
+                        </div>
+                        <div style="margin-bottom: 25px;">
+                            <span class="tag primary">Backend</span>
+                            <p style="margin: 5px 0 0; font-size: 0.9em;">Python FastAPI + Polars</p>
+                        </div>
+                        <div style="margin-bottom: 25px;">
+                            <span class="tag primary">Database</span>
+                            <p style="margin: 5px 0 0; font-size: 0.9em;">PostgreSQL</p>
+                        </div>
+                        <div style="margin-bottom: 25px;">
+                            <span class="tag primary">Deployment</span>
+                            <p style="margin: 5px 0 0; font-size: 0.9em;">Docker Compose</p>
+                        </div>
+                    </div>
+                    <div>
+                        <div class="code-block">
+<pre style="margin: 0;"># Quick Start
+
+git clone https://github.com/\
+    NeuroGranberg/NILS.git
+
+cd NILS
+
+docker compose up</pre>
+                        </div>
+                        <p style="font-size: 0.8em; color: #666; margin-top: 15px;">
+                            <i class="fas fa-globe"></i> Web UI at <code>localhost:5173</code>
+                        </p>
+                    </div>
+                </div>
+            </section>
+
+            <!-- ========== SLIDE 8: YAML-DRIVEN ========== -->
+            <section>
+                <h2><i class="fas fa-file-code"></i> YAML-Driven Rules</h2>
+                <p class="muted">Extensible without code changes</p>
+                <div class="grid-2" style="margin-top: 30px; font-size: 0.8em;">
+                    <div>
+                        <div class="code-block">
+<pre style="margin: 0;"># technique-detection.yaml
+
+MPRAGE:
+  name: "MPRAGE"
+  category: "GRE"
+
+  detection:
+    exclusive: is_mprage
+    keywords:
+      - "mprage"
+      - "bravo"
+      - "ir-spgr"
+    combination:
+      - has_gre
+      - has_ir
+      - is_3d
+
+  implied_base: "T1w"</pre>
+                        </div>
+                    </div>
+                    <div style="text-align: left;">
+                        <h4 style="margin-top: 0;"><i class="fas fa-folder-open" style="color: var(--ki-plum);"></i> Detection YAML Files</h4>
+                        <ul style="font-size: 0.9em;">
+                            <li>base-detection.yaml</li>
+                            <li>technique-detection.yaml</li>
+                            <li>modifier-detection.yaml</li>
+                            <li>construct-detection.yaml</li>
+                            <li>provenance-detection.yaml</li>
+                            <li>acceleration-detection.yaml</li>
+                        </ul>
+                    </div>
+                </div>
+            </section>
+
+            <!-- ========== SLIDE 9: CTA ========== -->
+            <section>
+                <div style="background: var(--ki-plum); color: white; padding: 50px 60px; border-radius: 12px;">
+                    <h2 style="color: white; border: none; margin-bottom: 30px;">
+                        <i class="fas fa-rocket"></i> Get Started
+                    </h2>
+                    <div class="grid-2" style="color: white; font-size: 0.9em;">
+                        <div style="text-align: left;">
+                            <p><i class="fab fa-github"></i> <strong>Repository</strong></p>
+                            <p style="opacity: 0.9;">github.com/NeuroGranberg/NILS</p>
+                            <br>
+                            <p><i class="fas fa-book"></i> <strong>Documentation</strong></p>
+                            <p style="opacity: 0.9;">neurogranberg.github.io/NILS</p>
+                        </div>
+                        <div style="text-align: left;">
+                            <p><i class="fas fa-terminal"></i> <strong>Quick Start</strong></p>
+                            <div style="background: rgba(255,255,255,0.1); padding: 15px; border-radius: 6px; font-family: monospace; font-size: 0.85em;">
+                                git clone ...NILS.git<br>
+                                docker compose up
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+        </div>
+    </div>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/reveal.js/5.1.0/reveal.min.js"></script>
+    <script>
+        Reveal.initialize({
+            controls: true,
+            progress: true,
+            history: true,
+            center: true,
+            backgroundTransition: 'none',
+            transition: 'fade',
+            width: 1280,
+            height: 720,
+            margin: 0.1,
+            minScale: 0.2,
+            maxScale: 1.5
+        });
+    </script>
+</body>
+
+</html>
