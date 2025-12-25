@@ -205,6 +205,11 @@ export default defineConfig(({ mode }) => {
     },
     build: {
       chunkSizeWarningLimit: 3000,
+      minify: 'esbuild',
+      esbuild: {
+        drop: ['debugger'],
+        pure: ['console.log', 'console.debug'],
+      },
     },
     configureServer(server: ViteDevServer) {
       // /api/files handler for real filesystem mode

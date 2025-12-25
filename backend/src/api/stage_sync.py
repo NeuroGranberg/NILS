@@ -173,11 +173,70 @@ def fail_pipeline_step(
 
 
 def reconcile_stage_jobs() -> None:
-    """Ensure pipeline steps mirror the latest persisted job states.
+    """Reconcile job states on startup - mark orphaned running jobs as interrupted.
     
-    Note: This function is now a no-op since pipeline service handles job/step 
-    synchronization automatically via FK relationships and the ON DELETE SET NULL
-    constraint on current_job_id.
+    When the backend restarts (e.g., due to crash, OOM, or manual restart), any jobs
+    that were marked as RUNNING are now orphaned - their actual process is gone.
+    
+    This function:
+    1. Finds all jobs with status=RUNNING
+    2. Marks them as FAILED with a clear message about the interruption
+    3. The user can then restart the job (with resume=True to continue from where it left off)
+    
+    This is critical for long-running extraction jobs that may take days to complete.
     """
-    # Pipeline service handles job/stage sync automatically
-    pass
+    from db.session import SessionLocal
+    from jobs.models import Job, JobStatus
+    from datetime import datetime, timezone
+    
+    try:
+        with SessionLocal() as session:
+            # Find all "running" jobs - these are orphaned since we just started
+            orphaned_jobs = session.query(Job).filter(
+                Job.status == JobStatus.RUNNING
+            ).all()
+            
+            if not orphaned_jobs:
+                logger.info("No orphaned running jobs found on startup")
+                return
+            
+            for job in orphaned_jobs:
+                old_progress = job.progress
+                old_metrics = job.metrics or {}
+                
+                # Mark as failed with a clear message
+                job.status = JobStatus.FAILED
+                job.finished_at = datetime.now(timezone.utc)
+                job.last_error = (
+                    f"Job interrupted by backend restart. "
+                    f"Progress was {old_progress}% with {old_metrics.get('instances', 0):,} instances. "
+                    f"Restart the job to resume from this point."
+                )
+                
+                logger.warning(
+                    "Marked orphaned job as failed: job_id=%d stage=%s progress=%d%% instances=%s",
+                    job.id,
+                    job.stage,
+                    old_progress,
+                    old_metrics.get('instances', 'N/A'),
+                )
+                
+                # Also update the pipeline step status
+                cohort_id = job.config.get('cohort_id') if job.config else None
+                if cohort_id:
+                    sync_step_to_pipeline(
+                        cohort_id=cohort_id,
+                        stage_id=job.stage,
+                        status="failed",
+                        progress=old_progress,
+                        job_id=None,  # Clear job reference
+                    )
+            
+            session.commit()
+            logger.info(
+                "Reconciled %d orphaned running job(s) on startup",
+                len(orphaned_jobs),
+            )
+            
+    except Exception as e:
+        logger.exception("Failed to reconcile orphaned jobs on startup: %s", e)

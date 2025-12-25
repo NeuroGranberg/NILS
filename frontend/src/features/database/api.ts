@@ -150,14 +150,14 @@ export const useDatabaseBackupsQuery = () =>
   useQuery<DatabaseBackup[]>({
     queryKey: QUERY_KEYS.databaseBackups,
     queryFn: () => apiClient.get<DatabaseBackup[]>('/database/backups'),
-    refetchInterval: REFETCH_INTERVALS.slow,
+    // No refetchInterval - administrative queries don't need real-time updates
   });
 
 export const useDatabaseSummaryQuery = () =>
   useQuery<DatabaseSummary[]>({
     queryKey: QUERY_KEYS.databaseSummary,
     queryFn: () => apiClient.get<DatabaseSummary[]>('/database/summary'),
-    refetchInterval: REFETCH_INTERVALS.verySlow,
+    // No refetchInterval - administrative queries don't need real-time updates
   });
 
 export const useCreateDatabaseBackup = () => {
@@ -212,7 +212,7 @@ export const useMetadataTables = () =>
     queryKey: QUERY_KEYS.metadataTables,
     queryFn: () => apiClient.get<MetadataTableInfo[]>('/metadata/tables'),
     staleTime: STALE_TIMES.medium,
-    refetchInterval: STALE_TIMES.long,
+    // No refetchInterval - table schema rarely changes
   });
 
 // =============================================================================
@@ -224,7 +224,7 @@ export const useApplicationTables = () =>
     queryKey: QUERY_KEYS.applicationTables,
     queryFn: () => apiClient.get<MetadataTableInfo[]>('/application/tables'),
     staleTime: STALE_TIMES.medium,
-    refetchInterval: STALE_TIMES.long,
+    // No refetchInterval - table schema rarely changes
   });
 
 // =============================================================================

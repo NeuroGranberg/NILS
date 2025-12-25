@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "nils-backend"
-version = "0.1.0"
+version = "0.2.0"
 description = "Backend services for NILS - Neuroimaging Intelligent Linked System"
 authors = [{ name = "Nima Chamyani", email = "nima.chamyani@ki.se" }]
 maintainers = [{ name = "Nima Chamyani", email = "nima.chamyani@ki.se" }]

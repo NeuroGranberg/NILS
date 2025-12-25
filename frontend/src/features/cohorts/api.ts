@@ -19,7 +19,7 @@ export const useCohortsQuery = () =>
     queryKey: QUERY_KEYS.cohorts,
     queryFn: () => apiClient.get<Cohort[]>('/cohorts'),
     staleTime: STALE_TIMES.short, // Cache for 30s before considering stale
-    refetchInterval: 30000, // Poll every 30s instead of 5s
+    // No refetchInterval - manual refresh or invalidation only (memory optimization)
     refetchOnWindowFocus: false, // Don't refetch on tab focus
   });
 
@@ -29,7 +29,7 @@ export const useCohortQuery = (cohortId: string | undefined) =>
     queryFn: () => apiClient.get<Cohort>(`/cohorts/${cohortId}`),
     enabled: Boolean(cohortId),
     staleTime: 10 * 1000, // Cache for 10s (detail view needs fresher data)
-    refetchInterval: 15000, // Poll every 15s for detail view
+    refetchInterval: 30000, // Poll every 30s for detail view (reduced from 15s)
     refetchOnWindowFocus: false,
   });
 

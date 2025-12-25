@@ -10,7 +10,7 @@ from contextlib import AbstractAsyncContextManager
 from typing import Awaitable, Callable, Optional
 
 from sqlalchemy import func, select, update
-from sqlalchemy.exc import IntegrityError, SQLAlchemyError
+from sqlalchemy.exc import IntegrityError, OperationalError, SQLAlchemyError
 from sqlalchemy.dialects.postgresql import insert
 
 from metadata_db import bootstrap
@@ -49,6 +49,13 @@ logger = logging.getLogger(__name__)
 ProgressCallback = Callable[[int, int], Awaitable[None] | None]
 _CONTROL_POLL_SECONDS = 0.5
 
+# Retry configuration for transient database errors (e.g., OOM under memory pressure)
+# We retry indefinitely for transient errors - never skip data
+_INITIAL_RETRY_DELAY_SECONDS = 2.0
+_MAX_RETRY_DELAY_SECONDS = 120.0  # Cap backoff at 2 minutes
+_RETRY_BACKOFF_MULTIPLIER = 2.0
+_MIN_SUB_BATCH_SIZE = 10  # Minimum sub-batch size during retries
+
 
 class Writer(AbstractAsyncContextManager["Writer"]):
     def __init__(
@@ -78,9 +85,10 @@ class Writer(AbstractAsyncContextManager["Writer"]):
         # Stack caches: keyed by series_instance_uid for stable lookups
         self._stack_cache: dict[tuple, int] = {}  # signature -> series_stack_id
         self._series_stack_counter: dict[str, int] = {}  # series_instance_uid -> next stack_index
-        # Reverse lookup: series_id -> series_instance_uid (for reconstructing signatures from DB)
-        self._series_id_to_uid: dict[int, str] = {}
         self._subject_identifier_cache: set[int] = set()
+        # Memory management: periodic cache pruning for long-running extractions
+        self._subjects_completed = 0
+        self._PRUNE_INTERVAL_SUBJECTS = 100  # Prune caches and update metrics every N subjects
         self._modality_fallback_logged: set[str] = set()
         self._subject_id_type_id = config.subject_id_type_id
         bootstrap()
@@ -125,19 +133,8 @@ class Writer(AbstractAsyncContextManager["Writer"]):
             if batch:
                 await self._checkpoint()
                 start = time.perf_counter()
-                try:
-                    self._write_batch(session, batch)
-                except SQLAlchemyError as exc:
-                    sample = batch[0]
-                    logger.exception(
-                        "DB write failed job_id=%s subject=%s series=%s modality=%s file=%s",
-                        self.job_id,
-                        sample.subject_key,
-                        sample.series_uid,
-                        sample.modality,
-                        sample.file_path,
-                    )
-                    raise
+                # Use retry wrapper to handle transient errors (OOM, timeouts)
+                await self._write_batch_with_retry(session, batch)
                 self._update_path_index(batch)
                 write_duration = time.perf_counter() - start
                 
@@ -157,15 +154,279 @@ class Writer(AbstractAsyncContextManager["Writer"]):
                 session.commit()
                 if profiler:
                     profiler.record("db_commit_final", time.perf_counter() - commit_start)
+                self._prune_caches_if_needed()
+
+    def _prune_caches_if_needed(self) -> None:
+        """Prune lookup caches periodically to prevent unbounded memory growth.
+        
+        Called after each subject completion. Pruning is subject-based (not batch
+        or entry-count based) to maintain cache efficiency during subject processing.
+        
+        For long-running extractions (days, millions of files), caches can grow to
+        several GB. This method caps memory usage by clearing caches periodically,
+        accepting the trade-off of occasional cache misses requiring DB lookups.
+        
+        Also saves current metrics to the job record, so frontend polling gets
+        accurate counts without running expensive COUNT(*) queries on the metadata DB.
+        """
+        self._subjects_completed += 1
+        if self._subjects_completed < self._PRUNE_INTERVAL_SUBJECTS:
+            return
+        
+        # Save metrics to job record - eliminates need for COUNT(*) queries during polling
+        # This is the KEY FIX for PostgreSQL OOM: frontend gets metrics from job record
+        # instead of running expensive COUNT(*) on 30M+ rows
+        if self.job_id is not None:
+            from jobs.service import job_service
+            try:
+                job_service.update_metrics(self.job_id, self.snapshot_metrics())
+            except Exception as exc:
+                # Best-effort - don't crash extraction if metrics update fails
+                logger.warning("Failed to update job metrics: %s", exc)
+        
+        logger.info(
+            "Pruning caches after %d subjects: stacks=%d, series=%d, studies=%d, subjects=%d, counters=%d",
+            self._subjects_completed,
+            len(self._stack_cache),
+            len(self._series_cache),
+            len(self._study_cache),
+            len(self._subject_cache),
+            len(self._series_stack_counter),
+        )
+        
+        # Clear all lookup caches - they will be rebuilt from DB on cache miss
+        self._subject_cache.clear()
+        self._study_cache.clear()
+        self._series_cache.clear()
+        self._stack_cache.clear()
+        self._series_stack_counter.clear()
+        self._subject_identifier_cache.clear()
+        
+        self._subjects_completed = 0
+
+    def _invalidate_caches_for_batch(self, batch: list[InstancePayload]) -> None:
+        """Remove cache entries for items in a rolled-back batch.
+        
+        After a transaction rollback, any IDs we cached during that transaction
+        are now invalid (the rows don't exist in the database). We must remove
+        them so the next retry will re-query or re-insert properly.
+        
+        Without this, the retry would use stale IDs from the cache, causing
+        FK violations and an infinite retry loop.
+        """
+        for payload in batch:
+            # Clear series cache entry
+            self._series_cache.pop(payload.series_uid, None)
+            
+            # Clear study cache entry
+            self._study_cache.pop(payload.study_uid, None)
+            
+            # Clear stack cache entry
+            sig = compute_stack_signature(payload.series_uid, payload.instance_fields)
+            self._stack_cache.pop(sig, None)
+            
+            # Clear subject cache entry
+            subject_key = (payload.patient_id, self._cohort_name)
+            self._subject_cache.pop(subject_key, None)
+        
+        logger.debug(
+            "Invalidated cache entries for %d items after rollback job_id=%s",
+            len(batch),
+            self.job_id,
+        )
+
+    async def _write_batch_with_retry(self, session, batch: list[InstancePayload]) -> bool:
+        """Write a batch with retry logic and adaptive batch size reduction.
+        
+        When transient errors occur (e.g., PostgreSQL OOM due to system memory pressure),
+        this method will:
+        1. Rollback the failed transaction
+        2. Reduce batch size to ease memory pressure
+        3. Wait with exponential backoff
+        4. Retry the smaller sub-batches
+        
+        Returns True if batch was written (fully or partially), False if completely failed.
+        """
+        # Try writing the full batch first
+        try:
+            self._write_batch(session, batch)
+            return True
+        except OperationalError as exc:
+            # Check if it's a transient error worth retrying
+            error_msg = str(exc).lower()
+            is_transient = "out of memory" in error_msg or "could not extend" in error_msg
+            if not is_transient:
+                raise
+            
+            sample = batch[0]
+            logger.warning(
+                "Transient DB error, will retry with smaller batches: job_id=%s subject=%s error=%s",
+                self.job_id,
+                sample.subject_key,
+                str(exc)[:200],
+            )
+            session.rollback()
+            self._invalidate_caches_for_batch(batch)  # Clear stale IDs from rolled-back transaction
+        except SQLAlchemyError:
+            # Non-transient errors - rollback and re-raise
+            session.rollback()
+            self._invalidate_caches_for_batch(batch)  # Clear stale IDs from rolled-back transaction
+            raise
+        
+        # Retry with progressively smaller sub-batches
+        return await self._retry_with_smaller_batches(session, batch)
+
+    async def _retry_with_smaller_batches(self, session, batch: list[InstancePayload]) -> bool:
+        """Retry a failed batch by splitting into smaller sub-batches with backoff.
+        
+        Uses exponential backoff between retries and progressively smaller batch sizes
+        to reduce memory pressure on the database.
+        
+        CRITICAL: This method retries indefinitely until ALL data is written.
+        We never skip data - the extraction will wait as long as needed for
+        system resources to become available.
+        """
+        original_batch_size = len(batch)
+        remaining = list(batch)  # Items still to be written
+        delay = _INITIAL_RETRY_DELAY_SECONDS
+        attempt = 0
+        
+        while remaining:
+            attempt += 1
+            
+            # Reduce batch size progressively, but cap at minimum
+            # After several attempts, we'll be at minimum size
+            current_batch_size = max(
+                _MIN_SUB_BATCH_SIZE,
+                original_batch_size // (2 ** min(attempt, 6))  # Cap reduction at 64x
+            )
+            
+            logger.info(
+                "Retry attempt %d: %d items remaining, sub-batch size %d (delay=%.1fs) job_id=%s",
+                attempt,
+                len(remaining),
+                current_batch_size,
+                delay,
+                self.job_id,
+            )
+            
+            # Wait for memory pressure to ease
+            await asyncio.sleep(delay)
+            await self._checkpoint()  # Check for cancellation during wait
+            
+            # Try to write remaining items in sub-batches
+            still_remaining = []
+            
+            for i in range(0, len(remaining), current_batch_size):
+                sub_batch = remaining[i:i + current_batch_size]
+                try:
+                    self._write_batch(session, sub_batch)
+                    session.commit()
+                    # Success! These items are done
+                except OperationalError as exc:
+                    error_msg = str(exc).lower()
+                    is_transient = "out of memory" in error_msg or "could not extend" in error_msg
+                    session.rollback()
+                    self._invalidate_caches_for_batch(sub_batch)  # Clear stale IDs
+                    
+                    if is_transient:
+                        # Keep these items for retry
+                        still_remaining.extend(sub_batch)
+                        logger.warning(
+                            "Sub-batch failed (transient), will retry: %d items, error=%s",
+                            len(sub_batch),
+                            str(exc)[:100],
+                        )
+                    else:
+                        # Non-transient error - still keep for retry, might be temporary
+                        still_remaining.extend(sub_batch)
+                        logger.warning(
+                            "Sub-batch failed (non-transient), will retry: %d items, error=%s",
+                            len(sub_batch),
+                            str(exc)[:200],
+                        )
+                except SQLAlchemyError as exc:
+                    session.rollback()
+                    self._invalidate_caches_for_batch(sub_batch)  # Clear stale IDs
+                    # Keep for retry - we never give up
+                    still_remaining.extend(sub_batch)
+                    logger.warning(
+                        "Sub-batch failed (SQLAlchemy error), will retry: %d items, error=%s",
+                        len(sub_batch),
+                        str(exc)[:200],
+                    )
+            
+            # Update remaining items
+            written_count = len(remaining) - len(still_remaining)
+            if written_count > 0:
+                logger.info(
+                    "Progress: wrote %d/%d items this attempt, %d remaining job_id=%s",
+                    written_count,
+                    len(remaining),
+                    len(still_remaining),
+                    self.job_id,
+                )
+                # Reset delay when making progress
+                delay = _INITIAL_RETRY_DELAY_SECONDS
+            else:
+                # No progress - increase delay (exponential backoff with cap)
+                delay = min(delay * _RETRY_BACKOFF_MULTIPLIER, _MAX_RETRY_DELAY_SECONDS)
+                logger.warning(
+                    "No progress this attempt, increasing delay to %.1fs job_id=%s",
+                    delay,
+                    self.job_id,
+                )
+            
+            remaining = still_remaining
+        
+        logger.info(
+            "Successfully recovered full batch after %d retry attempts job_id=%s",
+            attempt,
+            self.job_id,
+        )
+        return True
 
     def _write_batch(self, session, batch: list[InstancePayload]) -> None:
+        """Write a batch of instances using parents-first pattern for efficiency.
+        
+        This method uses a parents-first insertion pattern within a single transaction:
+        1. Pre-filter batch to only new SOPs (SELECT existing, filter out duplicates)
+        2. Create parent records (subject/study/series/stack) for new instances
+        3. Insert instances WITH correct series_id and stack_id already set
+        
+        Benefits over instance-first pattern:
+        - No dead rows: Instances are inserted once with correct FK, no UPDATE needed
+        - No orphans: If INSERT fails, entire transaction rolls back including parents
+        - ~50% less storage: No MVCC dead tuple overhead
+        
+        This is safe for single-writer mode (db_writer_pool_size=1) which is the
+        recommended configuration for large extractions.
+        """
         if not batch:
             return
-        subject_ids = self._bulk_ensure_subjects(session, batch)
-        study_ids = self._bulk_ensure_studies(session, batch, subject_ids)
-        series_ids = self._bulk_ensure_series(session, batch, subject_ids, study_ids)
-        stack_ids = self._bulk_ensure_stacks(session, batch, series_ids)
-        self._bulk_ensure_instances(session, batch, series_ids, stack_ids)
+        
+        # Step 1: Pre-filter to only new SOPs (no INSERT yet)
+        existing_sops = self._get_existing_sops(session, batch)
+        new_batch = [p for p in batch if p.sop_uid not in existing_sops]
+        
+        if not new_batch:
+            # All instances were duplicates - log if needed
+            self._log_duplicate_sops(session, batch, existing_sops)
+            return
+        
+        # Step 2: Create parent hierarchy FIRST (in same transaction)
+        # If INSERT fails later, these will rollback too - no orphans
+        subject_ids = self._bulk_ensure_subjects(session, new_batch)
+        study_ids = self._bulk_ensure_studies(session, new_batch, subject_ids)
+        series_ids = self._bulk_ensure_series(session, new_batch, subject_ids, study_ids)
+        stack_ids = self._bulk_ensure_stacks(session, new_batch, series_ids)
+        
+        # Step 3: Insert instances WITH correct FKs (no NULL, no UPDATE needed)
+        self._insert_instances_with_fks(session, new_batch, series_ids, stack_ids)
+        
+        # Log any duplicates we skipped
+        if existing_sops:
+            self._log_duplicate_sops(session, batch, existing_sops)
 
     def _update_path_index(self, batch: list[InstancePayload]) -> None:
         if not self._path_index:
@@ -520,7 +781,6 @@ class Writer(AbstractAsyncContextManager["Writer"]):
                     session.execute(update(Series).where(Series.series_id == series_id).values(**updates))
                     session.flush()
                 self._series_cache[existing.series_instance_uid] = series_id
-                self._series_id_to_uid[series_id] = existing.series_instance_uid
                 for idx in entry["indices"]:
                     series_ids[idx] = series_id
 
@@ -565,7 +825,6 @@ class Writer(AbstractAsyncContextManager["Writer"]):
             for uid, entry in pending.items():
                 series_id = inserted_map[uid]
                 self._series_cache[uid] = series_id
-                self._series_id_to_uid[series_id] = uid
                 for idx in entry["indices"]:
                     series_ids[idx] = series_id
 
@@ -635,17 +894,19 @@ class Writer(AbstractAsyncContextManager["Writer"]):
             })
             entry["indices"].append(idx)
         
-        # 2. Bulk query existing stacks for series in this batch
+        # 2. Bulk query existing stacks for series in this batch (JOIN with Series for UID)
         if pending:
             series_ids_to_check = {entry["series_id"] for entry in pending.values()}
-            stmt = select(SeriesStack).where(SeriesStack.series_id.in_(series_ids_to_check))
+            # JOIN with Series to get series_instance_uid directly, eliminating the need
+            # for _series_id_to_uid cache (saves ~850MB for large cohorts)
+            stmt = (
+                select(SeriesStack, Series.series_instance_uid)
+                .join(Series, SeriesStack.series_id == Series.series_id)
+                .where(SeriesStack.series_id.in_(series_ids_to_check))
+            )
             
-            for existing in session.execute(stmt).scalars():
-                # Reconstruct signature from DB record
-                series_uid = self._series_id_to_uid.get(existing.series_id)
-                if not series_uid:
-                    continue
-                
+            for existing, series_uid in session.execute(stmt):
+                # Reconstruct signature from DB record using series_uid from JOIN
                 db_sig = signature_from_stack_record(
                     series_uid,
                     existing.stack_echo_time,
@@ -728,15 +989,15 @@ class Writer(AbstractAsyncContextManager["Writer"]):
             # Handle entries that weren't inserted (conflict) - query them
             remaining_sigs = [sig for sig in pending if sig not in self._stack_cache]
             if remaining_sigs:
-                # Re-query to get IDs for stacks that hit conflict
+                # Re-query to get IDs for stacks that hit conflict (JOIN with Series for UID)
                 remaining_series_ids = {pending[sig]["series_id"] for sig in remaining_sigs}
-                stmt = select(SeriesStack).where(SeriesStack.series_id.in_(remaining_series_ids))
+                stmt = (
+                    select(SeriesStack, Series.series_instance_uid)
+                    .join(Series, SeriesStack.series_id == Series.series_id)
+                    .where(SeriesStack.series_id.in_(remaining_series_ids))
+                )
                 
-                for existing in session.execute(stmt).scalars():
-                    series_uid = self._series_id_to_uid.get(existing.series_id)
-                    if not series_uid:
-                        continue
-                    
+                for existing, series_uid in session.execute(stmt):
                     db_sig = signature_from_stack_record(
                         series_uid,
                         existing.stack_echo_time,
@@ -775,7 +1036,155 @@ class Writer(AbstractAsyncContextManager["Writer"]):
         
         return stack_ids
 
+    def _get_existing_sops(self, session, batch: list[InstancePayload]) -> set[str]:
+        """Query which SOP UIDs from the batch already exist in the database.
+        
+        This is used to pre-filter batches before creating parent records,
+        ensuring we only create parents for instances that will actually be inserted.
+        
+        Returns:
+            Set of sop_instance_uid values that already exist in the database.
+        """
+        if not batch:
+            return set()
+        
+        # Query which SOP UIDs already exist in the database
+        batch_sops = {p.sop_uid for p in batch}
+        
+        # Query existing SOPs in chunks to avoid parameter limits
+        existing_sops: set[str] = set()
+        sop_list = list(batch_sops)
+        # Use chunks of 1000 to stay well under PostgreSQL limits
+        for i in range(0, len(sop_list), 1000):
+            chunk_sops = sop_list[i:i + 1000]
+            stmt = select(Instance.sop_instance_uid).where(
+                Instance.sop_instance_uid.in_(chunk_sops)
+            )
+            result = session.execute(stmt)
+            existing_sops.update(row[0] for row in result)
+        
+        return existing_sops
+
+    def _log_duplicate_sops(
+        self, session, batch: list[InstancePayload], existing_sops: set[str]
+    ) -> None:
+        """Log duplicate SOP conflicts if configured to do so."""
+        log_duplicates = (
+            not self.config.resume
+            and self.config.duplicate_policy in {DuplicatePolicy.SKIP, DuplicatePolicy.APPEND_SERIES}
+        )
+        if not log_duplicates:
+            return
+        
+        for payload in batch:
+            if payload.sop_uid in existing_sops:
+                self._log_conflict(
+                    session,
+                    "instance",
+                    payload.sop_uid,
+                    "Duplicate SOP Instance",
+                    payload.file_path,
+                )
+
+    def _insert_instances_with_fks(
+        self,
+        session,
+        batch: list[InstancePayload],
+        series_ids: list[int],
+        stack_ids: list[int],
+    ) -> None:
+        """Insert instances with correct series_id and stack_id already set.
+        
+        This is the final step of the parents-first pattern. Instances are inserted
+        with their foreign keys already populated, avoiding the need for a subsequent
+        UPDATE and eliminating dead rows.
+        """
+        if not batch:
+            return
+        
+        # Build rows for insertion with correct FKs
+        rows = []
+        for payload, series_id, stack_id in zip(batch, series_ids, stack_ids):
+            values = {
+                "series_id": series_id,
+                "series_stack_id": stack_id,
+                "series_instance_uid": payload.series_uid,
+                "sop_instance_uid": payload.sop_uid,
+                "dicom_file_path": payload.file_path,
+            }
+            # Add instance fields but exclude stack-defining fields
+            for key, value in payload.instance_fields.items():
+                if key not in STACK_DEFINING_FIELDS:
+                    values[key] = value
+            rows.append(values)
+
+        chunks, params_per_row, chunk_limit = build_parameter_chunk_plan(rows)
+        
+        if len(chunks) > 1:
+            logger.info(
+                "Splitting instance insert of %d rows into %d chunks (<= %d rows, %d params/row)",
+                len(rows),
+                len(chunks),
+                chunk_limit,
+                params_per_row,
+            )
+
+        # Insert with correct FKs - no UPDATE needed later
+        for chunk in chunks:
+            stmt = insert(Instance).values(chunk)
+            
+            if self.config.duplicate_policy == DuplicatePolicy.OVERWRITE:
+                # For OVERWRITE, update existing records
+                excluded = stmt.excluded
+                update_values = {column: getattr(excluded, column) for column in chunk[0].keys()}
+                stmt = stmt.on_conflict_do_update(
+                    index_elements=[Instance.sop_instance_uid],
+                    set_=update_values,
+                )
+            else:
+                # For SKIP/APPEND_SERIES, use ON CONFLICT DO NOTHING
+                # (shouldn't hit conflicts since we pre-filtered, but just in case)
+                stmt = stmt.on_conflict_do_nothing()
+            
+            session.execute(stmt)
+        
+        # Track metrics
+        self._instances_inserted += len(batch)
+
+    def _update_instance_fks(
+        self,
+        session,
+        batch: list[InstancePayload],
+        series_ids: list[int],
+        stack_ids: list[int],
+    ) -> None:
+        """DEPRECATED: No longer used by _write_batch.
+        
+        This was part of the instance-first pattern where instances were inserted
+        with NULL FKs and then updated. The new parents-first pattern inserts
+        instances with correct FKs from the start, eliminating dead rows.
+        
+        Kept for backward compatibility but should not be called.
+        """
+        if not batch:
+            return
+        
+        # Use individual UPDATE statements - this is still efficient for typical batch sizes
+        # and avoids SQLAlchemy ORM bulk update limitations
+        from sqlalchemy import text
+        
+        # Get the underlying connection for raw SQL
+        conn = session.connection()
+        
+        for payload, series_id, stack_id in zip(batch, series_ids, stack_ids):
+            stmt = text(
+                "UPDATE instance SET series_id = :series_id, series_stack_id = :stack_id "
+                "WHERE sop_instance_uid = :sop"
+            )
+            conn.execute(stmt, {"series_id": series_id, "stack_id": stack_id, "sop": payload.sop_uid})
+
     def _bulk_ensure_instances(self, session, batch: list[InstancePayload], series_ids: list[int], stack_ids: list[int]) -> None:
+        """Legacy method - kept for backward compatibility but no longer used by _write_batch."""
         rows = []
         for payload, series_id, stack_id in zip(batch, series_ids, stack_ids):
             values = {
@@ -814,14 +1223,18 @@ class Writer(AbstractAsyncContextManager["Writer"]):
                 )
                 session.execute(stmt)
             else:
-                stmt = stmt.on_conflict_do_nothing().returning(Instance.sop_instance_uid)
-                inserted = {row[0] for row in session.execute(stmt)}
-                self._instances_inserted += len(inserted)
+                # Determine if we need to track individual duplicates for logging
                 log_duplicates = (
                     not self.config.resume
                     and self.config.duplicate_policy in {DuplicatePolicy.SKIP, DuplicatePolicy.APPEND_SERIES}
                 )
+                
                 if log_duplicates:
+                    # Need RETURNING to identify which rows were actually inserted vs skipped
+                    # This uses more PostgreSQL memory but is required for duplicate logging
+                    stmt = stmt.on_conflict_do_nothing().returning(Instance.sop_instance_uid)
+                    inserted = {row[0] for row in session.execute(stmt)}
+                    self._instances_inserted += len(inserted)
                     for payload in chunk:
                         if payload.sop_uid not in inserted:
                             self._log_conflict(
@@ -831,6 +1244,14 @@ class Writer(AbstractAsyncContextManager["Writer"]):
                                 "Duplicate SOP Instance",
                                 payload.file_path,
                             )
+                else:
+                    # Optimized path: skip RETURNING clause to reduce PostgreSQL memory usage
+                    # This is critical for long-running extractions with millions of instances
+                    # Without RETURNING, PostgreSQL doesn't need to materialize the result set
+                    stmt = stmt.on_conflict_do_nothing()
+                    result = session.execute(stmt)
+                    # rowcount gives us the number of inserted rows without RETURNING overhead
+                    self._instances_inserted += result.rowcount
 
     def _upsert_modality_details(self, session, series_id: int, payload: InstancePayload) -> None:
         modality = (payload.modality or "").upper()
@@ -846,12 +1267,16 @@ class Writer(AbstractAsyncContextManager["Writer"]):
             return
         values = {"series_id": series_id, "series_instance_uid": series_uid}
         values.update(fields)
+        # Use series_instance_uid as conflict target since it has a unique constraint.
+        # This handles the case where a series was previously processed with a different
+        # series_id (e.g., after a partial rollback or data inconsistency in PACS).
+        # We update the series_id to the new value along with all other fields.
         stmt = (
             insert(model)
             .values(**values)
             .on_conflict_do_update(
-                index_elements=[model.series_id],
-                set_={key: value for key, value in values.items() if key != "series_id"},
+                index_elements=[model.series_instance_uid],
+                set_=values,  # Update all fields including series_id
             )
         )
         session.execute(stmt)

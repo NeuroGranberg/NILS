@@ -24,7 +24,7 @@ export const useHealthCheck = () =>
     queryKey: QUERY_KEYS.health,
     queryFn: () => apiClient.get<HealthResponse>('/health'),
     staleTime: STALE_TIMES.short,
-    refetchInterval: REFETCH_INTERVALS.slow,
+    // No refetchInterval - health checks on demand only (memory optimization)
     retry: 1,
   });
 
@@ -36,7 +36,7 @@ export const useReadinessCheck = () =>
     queryKey: QUERY_KEYS.ready,
     queryFn: () => apiClient.get<ReadinessResponse>('/ready'),
     staleTime: STALE_TIMES.short,
-    refetchInterval: REFETCH_INTERVALS.slow,
+    // No refetchInterval - readiness checks on demand only (memory optimization)
     retry: 1,
   });
 

@@ -137,15 +137,21 @@ def get_cohort(cohort_id: int):
     
     payload = cohort.model_dump(mode="json")
     
+    # Pre-fetch cohort metrics ONCE and reuse for all jobs
+    # This avoids running expensive COUNT queries for each job in history
+    cached_metrics = get_cohort_metrics(cohort_id)
+    def get_cached_metrics(_cohort_id: int):
+        return cached_metrics
+    
     # Add anonymize job history
     anonymize_history_models = job_service.list_jobs_for_stage(cohort_id, "anonymize", limit=10)
-    anonymize_history = serialize_jobs(anonymize_history_models, get_cohort_metrics)
+    anonymize_history = serialize_jobs(anonymize_history_models, get_cached_metrics)
     payload["anonymize_job"] = anonymize_history[0] if anonymize_history else None
     payload["anonymize_history"] = anonymize_history
 
     # Add extract job history
     extract_history_models = job_service.list_jobs_for_stage(cohort_id, "extract", limit=10)
-    extract_history = serialize_jobs(extract_history_models, get_cohort_metrics)
+    extract_history = serialize_jobs(extract_history_models, get_cached_metrics)
     payload["extract_job"] = extract_history[0] if extract_history else None
     payload["extract_history"] = extract_history
     

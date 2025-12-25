@@ -8,7 +8,7 @@ export const useJobsQuery = () =>
   useQuery<Job[]>({
     queryKey: QUERY_KEYS.jobs,
     queryFn: () => apiClient.get<Job[]>('/jobs'),
-    refetchInterval: REFETCH_INTERVALS.fast,
+    refetchInterval: 15000, // 15 seconds - balanced between responsiveness and memory efficiency
   });
 
 export const useJobAction = () => {

@@ -418,7 +418,9 @@ class Study(Base):
     manufacturer_model_name: Mapped[str | None] = mapped_column(Text, nullable=True)
     station_name: Mapped[str | None] = mapped_column(Text, nullable=True)
     institution_name: Mapped[str | None] = mapped_column(Text, nullable=True)
-    subject_id: Mapped[int] = mapped_column(Integer, nullable=False)
+    subject_id: Mapped[int] = mapped_column(
+        Integer, ForeignKey("subject.subject_id", ondelete="CASCADE"), nullable=False
+    )
     quality_control: Mapped[str | None] = mapped_column(Text, nullable=True)
 
 
@@ -456,8 +458,12 @@ class Series(Base):
     contrast_bolus_volume: Mapped[float | None] = mapped_column(Float, nullable=True)
     contrast_flow_rate: Mapped[float | None] = mapped_column(Float, nullable=True)
     contrast_flow_duration: Mapped[float | None] = mapped_column(Float, nullable=True)
-    study_id: Mapped[int] = mapped_column(Integer, nullable=False)
-    subject_id: Mapped[int] = mapped_column(Integer, nullable=False)
+    study_id: Mapped[int] = mapped_column(
+        Integer, ForeignKey("study.study_id", ondelete="CASCADE"), nullable=False
+    )
+    subject_id: Mapped[int] = mapped_column(
+        Integer, ForeignKey("subject.subject_id", ondelete="CASCADE"), nullable=False
+    )
     quality_control: Mapped[str | None] = mapped_column(Text, nullable=True)
     processing_status: Mapped[str | None] = mapped_column(Text, nullable=True)
     acquisition_compliance: Mapped[str | None] = mapped_column(Text, nullable=True)
@@ -465,7 +471,9 @@ class Series(Base):
 
 class MRISeriesDetails(Base):
     __tablename__ = "mri_series_details"
-    series_id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    series_id: Mapped[int] = mapped_column(
+        Integer, ForeignKey("series.series_id", ondelete="CASCADE"), primary_key=True
+    )
     series_instance_uid: Mapped[str] = mapped_column(Text, nullable=False, unique=True)
     mr_acquisition_type: Mapped[str | None] = mapped_column(Text, nullable=True)
     angio_flag: Mapped[str | None] = mapped_column(Text, nullable=True)
@@ -504,7 +512,9 @@ class MRISeriesDetails(Base):
 
 class CTSeriesDetails(Base):
     __tablename__ = "ct_series_details"
-    series_id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    series_id: Mapped[int] = mapped_column(
+        Integer, ForeignKey("series.series_id", ondelete="CASCADE"), primary_key=True
+    )
     series_instance_uid: Mapped[str] = mapped_column(Text, nullable=False, unique=True)
     kvp: Mapped[float | None] = mapped_column(Float, nullable=True)
     data_collection_diameter: Mapped[float | None] = mapped_column(Float, nullable=True)
@@ -534,7 +544,9 @@ class CTSeriesDetails(Base):
 
 class PETSeriesDetails(Base):
     __tablename__ = "pet_series_details"
-    series_id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    series_id: Mapped[int] = mapped_column(
+        Integer, ForeignKey("series.series_id", ondelete="CASCADE"), primary_key=True
+    )
     series_instance_uid: Mapped[str] = mapped_column(Text, nullable=False, unique=True)
     radiopharmaceutical: Mapped[str | None] = mapped_column(Text, nullable=True)
     radionuclide_total_dose: Mapped[float | None] = mapped_column(Float, nullable=True)
@@ -570,7 +582,14 @@ class PETSeriesDetails(Base):
 class Instance(Base):
     __tablename__ = "instance"
     instance_id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
-    series_id: Mapped[int] = mapped_column(Integer, nullable=False)
+    # series_id is nullable to support instance-first insertion pattern:
+    # 1. Insert instance with series_id=NULL
+    # 2. Create parent records (subject/study/series) only for inserted instances
+    # 3. Update instance with correct series_id
+    # This prevents orphan parent records when instance insert fails (duplicate SOP)
+    series_id: Mapped[int | None] = mapped_column(
+        Integer, ForeignKey("series.series_id", ondelete="CASCADE"), nullable=True
+    )
     series_instance_uid: Mapped[str] = mapped_column(Text, nullable=False)
     sop_instance_uid: Mapped[str] = mapped_column(Text, nullable=False, unique=True)
     instance_number: Mapped[int | None] = mapped_column(Integer, nullable=True)
@@ -598,8 +617,10 @@ class Instance(Base):
     transfer_syntax_uid: Mapped[str | None] = mapped_column(Text, nullable=True)
     dicom_file_path: Mapped[str | None] = mapped_column(Text, nullable=True)
     quality_control: Mapped[str | None] = mapped_column(Text, nullable=True)
-    # FK to series_stack (set during extraction)
-    series_stack_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    # FK to series_stack (set during extraction, after parent creation)
+    series_stack_id: Mapped[int | None] = mapped_column(
+        Integer, ForeignKey("series_stack.series_stack_id", ondelete="SET NULL"), nullable=True
+    )
 
 
 class SeriesStack(Base):
@@ -610,7 +631,9 @@ class SeriesStack(Base):
     )
 
     series_stack_id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
-    series_id: Mapped[int] = mapped_column(Integer, nullable=False)
+    series_id: Mapped[int] = mapped_column(
+        Integer, ForeignKey("series.series_id", ondelete="CASCADE"), nullable=False
+    )
     stack_modality: Mapped[str] = mapped_column(Text, nullable=False)
     stack_index: Mapped[int] = mapped_column(Integer, nullable=False)
     stack_key: Mapped[str | None] = mapped_column(Text, nullable=True)

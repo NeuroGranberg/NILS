@@ -8,6 +8,7 @@ const queryClient = new QueryClient({
     queries: {
       refetchOnWindowFocus: false,
       staleTime: 1000 * 5,
+      gcTime: 1000 * 60 * 5, // Garbage collect unused queries after 5 minutes
     },
   },
 });

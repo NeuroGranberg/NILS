@@ -39,21 +39,35 @@ services:
 
   metadata-db:
     image: postgres:16-alpine
-    shm_size: '2g'  # Required for large queries (30M+ instances, 457K stacks)
+    shm_size: '4g'  # Reduced to prevent OOM during heavy writes
     command:
       - "postgres"
+      # Memory settings - conservative to prevent OOM during extraction
       - "-c"
-      - "shared_buffers=2GB"
+      - "shared_buffers=4GB"
       - "-c"
-      - "work_mem=256MB"
+      - "work_mem=32MB"
       - "-c"
       - "maintenance_work_mem=512MB"
       - "-c"
-      - "effective_cache_size=4GB"
+      - "effective_cache_size=32GB"
+      # Parallelism - DISABLED during extraction to prevent memory multiplication
+      # Re-enable after extraction if needed for query performance
       - "-c"
-      - "max_parallel_workers_per_gather=4"
+      - "max_parallel_workers_per_gather=0"
       - "-c"
-      - "max_parallel_workers=8"
+      - "max_parallel_workers=0"
+      # Connection limits
+      - "-c"
+      - "max_connections=50"
+      # Safety limits - kill runaway queries and stuck transactions
+      - "-c"
+      - "statement_timeout=120000"
+      - "-c"
+      - "idle_in_transaction_session_timeout=300000"
+      # Logging - track slow queries for debugging
+      - "-c"
+      - "log_min_duration_statement=10000"
     environment:
       POSTGRES_DB: neurotoolkit_metadata
       POSTGRES_USER: postgres
@@ -62,6 +76,10 @@ services:
       - "${BIND_ADDRESS:-127.0.0.1}:${METADATA_DB_PORT:-5532}:5432"
     volumes:
       - ${METADATA_DB_DATA_DIR:-./resource/db_metadata}:/var/lib/postgresql/data
+    deploy:
+      resources:
+        limits:
+          memory: 48G
 
   frontend:
     build:
@@ -82,9 +100,9 @@ services:
     volumes:
       - ./frontend:/app
       - /app/node_modules
-    depends_on:
-      backend:
-        condition: service_healthy
+    # NOTE: No depends_on backend - frontend can start independently and will
+    # gracefully handle backend unavailability. This prevents frontend restarts
+    # from affecting long-running backend extraction jobs.
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:5173"]
