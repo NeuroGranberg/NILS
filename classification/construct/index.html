@@ -1,0 +1,3795 @@
+
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+        <meta name="description" content="A comprehensive system for DICOM classification, sorting, anonymization, and BIDS export">
+      
+      
+        <meta name="author" content="Nima Chamyani">
+      
+      
+        <link rel="canonical" href="https://neurogranberg.github.io/NILS/classification/construct/">
+      
+      
+        <link rel="prev" href="../modifier/">
+      
+      
+        <link rel="next" href="../provenance/">
+      
+      
+        
+      
+      
+      <link rel="icon" href="../../assets/nils-logo.svg">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.1">
+    
+    
+      
+        <title>Construct - NILS - Neuroimaging Intelligent Linked System</title>
+      
+    
+    
+      <link rel="stylesheet" href="../../assets/stylesheets/main.484c7ddc.min.css">
+      
+        
+        <link rel="stylesheet" href="../../assets/stylesheets/palette.ab4e12ef.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+        
+        
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto:300,300i,400,400i,700,700i%7CRoboto+Mono:400,400i,700,700i&display=fallback">
+        <style>:root{--md-text-font:"Roboto";--md-code-font:"Roboto Mono"}</style>
+      
+    
+    
+      <link rel="stylesheet" href="../../stylesheets/extra.css">
+    
+    <script>__md_scope=new URL("../..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    
+      
+
+    
+    
+  </head>
+  
+  
+    
+    
+      
+    
+    
+    
+    
+    <body dir="ltr" data-md-color-scheme="slate" data-md-color-primary="custom" data-md-color-accent="light-blue">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#construct-axis" class="md-skip">
+          Skip to content
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+    </div>
+    
+    
+      
+
+<header class="md-header" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="Header">
+    <a href="../.." title="NILS - Neuroimaging Intelligent Linked System" class="md-header__button md-logo" aria-label="NILS - Neuroimaging Intelligent Linked System" data-md-component="logo">
+      
+  <img src="../../assets/nils-logo.svg" alt="logo">
+
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"/></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            NILS - Neuroimaging Intelligent Linked System
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              Construct
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+      
+        <form class="md-header__option" data-md-component="palette">
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="" data-md-color-scheme="slate" data-md-color-primary="custom" data-md-color-accent="light-blue"  aria-label="Switch to light mode"  type="radio" name="__palette" id="__palette_0">
+    
+      <label class="md-header__button md-icon" title="Switch to light mode" for="__palette_1" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 18c-.89 0-1.74-.2-2.5-.55C11.56 16.5 13 14.42 13 12s-1.44-4.5-3.5-5.45C10.26 6.2 11.11 6 12 6a6 6 0 0 1 6 6 6 6 0 0 1-6 6m8-9.31V4h-4.69L12 .69 8.69 4H4v4.69L.69 12 4 15.31V20h4.69L12 23.31 15.31 20H20v-4.69L23.31 12z"/></svg>
+      </label>
+    
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="" data-md-color-scheme="default" data-md-color-primary="custom" data-md-color-accent="blue"  aria-label="Switch to dark mode"  type="radio" name="__palette" id="__palette_1">
+    
+      <label class="md-header__button md-icon" title="Switch to dark mode" for="__palette_0" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a4 4 0 0 0-4 4 4 4 0 0 0 4 4 4 4 0 0 0 4-4 4 4 0 0 0-4-4m0 10a6 6 0 0 1-6-6 6 6 0 0 1 6-6 6 6 0 0 1 6 6 6 6 0 0 1-6 6m8-9.31V4h-4.69L12 .69 8.69 4H4v4.69L.69 12 4 15.31V20h4.69L12 23.31 15.31 20H20v-4.69L23.31 12z"/></svg>
+      </label>
+    
+  
+</form>
+      
+    
+    
+      <script>var palette=__md_get("__palette");if(palette&&palette.color){if("(prefers-color-scheme)"===palette.color.media){var media=matchMedia("(prefers-color-scheme: light)"),input=document.querySelector(media.matches?"[data-md-color-media='(prefers-color-scheme: light)']":"[data-md-color-media='(prefers-color-scheme: dark)']");palette.color.media=input.getAttribute("data-md-color-media"),palette.color.scheme=input.getAttribute("data-md-color-scheme"),palette.color.primary=input.getAttribute("data-md-color-primary"),palette.color.accent=input.getAttribute("data-md-color-accent")}for(var[key,value]of Object.entries(palette.color))document.body.setAttribute("data-md-color-"+key,value)}</script>
+    
+    
+    
+      
+      
+        <label class="md-header__button md-icon" for="__search">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        </label>
+        <div class="md-search" data-md-component="search" role="dialog">
+  <label class="md-search__overlay" for="__search"></label>
+  <div class="md-search__inner" role="search">
+    <form class="md-search__form" name="search">
+      <input type="text" class="md-search__input" name="query" aria-label="Search" placeholder="Search" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required>
+      <label class="md-search__icon md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+      </label>
+      <nav class="md-search__options" aria-label="Search">
+        
+        <button type="reset" class="md-search__icon md-icon" title="Clear" aria-label="Clear" tabindex="-1">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+        </button>
+      </nav>
+      
+        <div class="md-search__suggest" data-md-component="search-suggest"></div>
+      
+    </form>
+    <div class="md-search__output">
+      <div class="md-search__scrollwrap" tabindex="0" data-md-scrollfix>
+        <div class="md-search-result" data-md-component="search-result">
+          <div class="md-search-result__meta">
+            Initializing search
+          </div>
+          <ol class="md-search-result__list" role="presentation"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+      
+    
+    
+      <div class="md-header__source">
+        <a href="https://github.com/NeuroGranberg/NILS" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    NeuroGranberg/NILS
+  </div>
+</a>
+      </div>
+    
+  </nav>
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+          
+            
+<nav class="md-tabs" aria-label="Tabs" data-md-component="tabs">
+  <div class="md-grid">
+    <ul class="md-tabs__list">
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href="../.." class="md-tabs__link">
+        
+  
+  
+    
+  
+  Home
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href="../../presentation/" class="md-tabs__link">
+        
+  
+  
+    
+  
+  Presentation
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../../getting-started/installation/" class="md-tabs__link">
+          
+  
+  
+  Getting Started
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../../concepts/" class="md-tabs__link">
+          
+  
+  
+  Concepts
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
+    
+  
+  
+    
+    
+      <li class="md-tabs__item md-tabs__item--active">
+        <a href="../" class="md-tabs__link">
+          
+  
+  
+  Classification
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../../cohort/" class="md-tabs__link">
+          
+  
+  
+  Cohort Operations
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../../qc/" class="md-tabs__link">
+          
+  
+  
+  QC & Viewer
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href="../../changelog/" class="md-tabs__link">
+        
+  
+  
+    
+  
+  Changelog
+
+      </a>
+    </li>
+  
+
+      
+    </ul>
+  </div>
+</nav>
+          
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+  
+
+
+<nav class="md-nav md-nav--primary md-nav--lifted" aria-label="Navigation" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href="../.." title="NILS - Neuroimaging Intelligent Linked System" class="md-nav__button md-logo" aria-label="NILS - Neuroimaging Intelligent Linked System" data-md-component="logo">
+      
+  <img src="../../assets/nils-logo.svg" alt="logo">
+
+    </a>
+    NILS - Neuroimaging Intelligent Linked System
+  </label>
+  
+    <div class="md-nav__source">
+      <a href="https://github.com/NeuroGranberg/NILS" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    NeuroGranberg/NILS
+  </div>
+</a>
+    </div>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../.." class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Home
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../presentation/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Presentation
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_3" >
+        
+          
+          <label class="md-nav__link" for="__nav_3" id="__nav_3_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Getting Started
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_3_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_3">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Getting Started
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../getting-started/installation/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Installation
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../getting-started/quick-start/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Quick Start
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../getting-started/configuration/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Configuration
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_4" >
+        
+          
+          <label class="md-nav__link" for="__nav_4" id="__nav_4_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Concepts
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_4_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_4">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Concepts
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../concepts/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Overview
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+    
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--active md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_5" checked>
+        
+          
+          <label class="md-nav__link" for="__nav_5" id="__nav_5_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Classification
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_5_label" aria-expanded="true">
+          <label class="md-nav__title" for="__nav_5">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Classification
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Six-Axis System
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../foundations/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Detection Infrastructure
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+    
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+          
+          
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--active md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_5_3" checked>
+        
+          
+          <label class="md-nav__link" for="__nav_5_3" id="__nav_5_3_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Axes
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_5_3_label" aria-expanded="true">
+          <label class="md-nav__title" for="__nav_5_3">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Axes
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../base/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Base
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../technique/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Technique
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../modifier/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Modifier
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+    
+  
+  
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Construct
+  
+
+    
+  </span>
+  
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Construct
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#overview" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Overview
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#key-concepts" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Key Concepts
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Key Concepts">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#construct-vs-dicom-derived" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Construct vs DICOM DERIVED
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#additive-logic" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Additive Logic
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#output-format" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Output Format
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#detection-strategy" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Detection Strategy
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Detection Strategy">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#tier-1-exclusive-flag-95-confidence" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Tier 1: Exclusive Flag (95% confidence)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#tier-2-keywords-match-85-confidence" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Tier 2: Keywords Match (85% confidence)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#tier-3-combination-75-confidence" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Tier 3: Combination (75% confidence)
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#diffusion-constructs" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Diffusion Constructs
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Diffusion Constructs">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#adc-apparent-diffusion-coefficient" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ADC (Apparent Diffusion Coefficient)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#eadc-exponential-adc" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        eADC (Exponential ADC)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#fa-fractional-anisotropy" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        FA (Fractional Anisotropy)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#trace" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Trace
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#md-mean-diffusivity" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        MD (Mean Diffusivity)
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#perfusion-constructs" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Perfusion Constructs
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Perfusion Constructs">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#cbf-cerebral-blood-flow" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        CBF (Cerebral Blood Flow)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#cbv-cerebral-blood-volume" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        CBV (Cerebral Blood Volume)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#mtt-mean-transit-time" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        MTT (Mean Transit Time)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#tmax-time-to-maximum" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Tmax (Time to Maximum)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#ttp-time-to-peak" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        TTP (Time to Peak)
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#dixon-constructs" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Dixon Constructs
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Dixon Constructs">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#water" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Water
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#fat" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Fat
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#inphase" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        InPhase
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#outphase" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        OutPhase
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#quantitative-map-constructs" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Quantitative Map Constructs
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Quantitative Map Constructs">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#t1map" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        T1map
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#t2map" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        T2map
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#r1map-r2map" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        R1map / R2map
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#pdmap" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        PDmap
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#mp2rage-constructs" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        MP2RAGE Constructs
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="MP2RAGE Constructs">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#inv1-first-inversion" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        INV1 (First Inversion)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#inv2-second-inversion" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        INV2 (Second Inversion)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#uniform" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Uniform
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#denoised-uniformdenoised" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Denoised (UniformDenoised)
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#synthetic-mri-constructs" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Synthetic MRI Constructs
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Synthetic MRI Constructs">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#synthetict1w" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        SyntheticT1w
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#synthetict2w" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        SyntheticT2w
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#syntheticflair" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        SyntheticFLAIR
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#syntheticpdw" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        SyntheticPDw
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#myelinmap" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        MyelinMap
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#swi-constructs" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        SWI Constructs
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="SWI Constructs">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#swi-processed" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        SWI (Processed)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#phase" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Phase
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#qsm-quantitative-susceptibility-mapping" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        QSM (Quantitative Susceptibility Mapping)
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#projection-constructs" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Projection Constructs
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Projection Constructs">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#mip-maximum-intensity-projection" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        MIP (Maximum Intensity Projection)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#minip-minimum-intensity-projection" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        MinIP (Minimum Intensity Projection)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#mpr-multiplanar-reformation" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        MPR (Multiplanar Reformation)
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#field-map-constructs" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Field Map Constructs
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Field Map Constructs">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#b0map" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        B0map
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#b1map" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        B1map
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#component-constructs" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Component Constructs
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Component Constructs">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#magnitude" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Magnitude
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#real" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Real
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#imaginary" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Imaginary
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#original-vs-derived" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Original vs Derived
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#common-output-examples" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Common Output Examples
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#confidence-levels" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Confidence Levels
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#yaml-configuration" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        YAML Configuration
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#convenience-methods" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Convenience Methods
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../provenance/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Provenance
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../acceleration/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Acceleration
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+          
+          
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_5_4" >
+        
+          
+          <label class="md-nav__link" for="__nav_5_4" id="__nav_5_4_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Branches
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_5_4_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_5_4">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Branches
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../branches/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Overview
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../branches/symri/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    SyMRI
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../branches/swi/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    SWI
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../branches/epimix/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    EPIMix
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_6" >
+        
+          
+          <label class="md-nav__link" for="__nav_6" id="__nav_6_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Cohort Operations
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_6_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_6">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Cohort Operations
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../cohort/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Overview
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../cohort/extraction/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Extraction
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../cohort/sorting/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Sorting
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../cohort/anonymization/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Anonymization
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../cohort/export/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Export
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_7" >
+        
+          
+          <label class="md-nav__link" for="__nav_7" id="__nav_7_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    QC & Viewer
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_7_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_7">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    QC & Viewer
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../qc/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Quality Control
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../changelog/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Changelog
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+              
+              <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#overview" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Overview
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#key-concepts" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Key Concepts
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Key Concepts">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#construct-vs-dicom-derived" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Construct vs DICOM DERIVED
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#additive-logic" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Additive Logic
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#output-format" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Output Format
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#detection-strategy" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Detection Strategy
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Detection Strategy">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#tier-1-exclusive-flag-95-confidence" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Tier 1: Exclusive Flag (95% confidence)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#tier-2-keywords-match-85-confidence" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Tier 2: Keywords Match (85% confidence)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#tier-3-combination-75-confidence" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Tier 3: Combination (75% confidence)
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#diffusion-constructs" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Diffusion Constructs
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Diffusion Constructs">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#adc-apparent-diffusion-coefficient" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ADC (Apparent Diffusion Coefficient)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#eadc-exponential-adc" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        eADC (Exponential ADC)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#fa-fractional-anisotropy" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        FA (Fractional Anisotropy)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#trace" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Trace
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#md-mean-diffusivity" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        MD (Mean Diffusivity)
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#perfusion-constructs" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Perfusion Constructs
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Perfusion Constructs">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#cbf-cerebral-blood-flow" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        CBF (Cerebral Blood Flow)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#cbv-cerebral-blood-volume" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        CBV (Cerebral Blood Volume)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#mtt-mean-transit-time" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        MTT (Mean Transit Time)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#tmax-time-to-maximum" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Tmax (Time to Maximum)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#ttp-time-to-peak" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        TTP (Time to Peak)
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#dixon-constructs" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Dixon Constructs
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Dixon Constructs">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#water" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Water
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#fat" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Fat
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#inphase" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        InPhase
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#outphase" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        OutPhase
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#quantitative-map-constructs" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Quantitative Map Constructs
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Quantitative Map Constructs">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#t1map" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        T1map
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#t2map" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        T2map
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#r1map-r2map" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        R1map / R2map
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#pdmap" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        PDmap
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#mp2rage-constructs" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        MP2RAGE Constructs
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="MP2RAGE Constructs">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#inv1-first-inversion" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        INV1 (First Inversion)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#inv2-second-inversion" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        INV2 (Second Inversion)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#uniform" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Uniform
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#denoised-uniformdenoised" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Denoised (UniformDenoised)
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#synthetic-mri-constructs" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Synthetic MRI Constructs
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Synthetic MRI Constructs">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#synthetict1w" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        SyntheticT1w
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#synthetict2w" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        SyntheticT2w
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#syntheticflair" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        SyntheticFLAIR
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#syntheticpdw" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        SyntheticPDw
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#myelinmap" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        MyelinMap
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#swi-constructs" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        SWI Constructs
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="SWI Constructs">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#swi-processed" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        SWI (Processed)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#phase" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Phase
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#qsm-quantitative-susceptibility-mapping" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        QSM (Quantitative Susceptibility Mapping)
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#projection-constructs" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Projection Constructs
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Projection Constructs">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#mip-maximum-intensity-projection" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        MIP (Maximum Intensity Projection)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#minip-minimum-intensity-projection" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        MinIP (Minimum Intensity Projection)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#mpr-multiplanar-reformation" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        MPR (Multiplanar Reformation)
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#field-map-constructs" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Field Map Constructs
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Field Map Constructs">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#b0map" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        B0map
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#b1map" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        B1map
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#component-constructs" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Component Constructs
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Component Constructs">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#magnitude" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Magnitude
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#real" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Real
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#imaginary" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Imaginary
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#original-vs-derived" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Original vs Derived
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#common-output-examples" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Common Output Examples
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#confidence-levels" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Confidence Levels
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#yaml-configuration" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        YAML Configuration
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#convenience-methods" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Convenience Methods
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              
+              <article class="md-content__inner md-typeset">
+                
+                  
+
+
+  
+  
+
+
+<h1 id="construct-axis">Construct Axis<a class="headerlink" href="#construct-axis" title="Permanent link">&para;</a></h1>
+<p>The <strong>Construct</strong> axis identifies computed/derived outputs from MRI acquisitions. It answers the question: <em>"What type of calculated map or derived image is this?"</em></p>
+<hr />
+<h2 id="overview">Overview<a class="headerlink" href="#overview" title="Permanent link">&para;</a></h2>
+<p>Constructs are <strong>computed outputs</strong> - not directly acquired, but calculated from raw acquisition data.</p>
+<table>
+<thead>
+<tr>
+<th>Category</th>
+<th>Constructs</th>
+<th>Source</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Diffusion</strong></td>
+<td>ADC, eADC, FA, Trace, MD</td>
+<td>DWI/DTI</td>
+</tr>
+<tr>
+<td><strong>Perfusion</strong></td>
+<td>CBF, CBV, MTT, Tmax, TTP</td>
+<td>DSC/ASL</td>
+</tr>
+<tr>
+<td><strong>Dixon</strong></td>
+<td>Water, Fat, InPhase, OutPhase</td>
+<td>Dixon acquisition</td>
+</tr>
+<tr>
+<td><strong>Quantitative</strong></td>
+<td>T1map, T2map, R1map, R2map, PDmap</td>
+<td>Relaxometry</td>
+</tr>
+<tr>
+<td><strong>MP2RAGE</strong></td>
+<td>INV1, INV2, Uniform, Denoised</td>
+<td>MP2RAGE sequence</td>
+</tr>
+<tr>
+<td><strong>Synthetic</strong></td>
+<td>SyntheticT1w, SyntheticT2w, SyntheticFLAIR</td>
+<td>SyMRI/MAGiC</td>
+</tr>
+<tr>
+<td><strong>SWI</strong></td>
+<td>SWI, Phase, QSM</td>
+<td>SWI processing</td>
+</tr>
+<tr>
+<td><strong>Projection</strong></td>
+<td>MIP, MinIP, MPR</td>
+<td>Post-processing</td>
+</tr>
+<tr>
+<td><strong>Field Maps</strong></td>
+<td>B0map, B1map</td>
+<td>Calibration</td>
+</tr>
+<tr>
+<td><strong>Components</strong></td>
+<td>Magnitude, Real, Imaginary</td>
+<td>Complex data</td>
+</tr>
+</tbody>
+</table>
+<hr />
+<h2 id="key-concepts">Key Concepts<a class="headerlink" href="#key-concepts" title="Permanent link">&para;</a></h2>
+<h3 id="construct-vs-dicom-derived">Construct vs DICOM DERIVED<a class="headerlink" href="#construct-vs-dicom-derived" title="Permanent link">&para;</a></h3>
+<p>These are <strong>not the same</strong>:</p>
+<ul>
+<li><strong>DICOM DERIVED</strong>: Generic flag meaning "pixels computed from other images"</li>
+<li><strong>Construct</strong>: The specific TYPE of computed output (ADC, FA, T1map, etc.)</li>
+</ul>
+<p>A DERIVED image could be an ADC map, an MPR reformat, or a subtraction image - the construct tells you which.</p>
+<h3 id="additive-logic">Additive Logic<a class="headerlink" href="#additive-logic" title="Permanent link">&para;</a></h3>
+<p>Like Modifiers, constructs are additive - multiple can apply:</p>
+<div class="language-text highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>DTI acquisition → construct_csv = &quot;ADC,FA&quot;
+</span><span id="__span-0-2"><a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>MDME/SyMRI     → construct_csv = &quot;SyntheticT1w,T1map,T2map&quot;
+</span></code></pre></div>
+<h3 id="output-format">Output Format<a class="headerlink" href="#output-format" title="Permanent link">&para;</a></h3>
+<ul>
+<li>Comma-separated</li>
+<li>Alphabetically sorted</li>
+<li>Empty string for original acquisitions (no constructs)</li>
+</ul>
+<hr />
+<h2 id="detection-strategy">Detection Strategy<a class="headerlink" href="#detection-strategy" title="Permanent link">&para;</a></h2>
+<p>Same three-tier approach:</p>
+<h3 id="tier-1-exclusive-flag-95-confidence">Tier 1: Exclusive Flag (95% confidence)<a class="headerlink" href="#tier-1-exclusive-flag-95-confidence" title="Permanent link">&para;</a></h3>
+<div class="language-yaml highlight"><pre><span></span><code><span id="__span-1-1"><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="nt">ADC</span><span class="p">:</span>
+</span><span id="__span-1-2"><a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a><span class="w">  </span><span class="nt">detection</span><span class="p">:</span>
+</span><span id="__span-1-3"><a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a><span class="w">    </span><span class="nt">exclusive</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">has_adc</span>
+</span></code></pre></div>
+<h3 id="tier-2-keywords-match-85-confidence">Tier 2: Keywords Match (85% confidence)<a class="headerlink" href="#tier-2-keywords-match-85-confidence" title="Permanent link">&para;</a></h3>
+<div class="language-yaml highlight"><pre><span></span><code><span id="__span-2-1"><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="nt">ADC</span><span class="p">:</span>
+</span><span id="__span-2-2"><a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a><span class="w">  </span><span class="nt">keywords</span><span class="p">:</span>
+</span><span id="__span-2-3"><a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a><span class="w">    </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="s">&quot;adc&quot;</span>
+</span><span id="__span-2-4"><a id="__codelineno-2-4" name="__codelineno-2-4" href="#__codelineno-2-4"></a><span class="w">    </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="s">&quot;apparent</span><span class="nv"> </span><span class="s">diffusion</span><span class="nv"> </span><span class="s">coefficient&quot;</span>
+</span></code></pre></div>
+<h3 id="tier-3-combination-75-confidence">Tier 3: Combination (75% confidence)<a class="headerlink" href="#tier-3-combination-75-confidence" title="Permanent link">&para;</a></h3>
+<div class="language-yaml highlight"><pre><span></span><code><span id="__span-3-1"><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a><span class="nt">SWI</span><span class="p">:</span>
+</span><span id="__span-3-2"><a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a><span class="w">  </span><span class="nt">detection</span><span class="p">:</span>
+</span><span id="__span-3-3"><a id="__codelineno-3-3" name="__codelineno-3-3" href="#__codelineno-3-3"></a><span class="w">    </span><span class="nt">combination</span><span class="p">:</span>
+</span><span id="__span-3-4"><a id="__codelineno-3-4" name="__codelineno-3-4" href="#__codelineno-3-4"></a><span class="w">      </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">has_swi</span>
+</span><span id="__span-3-5"><a id="__codelineno-3-5" name="__codelineno-3-5" href="#__codelineno-3-5"></a><span class="w">      </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">is_derived</span>
+</span></code></pre></div>
+<hr />
+<h2 id="diffusion-constructs">Diffusion Constructs<a class="headerlink" href="#diffusion-constructs" title="Permanent link">&para;</a></h2>
+<p>Derived from diffusion-weighted imaging (DWI/DTI/HARDI).</p>
+<h3 id="adc-apparent-diffusion-coefficient">ADC (Apparent Diffusion Coefficient)<a class="headerlink" href="#adc-apparent-diffusion-coefficient" title="Permanent link">&para;</a></h3>
+<p><strong>Units:</strong> mm²/s</p>
+<p><strong>Detection:</strong>
+- Exclusive flag: <code>has_adc</code>
+- Keywords: <code>adc</code>, <code>apparent diffusion coefficient</code></p>
+<p><strong>Computation:</strong> Fitted from multi-b-value DWI using: S(b) = S₀ × exp(-b × ADC)</p>
+<p><strong>Clinical interpretation:</strong>
+- Low ADC = restricted diffusion (acute stroke, tumor cellularity)
+- High ADC = free water diffusion</p>
+<hr />
+<h3 id="eadc-exponential-adc">eADC (Exponential ADC)<a class="headerlink" href="#eadc-exponential-adc" title="Permanent link">&para;</a></h3>
+<p><strong>Formula:</strong> eADC = exp(-b × ADC)</p>
+<p><strong>Detection:</strong>
+- Exclusive flag: <code>has_eadc</code>
+- Keywords: <code>eadc</code>, <code>exponential adc</code></p>
+<p><strong>Use:</strong> Some clinical applications prefer exponential form.</p>
+<hr />
+<h3 id="fa-fractional-anisotropy">FA (Fractional Anisotropy)<a class="headerlink" href="#fa-fractional-anisotropy" title="Permanent link">&para;</a></h3>
+<p><strong>Range:</strong> 0 (isotropic) to 1 (perfectly anisotropic)</p>
+<p><strong>Detection:</strong>
+- Exclusive flag: <code>has_fa</code>
+- Keywords: <code>fractional anisotropy</code>, <code>fa map</code></p>
+<p><strong>Clinical interpretation:</strong>
+- High FA in white matter tracts (organized fibers)
+- Low FA in gray matter, CSF
+- FA reduction indicates white matter damage</p>
+<hr />
+<h3 id="trace">Trace<a class="headerlink" href="#trace" title="Permanent link">&para;</a></h3>
+<p><strong>Description:</strong> Direction-independent diffusion-weighted image.</p>
+<p><strong>Detection:</strong>
+- Exclusive flag: <code>has_trace</code>
+- Keywords: <code>trace</code>, <code>tracew</code>, <code>isodwi</code></p>
+<p><strong>Computation:</strong> Combined DWI from multiple directions (geometric mean).</p>
+<hr />
+<h3 id="md-mean-diffusivity">MD (Mean Diffusivity)<a class="headerlink" href="#md-mean-diffusivity" title="Permanent link">&para;</a></h3>
+<p><strong>Description:</strong> Average diffusion in all directions.</p>
+<p><strong>Detection:</strong> Keywords only: <code>mean diffusivity</code>, <code>md map</code></p>
+<p><strong>Relationship:</strong> MD ≈ ADC for isotropic diffusion.</p>
+<hr />
+<h2 id="perfusion-constructs">Perfusion Constructs<a class="headerlink" href="#perfusion-constructs" title="Permanent link">&para;</a></h2>
+<p>Derived from DSC-MRI or ASL perfusion imaging.</p>
+<h3 id="cbf-cerebral-blood-flow">CBF (Cerebral Blood Flow)<a class="headerlink" href="#cbf-cerebral-blood-flow" title="Permanent link">&para;</a></h3>
+<p><strong>Units:</strong> ml/100g/min</p>
+<p><strong>Detection:</strong>
+- Exclusive flag: <code>has_cbf</code>
+- Keywords: <code>cbf</code>, <code>cerebral blood flow</code></p>
+<p><strong>Clinical use:</strong> Tissue perfusion assessment.</p>
+<hr />
+<h3 id="cbv-cerebral-blood-volume">CBV (Cerebral Blood Volume)<a class="headerlink" href="#cbv-cerebral-blood-volume" title="Permanent link">&para;</a></h3>
+<p><strong>Units:</strong> ml/100g</p>
+<p><strong>Detection:</strong>
+- Exclusive flag: <code>has_cbv</code>
+- Keywords: <code>cbv</code>, <code>cerebral blood volume</code></p>
+<p><strong>Clinical use:</strong> Vascular density, tumor grading.</p>
+<hr />
+<h3 id="mtt-mean-transit-time">MTT (Mean Transit Time)<a class="headerlink" href="#mtt-mean-transit-time" title="Permanent link">&para;</a></h3>
+<p><strong>Units:</strong> seconds</p>
+<p><strong>Detection:</strong>
+- Exclusive flag: <code>has_mtt</code>
+- Keywords: <code>mtt</code>, <code>mean transit time</code></p>
+<p><strong>Relationship:</strong> MTT = CBV / CBF (central volume theorem).</p>
+<hr />
+<h3 id="tmax-time-to-maximum">Tmax (Time to Maximum)<a class="headerlink" href="#tmax-time-to-maximum" title="Permanent link">&para;</a></h3>
+<p><strong>Description:</strong> Time to maximum of residue function.</p>
+<p><strong>Detection:</strong>
+- Exclusive flag: <code>has_tmax</code>
+- Keywords: <code>tmax</code>, <code>time to max</code></p>
+<p><strong>Clinical use:</strong> Stroke - penumbra identification (Tmax &gt; 6s threshold).</p>
+<hr />
+<h3 id="ttp-time-to-peak">TTP (Time to Peak)<a class="headerlink" href="#ttp-time-to-peak" title="Permanent link">&para;</a></h3>
+<p><strong>Description:</strong> Time to peak of contrast bolus.</p>
+<p><strong>Detection:</strong>
+- Exclusive flag: <code>has_ttp</code>
+- Keywords: <code>ttp</code>, <code>time to peak</code></p>
+<hr />
+<h2 id="dixon-constructs">Dixon Constructs<a class="headerlink" href="#dixon-constructs" title="Permanent link">&para;</a></h2>
+<p>Fat-water separation outputs from Dixon acquisition.</p>
+<h3 id="water">Water<a class="headerlink" href="#water" title="Permanent link">&para;</a></h3>
+<p><strong>Description:</strong> Water-only image (fat suppressed).</p>
+<p><strong>Detection:</strong>
+- Exclusive flag: <code>has_water</code>
+- Keywords: <code>water only</code>, <code>dixon water</code></p>
+<p><strong>Advantage:</strong> Better fat suppression near metal than spectral methods.</p>
+<hr />
+<h3 id="fat">Fat<a class="headerlink" href="#fat" title="Permanent link">&para;</a></h3>
+<p><strong>Description:</strong> Fat-only image (water suppressed).</p>
+<p><strong>Detection:</strong>
+- Exclusive flag: <code>has_fat</code>
+- Keywords: <code>fat only</code>, <code>dixon fat</code></p>
+<p><strong>Use:</strong> Fat quantification, lipid assessment.</p>
+<hr />
+<h3 id="inphase">InPhase<a class="headerlink" href="#inphase" title="Permanent link">&para;</a></h3>
+<p><strong>Description:</strong> Echo where water and fat signals are in phase.</p>
+<p><strong>Detection:</strong>
+- Exclusive flag: <code>has_in_phase</code>
+- Keywords: <code>in phase</code>, <code>inphase</code></p>
+<p><strong>Note:</strong> Can be original acquisition, not necessarily derived.</p>
+<hr />
+<h3 id="outphase">OutPhase<a class="headerlink" href="#outphase" title="Permanent link">&para;</a></h3>
+<p><strong>Description:</strong> Echo where water and fat signals are opposed.</p>
+<p><strong>Detection:</strong>
+- Exclusive flag: <code>has_out_phase</code>
+- Keywords: <code>opposed phase</code>, <code>out of phase</code></p>
+<p><strong>Use:</strong> Signal cancellation at fat-water interfaces reveals fat content.</p>
+<hr />
+<h2 id="quantitative-map-constructs">Quantitative Map Constructs<a class="headerlink" href="#quantitative-map-constructs" title="Permanent link">&para;</a></h2>
+<p>Relaxometry and parameter maps.</p>
+<h3 id="t1map">T1map<a class="headerlink" href="#t1map" title="Permanent link">&para;</a></h3>
+<p><strong>Units:</strong> milliseconds</p>
+<p><strong>Detection:</strong>
+- Exclusive flag: <code>has_t1_map</code>
+- Keywords: <code>t1 map</code>, <code>t1 relaxation</code>
+- Combination: <code>is_qmap</code></p>
+<p><strong>Acquisition methods:</strong> VFA-GRE, IR sequences, MP2RAGE.</p>
+<hr />
+<h3 id="t2map">T2map<a class="headerlink" href="#t2map" title="Permanent link">&para;</a></h3>
+<p><strong>Units:</strong> milliseconds</p>
+<p><strong>Detection:</strong>
+- Exclusive flag: <code>has_t2_map</code>
+- Keywords: <code>t2 map</code>, <code>t2 relaxation</code></p>
+<p><strong>Acquisition method:</strong> Multi-echo SE.</p>
+<hr />
+<h3 id="r1map-r2map">R1map / R2map<a class="headerlink" href="#r1map-r2map" title="Permanent link">&para;</a></h3>
+<p><strong>Description:</strong> Relaxation rate maps (1/T1 and 1/T2).</p>
+<p><strong>Detection:</strong>
+- Exclusive flags: <code>has_r1</code>, <code>has_r2</code>
+- Keywords: <code>r1 map</code>, <code>r2 map</code></p>
+<hr />
+<h3 id="pdmap">PDmap<a class="headerlink" href="#pdmap" title="Permanent link">&para;</a></h3>
+<p><strong>Description:</strong> Quantitative proton density map.</p>
+<p><strong>Detection:</strong> Keywords: <code>pd map</code>, <code>proton density map</code></p>
+<hr />
+<h2 id="mp2rage-constructs">MP2RAGE Constructs<a class="headerlink" href="#mp2rage-constructs" title="Permanent link">&para;</a></h2>
+<p>Outputs from MP2RAGE acquisition. All are fundamentally T1-weighted.</p>
+<h3 id="inv1-first-inversion">INV1 (First Inversion)<a class="headerlink" href="#inv1-first-inversion" title="Permanent link">&para;</a></h3>
+<p><strong>TI:</strong> ~700-1000ms (short)</p>
+<p><strong>Detection:</strong>
+- Exclusive flag: <code>is_mp2rage_inv1</code>
+- Keywords: <code>inv1</code>, <code>inv 1</code></p>
+<p><strong>Characteristics:</strong>
+- Strong T1 weighting
+- Lower SNR than INV2
+- Not derived (original acquisition)</p>
+<hr />
+<h3 id="inv2-second-inversion">INV2 (Second Inversion)<a class="headerlink" href="#inv2-second-inversion" title="Permanent link">&para;</a></h3>
+<p><strong>TI:</strong> ~2500-3200ms (long)</p>
+<p><strong>Detection:</strong>
+- Exclusive flag: <code>is_mp2rage_inv2</code>
+- Keywords: <code>inv2</code>, <code>inv 2</code></p>
+<p><strong>Characteristics:</strong>
+- Higher SNR
+- Weaker T1 contrast
+- Not derived (original acquisition)</p>
+<hr />
+<h3 id="uniform">Uniform<a class="headerlink" href="#uniform" title="Permanent link">&para;</a></h3>
+<p><strong>Description:</strong> Bias-corrected T1w image.</p>
+<p><strong>Detection:</strong>
+- Exclusive flag: <code>has_uniform</code>
+- Keywords: <code>uni image</code>, <code>uniform image</code></p>
+<p><strong>Computation:</strong>
+<div class="language-text highlight"><pre><span></span><code><span id="__span-4-1"><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a>S_UNI = Re(INV1* · INV2) / (|INV1|² + |INV2|²)
+</span></code></pre></div></p>
+<p><strong>Caveat:</strong> Has "salt-and-pepper" noise in background (division of small numbers in air).</p>
+<hr />
+<h3 id="denoised-uniformdenoised">Denoised (UniformDenoised)<a class="headerlink" href="#denoised-uniformdenoised" title="Permanent link">&para;</a></h3>
+<p><strong>Description:</strong> Bias-corrected with clean background.</p>
+<p><strong>Detection:</strong>
+- Exclusive flag: <code>is_uniform_denoised</code>
+- Keywords: <code>uni-den</code>, <code>uniform denoised</code></p>
+<p><strong>Computation:</strong>
+<div class="language-text highlight"><pre><span></span><code><span id="__span-5-1"><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a>S_UNI-DEN = Re(INV1* · INV2) / (|INV1|² + |INV2|² + β)
+</span></code></pre></div></p>
+<p>The regularization term β suppresses background noise.</p>
+<p><strong>Use:</strong> <strong>Primary input for segmentation</strong> (FreeSurfer, FSL, SPM) - has clean dark background.</p>
+<hr />
+<h2 id="synthetic-mri-constructs">Synthetic MRI Constructs<a class="headerlink" href="#synthetic-mri-constructs" title="Permanent link">&para;</a></h2>
+<p>Generated from quantitative maps (SyMRI/MAGiC).</p>
+<h3 id="synthetict1w">SyntheticT1w<a class="headerlink" href="#synthetict1w" title="Permanent link">&para;</a></h3>
+<p><strong>Detection:</strong>
+- Exclusive flag: <code>has_t1_synthetic</code>
+- Keywords: <code>synthetic t1</code></p>
+<p><strong>Source:</strong> Computed from T1, T2, PD maps using Bloch equations.</p>
+<hr />
+<h3 id="synthetict2w">SyntheticT2w<a class="headerlink" href="#synthetict2w" title="Permanent link">&para;</a></h3>
+<p><strong>Detection:</strong>
+- Exclusive flag: <code>has_t2_synthetic</code>
+- Keywords: <code>synthetic t2</code></p>
+<hr />
+<h3 id="syntheticflair">SyntheticFLAIR<a class="headerlink" href="#syntheticflair" title="Permanent link">&para;</a></h3>
+<p><strong>Detection:</strong>
+- Exclusive flag: <code>has_flair_synthetic</code>
+- Keywords: <code>synthetic flair</code></p>
+<p><strong>Advantage:</strong> FLAIR contrast without additional scan time.</p>
+<hr />
+<h3 id="syntheticpdw">SyntheticPDw<a class="headerlink" href="#syntheticpdw" title="Permanent link">&para;</a></h3>
+<p><strong>Detection:</strong>
+- Exclusive flag: <code>has_pd_synthetic</code>
+- Keywords: <code>synthetic pd</code></p>
+<hr />
+<h3 id="myelinmap">MyelinMap<a class="headerlink" href="#myelinmap" title="Permanent link">&para;</a></h3>
+<p><strong>Description:</strong> Myelin content / myelin water fraction.</p>
+<p><strong>Detection:</strong>
+- Exclusive flag: <code>has_myelin</code>
+- Keywords: <code>myelin map</code>, <code>mwf</code></p>
+<p><strong>Use:</strong> White matter integrity assessment, MS research.</p>
+<hr />
+<h2 id="swi-constructs">SWI Constructs<a class="headerlink" href="#swi-constructs" title="Permanent link">&para;</a></h2>
+<p>Susceptibility-weighted imaging outputs.</p>
+<h3 id="swi-processed">SWI (Processed)<a class="headerlink" href="#swi-processed" title="Permanent link">&para;</a></h3>
+<p><strong>Description:</strong> Magnitude × phase mask^n for maximum susceptibility sensitivity.</p>
+<p><strong>Detection:</strong>
+- Keywords: <code>swi processed</code>, <code>swi combined</code>
+- Combination: <code>has_swi</code> + <code>is_derived</code></p>
+<p><strong>Note:</strong> SWI branch (<code>branches/swi.py</code>) handles this directly for SWI provenance.</p>
+<hr />
+<h3 id="phase">Phase<a class="headerlink" href="#phase" title="Permanent link">&para;</a></h3>
+<p><strong>Description:</strong> Phase image (wrapped or unwrapped).</p>
+<p><strong>Detection:</strong>
+- Exclusive flag: <code>has_phase</code>
+- Keywords: <code>phase</code>, <code>phase map</code></p>
+<p><strong>Use:</strong>
+- QSM derivation
+- Iron vs calcium differentiation
+- Phase-contrast flow</p>
+<p><strong>Note:</strong> Can be original acquisition, not necessarily derived.</p>
+<hr />
+<h3 id="qsm-quantitative-susceptibility-mapping">QSM (Quantitative Susceptibility Mapping)<a class="headerlink" href="#qsm-quantitative-susceptibility-mapping" title="Permanent link">&para;</a></h3>
+<p><strong>Units:</strong> ppm (parts per million)</p>
+<p><strong>Detection:</strong> Keywords: <code>qsm</code>, <code>susceptibility map</code>, <code>chi map</code></p>
+<p><strong>Computation:</strong> Derived from phase via dipole inversion.</p>
+<p><strong>Clinical use:</strong> Iron quantification, calcification detection.</p>
+<hr />
+<h2 id="projection-constructs">Projection Constructs<a class="headerlink" href="#projection-constructs" title="Permanent link">&para;</a></h2>
+<p>Post-processing reformats.</p>
+<h3 id="mip-maximum-intensity-projection">MIP (Maximum Intensity Projection)<a class="headerlink" href="#mip-maximum-intensity-projection" title="Permanent link">&para;</a></h3>
+<p><strong>Detection:</strong>
+- Exclusive flag: <code>is_mip</code>
+- Keywords: <code>mip</code>, <code>maximum intensity projection</code></p>
+<p><strong>Use:</strong> Angiography visualization, vessel overview.</p>
+<hr />
+<h3 id="minip-minimum-intensity-projection">MinIP (Minimum Intensity Projection)<a class="headerlink" href="#minip-minimum-intensity-projection" title="Permanent link">&para;</a></h3>
+<p><strong>Detection:</strong>
+- Exclusive flag: <code>is_minip</code>
+- Keywords: <code>minip</code>, <code>minimum intensity projection</code></p>
+<p><strong>Use:</strong> Airway visualization, SWI vein display.</p>
+<hr />
+<h3 id="mpr-multiplanar-reformation">MPR (Multiplanar Reformation)<a class="headerlink" href="#mpr-multiplanar-reformation" title="Permanent link">&para;</a></h3>
+<p><strong>Detection:</strong>
+- Exclusive flag: <code>is_mpr</code>
+- Keywords: <code>multiplanar reformat</code>, <code>reformatted</code></p>
+<p><strong>Note:</strong> Keyword "mpr" excluded to avoid false matches with "mprage".</p>
+<hr />
+<h2 id="field-map-constructs">Field Map Constructs<a class="headerlink" href="#field-map-constructs" title="Permanent link">&para;</a></h2>
+<p>Calibration maps.</p>
+<h3 id="b0map">B0map<a class="headerlink" href="#b0map" title="Permanent link">&para;</a></h3>
+<p><strong>Description:</strong> Static field off-resonance map.</p>
+<p><strong>Detection:</strong> Keywords: <code>b0 map</code>, <code>field map</code>, <code>fieldmap</code></p>
+<p><strong>Use:</strong> Distortion correction, shimming.</p>
+<hr />
+<h3 id="b1map">B1map<a class="headerlink" href="#b1map" title="Permanent link">&para;</a></h3>
+<p><strong>Description:</strong> RF transmit/receive field map.</p>
+<p><strong>Detection:</strong> Keywords: <code>b1 map</code>, <code>b1+</code>, <code>b1-</code></p>
+<p><strong>Use:</strong> RF inhomogeneity correction.</p>
+<hr />
+<h2 id="component-constructs">Component Constructs<a class="headerlink" href="#component-constructs" title="Permanent link">&para;</a></h2>
+<p>Complex data components.</p>
+<h3 id="magnitude">Magnitude<a class="headerlink" href="#magnitude" title="Permanent link">&para;</a></h3>
+<p><strong>Description:</strong> Magnitude from complex data.</p>
+<p><strong>Detection:</strong> Keywords only: <code>magnitude image</code>, <code>magnitude only</code></p>
+<p><strong>Note:</strong> <code>has_magnitude</code> flag not used for detection - most images are magnitude.</p>
+<hr />
+<h3 id="real">Real<a class="headerlink" href="#real" title="Permanent link">&para;</a></h3>
+<p><strong>Detection:</strong>
+- Exclusive flag: <code>has_real</code>
+- Keywords: <code>real image</code>, <code>real component</code></p>
+<hr />
+<h3 id="imaginary">Imaginary<a class="headerlink" href="#imaginary" title="Permanent link">&para;</a></h3>
+<p><strong>Detection:</strong>
+- Exclusive flag: <code>has_imaginary</code>
+- Keywords: <code>imaginary image</code>, <code>imaginary component</code></p>
+<hr />
+<h2 id="original-vs-derived">Original vs Derived<a class="headerlink" href="#original-vs-derived" title="Permanent link">&para;</a></h2>
+<p>Most constructs require <code>is_derived=True</code> in DICOM ImageType:</p>
+<table>
+<thead>
+<tr>
+<th>Requires Derived</th>
+<th>Construct Examples</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Yes</strong></td>
+<td>ADC, FA, CBF, T1map, SyntheticT1w, MIP</td>
+</tr>
+<tr>
+<td><strong>No</strong></td>
+<td>INV1, INV2, InPhase, OutPhase, Phase, Magnitude</td>
+</tr>
+</tbody>
+</table>
+<p>Some outputs (like MP2RAGE inversions, Dixon echoes, phase images) are <strong>original</strong> acquisitions, not derived.</p>
+<hr />
+<h2 id="common-output-examples">Common Output Examples<a class="headerlink" href="#common-output-examples" title="Permanent link">&para;</a></h2>
+<table>
+<thead>
+<tr>
+<th>Acquisition</th>
+<th>construct_csv</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Standard T1w MPRAGE</td>
+<td><code>""</code> (empty - no constructs)</td>
+</tr>
+<tr>
+<td>DTI with maps</td>
+<td><code>"ADC,FA"</code></td>
+</tr>
+<tr>
+<td>DSC perfusion</td>
+<td><code>"CBF,CBV,MTT"</code></td>
+</tr>
+<tr>
+<td>Dixon</td>
+<td><code>"Fat,Water"</code></td>
+</tr>
+<tr>
+<td>SyMRI/MAGiC</td>
+<td><code>"SyntheticFLAIR,SyntheticT1w,T1map,T2map"</code></td>
+</tr>
+<tr>
+<td>MP2RAGE</td>
+<td><code>"Denoised,T1map"</code> or <code>"INV1"</code></td>
+</tr>
+<tr>
+<td>TOF-MRA MIP</td>
+<td><code>"MIP"</code></td>
+</tr>
+<tr>
+<td>SWI</td>
+<td><code>"Phase,SWI"</code></td>
+</tr>
+</tbody>
+</table>
+<hr />
+<h2 id="confidence-levels">Confidence Levels<a class="headerlink" href="#confidence-levels" title="Permanent link">&para;</a></h2>
+<table>
+<thead>
+<tr>
+<th>Detection Method</th>
+<th>Confidence</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Exclusive flag</td>
+<td>95%</td>
+</tr>
+<tr>
+<td>Keywords match</td>
+<td>85%</td>
+</tr>
+<tr>
+<td>Combination (AND)</td>
+<td>75%</td>
+</tr>
+</tbody>
+</table>
+<hr />
+<h2 id="yaml-configuration">YAML Configuration<a class="headerlink" href="#yaml-configuration" title="Permanent link">&para;</a></h2>
+<p>Constructs are configured in <code>backend/src/classification/detection_yaml/construct-detection.yaml</code>:</p>
+<div class="language-yaml highlight"><pre><span></span><code><span id="__span-6-1"><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a><span class="nt">constructs</span><span class="p">:</span>
+</span><span id="__span-6-2"><a id="__codelineno-6-2" name="__codelineno-6-2" href="#__codelineno-6-2"></a><span class="w">  </span><span class="nt">ADC</span><span class="p">:</span>
+</span><span id="__span-6-3"><a id="__codelineno-6-3" name="__codelineno-6-3" href="#__codelineno-6-3"></a><span class="w">    </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;ADC&quot;</span>
+</span><span id="__span-6-4"><a id="__codelineno-6-4" name="__codelineno-6-4" href="#__codelineno-6-4"></a><span class="w">    </span><span class="nt">category</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;diffusion&quot;</span>
+</span><span id="__span-6-5"><a id="__codelineno-6-5" name="__codelineno-6-5" href="#__codelineno-6-5"></a><span class="w">    </span><span class="nt">description</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;Apparent</span><span class="nv"> </span><span class="s">Diffusion</span><span class="nv"> </span><span class="s">Coefficient</span><span class="nv"> </span><span class="s">map&quot;</span>
+</span><span id="__span-6-6"><a id="__codelineno-6-6" name="__codelineno-6-6" href="#__codelineno-6-6"></a><span class="w">    </span><span class="nt">keywords</span><span class="p">:</span>
+</span><span id="__span-6-7"><a id="__codelineno-6-7" name="__codelineno-6-7" href="#__codelineno-6-7"></a><span class="w">      </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="s">&quot;adc&quot;</span>
+</span><span id="__span-6-8"><a id="__codelineno-6-8" name="__codelineno-6-8" href="#__codelineno-6-8"></a><span class="w">      </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="s">&quot;apparent</span><span class="nv"> </span><span class="s">diffusion</span><span class="nv"> </span><span class="s">coefficient&quot;</span>
+</span><span id="__span-6-9"><a id="__codelineno-6-9" name="__codelineno-6-9" href="#__codelineno-6-9"></a><span class="w">    </span><span class="nt">detection</span><span class="p">:</span>
+</span><span id="__span-6-10"><a id="__codelineno-6-10" name="__codelineno-6-10" href="#__codelineno-6-10"></a><span class="w">      </span><span class="nt">exclusive</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">has_adc</span>
+</span><span id="__span-6-11"><a id="__codelineno-6-11" name="__codelineno-6-11" href="#__codelineno-6-11"></a><span class="w">    </span><span class="nt">requires_derived</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">true</span>
+</span><span id="__span-6-12"><a id="__codelineno-6-12" name="__codelineno-6-12" href="#__codelineno-6-12"></a>
+</span><span id="__span-6-13"><a id="__codelineno-6-13" name="__codelineno-6-13" href="#__codelineno-6-13"></a><span class="w">  </span><span class="nt">INV1</span><span class="p">:</span>
+</span><span id="__span-6-14"><a id="__codelineno-6-14" name="__codelineno-6-14" href="#__codelineno-6-14"></a><span class="w">    </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;INV1&quot;</span>
+</span><span id="__span-6-15"><a id="__codelineno-6-15" name="__codelineno-6-15" href="#__codelineno-6-15"></a><span class="w">    </span><span class="nt">category</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;mp2rage&quot;</span>
+</span><span id="__span-6-16"><a id="__codelineno-6-16" name="__codelineno-6-16" href="#__codelineno-6-16"></a><span class="w">    </span><span class="nt">detection</span><span class="p">:</span>
+</span><span id="__span-6-17"><a id="__codelineno-6-17" name="__codelineno-6-17" href="#__codelineno-6-17"></a><span class="w">      </span><span class="nt">exclusive</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">is_mp2rage_inv1</span>
+</span><span id="__span-6-18"><a id="__codelineno-6-18" name="__codelineno-6-18" href="#__codelineno-6-18"></a><span class="w">    </span><span class="nt">requires_derived</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">false</span><span class="w">  </span><span class="c1"># Original acquisition</span>
+</span><span id="__span-6-19"><a id="__codelineno-6-19" name="__codelineno-6-19" href="#__codelineno-6-19"></a>
+</span><span id="__span-6-20"><a id="__codelineno-6-20" name="__codelineno-6-20" href="#__codelineno-6-20"></a><span class="nt">rules</span><span class="p">:</span>
+</span><span id="__span-6-21"><a id="__codelineno-6-21" name="__codelineno-6-21" href="#__codelineno-6-21"></a><span class="w">  </span><span class="nt">allow_multiple</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">true</span>
+</span><span id="__span-6-22"><a id="__codelineno-6-22" name="__codelineno-6-22" href="#__codelineno-6-22"></a><span class="w">  </span><span class="nt">priority_order</span><span class="p">:</span>
+</span><span id="__span-6-23"><a id="__codelineno-6-23" name="__codelineno-6-23" href="#__codelineno-6-23"></a><span class="w">    </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="s">&quot;ADC&quot;</span>
+</span><span id="__span-6-24"><a id="__codelineno-6-24" name="__codelineno-6-24" href="#__codelineno-6-24"></a><span class="w">    </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="s">&quot;FA&quot;</span>
+</span><span id="__span-6-25"><a id="__codelineno-6-25" name="__codelineno-6-25" href="#__codelineno-6-25"></a><span class="w">    </span><span class="c1"># ... more specific first</span>
+</span></code></pre></div>
+<hr />
+<h2 id="convenience-methods">Convenience Methods<a class="headerlink" href="#convenience-methods" title="Permanent link">&para;</a></h2>
+<p>The detector provides helper methods:</p>
+<div class="language-python highlight"><pre><span></span><code><span id="__span-7-1"><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a><span class="c1"># Get all constructs by category</span>
+</span><span id="__span-7-2"><a id="__codelineno-7-2" name="__codelineno-7-2" href="#__codelineno-7-2"></a><span class="n">detector</span><span class="o">.</span><span class="n">get_constructs_by_category</span><span class="p">(</span><span class="s2">&quot;diffusion&quot;</span><span class="p">)</span>  <span class="c1"># [&quot;ADC&quot;, &quot;FA&quot;, &quot;MD&quot;, &quot;Trace&quot;, &quot;eADC&quot;]</span>
+</span><span id="__span-7-3"><a id="__codelineno-7-3" name="__codelineno-7-3" href="#__codelineno-7-3"></a>
+</span><span id="__span-7-4"><a id="__codelineno-7-4" name="__codelineno-7-4" href="#__codelineno-7-4"></a><span class="c1"># Get all categories</span>
+</span><span id="__span-7-5"><a id="__codelineno-7-5" name="__codelineno-7-5" href="#__codelineno-7-5"></a><span class="n">detector</span><span class="o">.</span><span class="n">get_categories</span><span class="p">()</span>  <span class="c1"># [&quot;component&quot;, &quot;diffusion&quot;, &quot;dixon&quot;, &quot;mp2rage&quot;, ...]</span>
+</span><span id="__span-7-6"><a id="__codelineno-7-6" name="__codelineno-7-6" href="#__codelineno-7-6"></a>
+</span><span id="__span-7-7"><a id="__codelineno-7-7" name="__codelineno-7-7" href="#__codelineno-7-7"></a><span class="c1"># Check if specific construct detected</span>
+</span><span id="__span-7-8"><a id="__codelineno-7-8" name="__codelineno-7-8" href="#__codelineno-7-8"></a><span class="n">output</span><span class="o">.</span><span class="n">has</span><span class="p">(</span><span class="s2">&quot;ADC&quot;</span><span class="p">)</span>  <span class="c1"># True/False</span>
+</span><span id="__span-7-9"><a id="__codelineno-7-9" name="__codelineno-7-9" href="#__codelineno-7-9"></a>
+</span><span id="__span-7-10"><a id="__codelineno-7-10" name="__codelineno-7-10" href="#__codelineno-7-10"></a><span class="c1"># Get constructs by category from output</span>
+</span><span id="__span-7-11"><a id="__codelineno-7-11" name="__codelineno-7-11" href="#__codelineno-7-11"></a><span class="n">output</span><span class="o">.</span><span class="n">by_category</span><span class="p">(</span><span class="s2">&quot;perfusion&quot;</span><span class="p">)</span>  <span class="c1"># List of ConstructMatch objects</span>
+</span></code></pre></div>
+
+
+
+
+
+
+
+
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+          <button type="button" class="md-top md-icon" data-md-component="top" hidden>
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M13 20h-2V8l-5.5 5.5-1.42-1.42L12 4.16l7.92 7.92-1.42 1.42L13 8z"/></svg>
+  Back to top
+</button>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+    
+      
+      <nav class="md-footer__inner md-grid" aria-label="Footer" >
+        
+          
+          <a href="../modifier/" class="md-footer__link md-footer__link--prev" aria-label="Previous: Modifier">
+            <div class="md-footer__button md-icon">
+              
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+            </div>
+            <div class="md-footer__title">
+              <span class="md-footer__direction">
+                Previous
+              </span>
+              <div class="md-ellipsis">
+                Modifier
+              </div>
+            </div>
+          </a>
+        
+        
+          
+          <a href="../provenance/" class="md-footer__link md-footer__link--next" aria-label="Next: Provenance">
+            <div class="md-footer__title">
+              <span class="md-footer__direction">
+                Next
+              </span>
+              <div class="md-ellipsis">
+                Provenance
+              </div>
+            </div>
+            <div class="md-footer__button md-icon">
+              
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M4 11v2h12l-5.5 5.5 1.42 1.42L19.84 12l-7.92-7.92L10.5 5.5 16 11z"/></svg>
+            </div>
+          </a>
+        
+      </nav>
+    
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+    <div class="md-copyright__highlight">
+      Copyright &copy; 2025 Nima Chamyani, Karolinska Institutet
+    </div>
+  
+  
+</div>
+      
+        
+<div class="md-social">
+  
+    
+    
+    
+    
+      
+      
+    
+    <a href="https://github.com/NeuroGranberg/NILS" target="_blank" rel="noopener" title="github.com" class="md-social__link">
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M173.9 397.4c0 2-2.3 3.6-5.2 3.6-3.3.3-5.6-1.3-5.6-3.6 0-2 2.3-3.6 5.2-3.6 3-.3 5.6 1.3 5.6 3.6m-31.1-4.5c-.7 2 1.3 4.3 4.3 4.9 2.6 1 5.6 0 6.2-2s-1.3-4.3-4.3-5.2c-2.6-.7-5.5.3-6.2 2.3m44.2-1.7c-2.9.7-4.9 2.6-4.6 4.9.3 2 2.9 3.3 5.9 2.6 2.9-.7 4.9-2.6 4.6-4.6-.3-1.9-3-3.2-5.9-2.9M252.8 8C114.1 8 8 113.3 8 252c0 110.9 69.8 205.8 169.5 239.2 12.8 2.3 17.3-5.6 17.3-12.1 0-6.2-.3-40.4-.3-61.4 0 0-70 15-84.7-29.8 0 0-11.4-29.1-27.8-36.6 0 0-22.9-15.7 1.6-15.4 0 0 24.9 2 38.6 25.8 21.9 38.6 58.6 27.5 72.9 20.9 2.3-16 8.8-27.1 16-33.7-55.9-6.2-112.3-14.3-112.3-110.5 0-27.5 7.6-41.3 23.6-58.9-2.6-6.5-11.1-33.3 2.6-67.9 20.9-6.5 69 27 69 27 20-5.6 41.5-8.5 62.8-8.5s42.8 2.9 62.8 8.5c0 0 48.1-33.6 69-27 13.7 34.7 5.2 61.4 2.6 67.9 16 17.7 25.8 31.5 25.8 58.9 0 96.5-58.9 104.2-114.8 110.5 9.2 7.9 17 22.9 17 46.4 0 33.7-.3 75.4-.3 83.6 0 6.5 4.6 14.4 17.3 12.1C436.2 457.8 504 362.9 504 252 504 113.3 391.5 8 252.8 8M105.2 352.9c-1.3 1-1 3.3.7 5.2 1.6 1.6 3.9 2.3 5.2 1 1.3-1 1-3.3-.7-5.2-1.6-1.6-3.9-2.3-5.2-1m-10.8-8.1c-.7 1.3.3 2.9 2.3 3.9 1.6 1 3.6.7 4.3-.7.7-1.3-.3-2.9-2.3-3.9-2-.6-3.6-.3-4.3.7m32.4 35.6c-1.6 1.3-1 4.3 1.3 6.2 2.3 2.3 5.2 2.6 6.5 1 1.3-1.3.7-4.3-1.3-6.2-2.2-2.3-5.2-2.6-6.5-1m-11.4-14.7c-1.6 1-1.6 3.6 0 5.9s4.3 3.3 5.6 2.3c1.6-1.3 1.6-3.9 0-6.2-1.4-2.3-4-3.3-5.6-2"/></svg>
+    </a>
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+    
+      
+      
+      <script id="__config" type="application/json">{"annotate": null, "base": "../..", "features": ["navigation.tabs", "navigation.sections", "navigation.top", "navigation.instant", "navigation.footer", "search.highlight", "search.suggest", "content.code.copy", "content.code.annotate", "toc.follow"], "search": "../../assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": null}</script>
+    
+    
+      <script src="../../assets/javascripts/bundle.79ae519e.min.js"></script>
+      
+    
+  </body>
+</html>
