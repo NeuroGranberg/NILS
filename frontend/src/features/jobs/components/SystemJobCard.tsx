@@ -17,16 +17,8 @@ import {
 } from '@mantine/core';
 import { IconChevronDown, IconChevronUp, IconDatabase, IconTrash, IconDownload, IconUpload } from '@tabler/icons-react';
 import type { Job, JobStatus } from '../../../types';
+import { JOB_STATUS_CONFIG } from '../../../constants/status';
 import { useDeleteJob } from '../api';
-
-const statusConfig: Record<JobStatus, { color: string; bgColor: string; label: string }> = {
-  queued: { color: 'var(--nils-stage-pending)', bgColor: 'rgba(163, 113, 247, 0.15)', label: 'Queued' },
-  running: { color: 'var(--nils-stage-running)', bgColor: 'rgba(88, 166, 255, 0.15)', label: 'Running' },
-  paused: { color: 'var(--nils-stage-paused)', bgColor: 'rgba(210, 153, 34, 0.15)', label: 'Paused' },
-  completed: { color: 'var(--nils-stage-completed)', bgColor: 'rgba(63, 185, 80, 0.15)', label: 'Completed' },
-  failed: { color: 'var(--nils-stage-failed)', bgColor: 'rgba(248, 81, 73, 0.15)', label: 'Failed' },
-  canceled: { color: 'var(--nils-stage-idle)', bgColor: 'rgba(110, 118, 129, 0.15)', label: 'Canceled' },
-};
 
 // Format relative time
 const formatRelativeTime = (dateString: string): string => {
@@ -173,7 +165,7 @@ export const SystemJobCard = ({ jobs, defaultExpanded = false }: SystemJobCardPr
         >
           <Stack gap="xs">
             {sortedJobs.map((job) => {
-              const status = statusConfig[job.status];
+              const status = JOB_STATUS_CONFIG[job.status];
               const config = job.config as Record<string, unknown>;
               const database = config?.database as string | undefined;
               const path = config?.path as string | undefined;

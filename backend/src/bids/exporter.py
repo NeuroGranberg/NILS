@@ -739,9 +739,15 @@ def run_bids_export(
             progress_cb(processed, total_tasks)
 
     if config.is_nifti and nifti_tasks:
+        import multiprocessing as mp
         from concurrent.futures import ProcessPoolExecutor, as_completed
 
-        with ProcessPoolExecutor(max_workers=config.convert_workers) as pool:
+        # Use 'spawn' context to avoid fork() memory issues.
+        # With vm.overcommit_memory=2 (strict), fork() must reserve the parent's
+        # entire virtual address space (~12GB) per worker, which can exceed the
+        # system's commit limit. Spawn creates fresh interpreters without this overhead.
+        ctx = mp.get_context('spawn')
+        with ProcessPoolExecutor(max_workers=config.convert_workers, mp_context=ctx) as pool:
             futures = {
                 pool.submit(_convert_stack, stack, raw_root, dest_dir, filename, config): (stack, dest_dir)
                 for stack, dest_dir, filename in nifti_tasks

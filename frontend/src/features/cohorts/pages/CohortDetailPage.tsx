@@ -51,6 +51,7 @@ import { useQueryClient } from '@tanstack/react-query';
 import { SortingPipelineSimple } from '../../sorting/components/SortingPipelineSimple';
 import { useRunSortingStep, sortingKeys, type SortingConfig } from '../../sorting';
 import { useIdTypes } from '../../database/api';
+import { BidsStageForm, type BidsConfig } from '../../bids/BidsStageForm';
 
 // Debug logging disabled for production - uncomment for local debugging
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
@@ -515,7 +516,7 @@ export const CohortDetailPage = () => {
   const renderAnonymizeConflict = () => {
     if (!anonymizeConflict) return null;
     return (
-      <Card withBorder radius="md" padding="md" bg="var(--mantine-color-red-0)">
+      <Card withBorder radius="md" padding="md" bg="rgba(248, 81, 73, 0.1)">
         <Stack gap="sm">
           <Text fw={600}>Existing anonymized files detected</Text>
           <Text size="sm">
@@ -851,248 +852,17 @@ export const CohortDetailPage = () => {
           )}
 
           {activeStage.id === 'bids' && activeGenericConfig && (
-            <Stack gap="sm">
-              {(() => {
-                const bidsConfig = (activeGenericConfig as Record<string, unknown>) || {};
-                const rawIncludeIntents = bidsConfig.includeIntents as string[] | undefined;
-                const includeIntentsVal =
-                  rawIncludeIntents && rawIncludeIntents.length === 0
-                    ? defaultIntentSelection
-                    : rawIncludeIntents ?? defaultIntentSelection;
-                const rawIncludeProvenance = bidsConfig.includeProvenance as string[] | undefined;
-                const includeProvVal =
-                  rawIncludeProvenance && rawIncludeProvenance.length === 0
-                    ? defaultProvenanceSelection
-                    : rawIncludeProvenance ?? defaultProvenanceSelection;
-                const showProvenanceSelection = includeIntentsVal.includes('anat');
-                const copyWorkersVal = Number((bidsConfig.copyWorkers as number | string | boolean | undefined) ?? 8);
-                const convertWorkersVal = Number((bidsConfig.convertWorkers as number | string | boolean | undefined) ?? 8);
-                const bidsDcmRootNameVal = String((bidsConfig.bidsDcmRootName as string | undefined) ?? 'bids-dcm');
-                const bidsNiftiRootNameVal = String((bidsConfig.bidsNiftiRootName as string | undefined) ?? 'bids-nifti');
-                const rawFlatDcmRoot = bidsConfig.flatDcmRootName as string | undefined;
-                const rawFlatNiftiRoot = bidsConfig.flatNiftiRootName as string | undefined;
-                const flatDcmRootNameVal =
-                  rawFlatDcmRoot === 'dcm-flat'
-                    ? 'flat-dcm'
-                    : String(rawFlatDcmRoot ?? 'flat-dcm');
-                const flatNiftiRootNameVal =
-                  rawFlatNiftiRoot === 'nii-flat'
-                    ? 'flat-nifti'
-                    : String(rawFlatNiftiRoot ?? 'flat-nifti');
-                const layoutVal = String((bidsConfig.layout as string | undefined) ?? 'bids');
-                const layoutLabel = layoutVal === 'flat' ? 'Flat' : 'BIDS';
-                const outputModesVal =
-                  (bidsConfig.outputModes as string[] | undefined) ??
-                  ((bidsConfig.outputMode as string | undefined) ? [String(bidsConfig.outputMode)] : ['dcm']);
-                const exportDicom = outputModesVal.includes('dcm');
-                const niftiModeVal = outputModesVal.find(
-                  (mode) => mode === 'nii' || mode === 'nii.gz',
-                ) as 'nii' | 'nii.gz' | undefined;
-                const applyOutputModes = (nextDicom: boolean, nextNifti: 'nii' | 'nii.gz' | null) => {
-                  const next: string[] = [];
-                  if (nextDicom) next.push('dcm');
-                  if (nextNifti) next.push(nextNifti);
-                  const safeNext = next.length ? next : ['dcm'];
-                  handleGenericConfigChange('bids', 'outputModes', safeNext);
-                  // Keep legacy field in sync for older configs
-                  handleGenericConfigChange('bids', 'outputMode', nextNifti ?? (nextDicom ? 'dcm' : 'dcm'));
-                };
-                const overwriteRaw = (bidsConfig.overwriteMode as string | undefined) ?? 'skip';
-                const overwriteModeVal = ['skip', 'clean', 'overwrite'].includes(overwriteRaw) ? overwriteRaw : 'skip';
-                const subjectIdentifierSourceVal = String(
-                  (bidsConfig.subjectIdentifierSource as string | number | undefined) ?? 'subject_code',
-                );
-                const jobStatusColor = (status: string) => {
-                  switch (status) {
-                    case 'running':
-                      return 'blue';
-                    case 'queued':
-                      return 'yellow';
-                    case 'paused':
-                      return 'orange';
-                    case 'completed':
-                      return 'teal';
-                    case 'failed':
-                      return 'red';
-                    default:
-                      return 'gray';
-                  }
-                };
-                const bidsRunningStatuses = ['running', 'queued', 'paused'];
-                const renderBidsJobCard = (job: JobSummary, title: string) => (
-                  <Card withBorder padding="md" radius="md">
-                    <Stack gap="xs">
-                      <Group justify="space-between" align="center">
-                        <Text fw={600}>{title}</Text>
-                        <Badge color={jobStatusColor(job.status)}>{job.status.toUpperCase()}</Badge>
-                      </Group>
-                      <Progress value={job.progress ?? 0} size="lg" radius="md" transitionDuration={200} />
-                      <Group justify="space-between">
-                        <Text size="xs" c="dimmed">
-                          Started {job.startedAt ? formatDateTime(job.startedAt) : formatDateTime(job.submittedAt)}
-                        </Text>
-                        <Text size="xs" c="dimmed">
-                          Job #{job.id}
-                        </Text>
-                      </Group>
-                      {job.finishedAt && (
-                        <Text size="xs" c="dimmed">
-                          Finished {formatDateTime(job.finishedAt)}
-                        </Text>
-                      )}
-                      {job.errorMessage && (
-                        <Text size="xs" c="red">
-                          Error: {job.errorMessage}
-                        </Text>
-                      )}
-                    </Stack>
-                  </Card>
-                );
-
-                if (activeBidsJob && bidsRunningStatuses.includes(activeBidsJob.status)) {
-                  return (
-                    <>
-                      {renderBidsJobCard(activeBidsJob, 'BIDS export in progress')}
-                      {activeBidsJob.status === 'paused' && (
-                        <Text size="xs" c="dimmed">
-                          Job paused. Manage actions from the Jobs page.
-                        </Text>
-                      )}
-                    </>
-                  );
-                }
-
-                return (
-                  <>
-              <Stack gap="xs">
-                <SegmentedControl
-                  data={[
-                    { label: 'BIDS layout', value: 'bids' },
-                    { label: 'Flat layout', value: 'flat' },
-                  ]}
-                  value={layoutVal}
-                  onChange={(value) => handleGenericConfigChange('bids', 'layout', value ?? 'bids')}
-                />
-                <SegmentedControl
-                  value={overwriteModeVal}
-                  onChange={(value) => handleGenericConfigChange('bids', 'overwriteMode', value ?? 'skip')}
-                  data={[
-                    { label: 'Skip existing', value: 'skip' },
-                    { label: 'Clean', value: 'clean' },
-                    { label: 'Overwrite', value: 'overwrite' },
-                  ]}
-                />
-                <Group gap="md" align="center">
-                  <Switch
-                    label="Export DICOM"
-                    checked={exportDicom}
-                    onChange={(event) => applyOutputModes(event.currentTarget.checked, niftiModeVal ?? null)}
-                  />
-                  {exportDicom && (
-                    <TextInput
-                      label={`${layoutLabel} DICOM root (under derivatives)`}
-                      value={layoutVal === 'flat' ? flatDcmRootNameVal : bidsDcmRootNameVal}
-                      style={{ flex: 1 }}
-                      onChange={(event) =>
-                        handleGenericConfigChange(
-                          'bids',
-                          layoutVal === 'flat' ? 'flatDcmRootName' : 'bidsDcmRootName',
-                          event.currentTarget.value,
-                        )
-                      }
-                    />
-                  )}
-                </Group>
-                <Group gap="md" align="center">
-                  <Switch
-                    label="Export NIfTI"
-                    checked={Boolean(niftiModeVal)}
-                    onChange={(event) =>
-                      applyOutputModes(exportDicom, event.currentTarget.checked ? (niftiModeVal ?? 'nii.gz') : null)
-                    }
-                  />
-                  {Boolean(niftiModeVal) && (
-                    <TextInput
-                      label={`${layoutLabel} NIfTI root (under derivatives)`}
-                      value={layoutVal === 'flat' ? flatNiftiRootNameVal : bidsNiftiRootNameVal}
-                      style={{ flex: 1 }}
-                      onChange={(event) =>
-                        handleGenericConfigChange(
-                          'bids',
-                          layoutVal === 'flat' ? 'flatNiftiRootName' : 'bidsNiftiRootName',
-                          event.currentTarget.value,
-                        )
-                      }
-                    />
-                  )}
-                </Group>
-                {Boolean(niftiModeVal) && (
-                  <SegmentedControl
-                    data={[
-                      { label: 'NIfTI (.nii)', value: 'nii' },
-                      { label: 'Compressed (.nii.gz)', value: 'nii.gz' },
-                    ]}
-                    value={niftiModeVal}
-                    onChange={(value) => applyOutputModes(exportDicom, value as 'nii' | 'nii.gz')}
-                  />
-                )}
-              </Stack>
-              <Select
-                label="Subject identifier"
-                description="Choose which identifier to use for subject naming (sub-*)"
-                value={subjectIdentifierSourceVal}
-                data={subjectIdentifierOptions}
-                onChange={(value) => {
-                  // Convert numeric string back to number for id_type_id values
-                  const parsed = value === 'subject_code' ? 'subject_code' : Number(value);
-                  handleGenericConfigChange('bids', 'subjectIdentifierSource', parsed);
-                }}
-              />
-              <Checkbox.Group
-                label="Include intents"
-                description="Select which directory types to include in the export"
-                value={includeIntentsVal}
-                onChange={(value) => handleGenericConfigChange('bids', 'includeIntents', value)}
-              >
-                <Group mt="xs">
-                  {intentOptions.map((option) => (
-                    <Checkbox key={option.value} value={option.value} label={option.label} />
-                  ))}
-                </Group>
-              </Checkbox.Group>
-              {showProvenanceSelection && (
-                <Checkbox.Group
-                  label="Include provenance (anat only)"
-                  description="Leave empty to include all provenance types"
-                  value={includeProvVal}
-                  onChange={(value) => handleGenericConfigChange('bids', 'includeProvenance', value)}
-                >
-                  <Group mt="xs">
-                    {provenanceOptions.map((option) => (
-                      <Checkbox key={option.value} value={option.value} label={option.label} />
-                    ))}
-                  </Group>
-                </Checkbox.Group>
-              )}
-              <Group grow>
-                <NumberInput
-                  label="Copy workers (DICOM)"
-                  min={1}
-                  value={copyWorkersVal}
-                  onChange={(value) => handleGenericConfigChange('bids', 'copyWorkers', Number(value ?? 8))}
-                />
-                <NumberInput
-                  label="Convert workers (NIfTI)"
-                  min={1}
-                  value={convertWorkersVal}
-                  onChange={(value) => handleGenericConfigChange('bids', 'convertWorkers', Number(value ?? 8))}
-                />
-              </Group>
-              {lastBidsJob && renderBidsJobCard(lastBidsJob, 'Last BIDS export')}
-                  </>
-                );
-              })()}
-            </Stack>
+            <BidsStageForm
+              config={activeGenericConfig as BidsConfig}
+              onChange={(key, value) => handleGenericConfigChange('bids', key, value)}
+              subjectIdentifierOptions={subjectIdentifierOptions}
+              intentOptions={intentOptions}
+              provenanceOptions={provenanceOptions}
+              defaultIntentSelection={defaultIntentSelection}
+              defaultProvenanceSelection={defaultProvenanceSelection}
+              activeBidsJob={activeBidsJob}
+              lastBidsJob={lastBidsJob}
+            />
           )}
         </StageCard>
       )}

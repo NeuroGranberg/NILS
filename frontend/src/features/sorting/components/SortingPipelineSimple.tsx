@@ -16,6 +16,7 @@ import { notifications } from '@mantine/notifications';
 import { sortingKeys, useRecoverDates, useSortingStatus } from '../api';
 import { SORTING_STEPS, type SortingConfig, type Step1Metrics, type Step2Metrics } from '../types';
 import { DateRecoveryCard } from './DateRecoveryCard';
+import { SelectablePill } from '../../shared/components/SelectablePill';
 
 // ============================================================================
 // SSE Event Types
@@ -678,41 +679,22 @@ export const SortingPipelineSimple = ({
                       ].map((modality) => {
                         const isSelected = config.selectedModalities?.includes(modality.value) ?? true;
                         return (
-                          <Box
+                          <SelectablePill
                             key={modality.value}
+                            selected={isSelected}
+                            disabled={isStepRunning}
+                            showDot
+                            size="sm"
                             onClick={() => {
-                              if (isStepRunning) return;
                               const current = config.selectedModalities || ['MR', 'CT', 'PT'];
                               const updated = isSelected
                                 ? current.filter(m => m !== modality.value)
                                 : [...current, modality.value];
                               onConfigChange({ ...config, selectedModalities: updated });
                             }}
-                            style={{
-                              display: 'inline-flex',
-                              alignItems: 'center',
-                              gap: 6,
-                              padding: '6px 12px',
-                              borderRadius: 'var(--nils-radius-sm)',
-                              backgroundColor: isSelected ? 'rgba(88, 166, 255, 0.15)' : 'var(--nils-bg-elevated)',
-                              border: isSelected ? '1px solid var(--nils-accent-primary)' : '1px solid var(--nils-border-subtle)',
-                              cursor: isStepRunning ? 'not-allowed' : 'pointer',
-                              opacity: isStepRunning ? 0.6 : 1,
-                              transition: 'all 0.2s ease',
-                            }}
                           >
-                            <Box
-                              style={{
-                                width: 6,
-                                height: 6,
-                                borderRadius: '50%',
-                                backgroundColor: isSelected ? 'var(--nils-accent-primary)' : 'var(--nils-text-tertiary)',
-                              }}
-                            />
-                            <Text size="xs" fw={isSelected ? 500 : 400} c={isSelected ? 'var(--nils-accent-primary)' : 'var(--nils-text-secondary)'}>
-                              {modality.label}
-                            </Text>
-                          </Box>
+                            {modality.label}
+                          </SelectablePill>
                         );
                       })}
                     </Group>

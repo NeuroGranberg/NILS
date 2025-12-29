@@ -12,11 +12,49 @@ from backup.manager import BackupError, DatabaseKey, PostgresBackupManager, get_
 
 logger = logging.getLogger(__name__)
 
-# Tables added by migrations that may not exist in older backups.
-# These must be dropped BEFORE pg_restore to avoid FK dependency errors.
-# Order matters: drop tables with FKs first, then tables they reference.
-MIGRATION_TABLES = [
-    "stack_fingerprint",  # Has FK to series_stack
+# Tables that must be dropped BEFORE pg_restore to avoid FK dependency errors.
+# pg_restore --clean tries to DROP TABLE without CASCADE, which fails when
+# other tables have foreign keys referencing the table being dropped.
+#
+# Order matters: drop tables with FKs first (children), then tables they reference (parents).
+# This is the reverse of creation order.
+TABLES_TO_DROP_BEFORE_RESTORE = [
+    # Leaf tables (no incoming FKs)
+    "ingest_conflicts",
+    "series_classification_cache",
+    "stack_fingerprint",
+    # Instance depends on series and series_stack
+    "instance",
+    # Modality-specific details depend on series
+    "mri_series_details",
+    "ct_series_details",
+    "pet_series_details",
+    # series_stack depends on series
+    "series_stack",
+    # series depends on study and subject
+    "series",
+    # study depends on subject
+    "study",
+    # Clinical/metadata tables
+    "json_measures",
+    "boolean_measures",
+    "text_measures",
+    "numeric_measures",
+    "clinical_measure_types",
+    "subject_disease_types",
+    "subject_diseases",
+    "disease_types",
+    "diseases",
+    "event",
+    "event_types",
+    "subject_other_identifiers",
+    "id_types",
+    "subject_cohorts",
+    "cohort",
+    # Root table (no outgoing FKs to other data tables)
+    "subject",
+    # Schema versioning
+    "schema_version",
 ]
 
 
@@ -30,29 +68,33 @@ class MetadataBackupManager(PostgresBackupManager):
     def create_backup(self, directory: str | Path | None = None, *, note: str | None = None) -> Path:
         return super().create_backup(directory=directory, note=note)
 
-    def _drop_migration_tables(self) -> None:
-        """Drop tables created by migrations to allow clean pg_restore.
-        
-        When restoring an older backup, pg_restore --clean can fail because
-        newer tables (created by migrations) have FK dependencies on tables
-        that pg_restore wants to drop and recreate.
-        
-        Solution: Drop these migration tables first, restore, then re-apply migrations.
+    def _drop_tables_before_restore(self) -> None:
+        """Drop all metadata tables to allow clean pg_restore.
+
+        pg_restore --clean tries to DROP TABLE without CASCADE, which fails when
+        tables have foreign key constraints. By dropping all tables first in the
+        correct dependency order, we ensure pg_restore can recreate them cleanly.
+
+        The table order in TABLES_TO_DROP_BEFORE_RESTORE is critical:
+        - Children (tables with FKs) must be dropped before parents
+        - This is the reverse of the creation order
         """
         from .session import SessionLocal
         from sqlalchemy import text
-        
-        logger.info("Dropping migration tables before restore...")
-        
+
+        logger.info("Dropping all metadata tables before restore...")
+
         with SessionLocal() as session:
-            for table_name in MIGRATION_TABLES:
+            for table_name in TABLES_TO_DROP_BEFORE_RESTORE:
                 try:
-                    # Use CASCADE to handle any remaining dependencies
+                    # Use CASCADE as a safety net for any unlisted dependencies
                     session.execute(text(f"DROP TABLE IF EXISTS {table_name} CASCADE"))
                     logger.info("Dropped table: %s", table_name)
                 except Exception as exc:
                     logger.warning("Failed to drop table %s: %s", table_name, exc)
             session.commit()
+
+        logger.info("Dropped %d tables", len(TABLES_TO_DROP_BEFORE_RESTORE))
 
     def restore(self, dump_path: str | Path | None = None) -> Path:
         """Restore metadata database and apply migrations for schema compatibility.
@@ -71,8 +113,8 @@ class MetadataBackupManager(PostgresBackupManager):
         Returns:
             Path to the restored backup file
         """
-        # Step 1: Drop migration tables to avoid FK dependency errors
-        self._drop_migration_tables()
+        # Step 1: Drop all tables to avoid FK dependency errors during pg_restore --clean
+        self._drop_tables_before_restore()
         
         def post_restore_migrations():
             """Apply any pending migrations to restored database."""

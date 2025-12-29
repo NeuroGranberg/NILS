@@ -14,7 +14,7 @@ from .session import SessionLocal
 # Simple in-memory cache for cohort metrics
 # Format: {cohort_id: (timestamp, metrics_dict)}
 _metrics_cache: dict[int, tuple[float, dict[str, int]]] = {}
-_CACHE_TTL_SECONDS = 30  # Cache for 30 seconds
+_CACHE_TTL_SECONDS = 120  # Cache for 2 minutes (counts rarely change during normal browsing)
 
 
 def get_cohort_metrics(cohort_id: int, *, include_instances: bool = True, use_cache: bool = True) -> Optional[dict[str, int]]:

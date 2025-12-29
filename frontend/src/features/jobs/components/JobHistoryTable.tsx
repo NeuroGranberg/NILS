@@ -25,16 +25,8 @@ import {
 import type { ReactNode } from 'react';
 import { useJobAction, useDeleteJob } from '../api';
 import type { Job, JobAction, JobStatus, JobMetrics } from '../../../types';
+import { JOB_STATUS_CONFIG } from '../../../constants/status';
 import { formatDateTime } from '../../../utils/formatters';
-
-const statusConfig: Record<JobStatus, { color: string; bgColor: string; label: string }> = {
-  queued: { color: 'var(--nils-stage-pending)', bgColor: 'rgba(163, 113, 247, 0.15)', label: 'Queued' },
-  running: { color: 'var(--nils-stage-running)', bgColor: 'rgba(88, 166, 255, 0.15)', label: 'Running' },
-  paused: { color: 'var(--nils-stage-paused)', bgColor: 'rgba(210, 153, 34, 0.15)', label: 'Paused' },
-  completed: { color: 'var(--nils-stage-completed)', bgColor: 'rgba(63, 185, 80, 0.15)', label: 'Completed' },
-  failed: { color: 'var(--nils-stage-failed)', bgColor: 'rgba(248, 81, 73, 0.15)', label: 'Failed' },
-  canceled: { color: 'var(--nils-stage-idle)', bgColor: 'rgba(110, 118, 129, 0.15)', label: 'Canceled' },
-};
 
 const jobActions: Record<JobStatus, Array<{ action: JobAction; icon: ReactNode; label: string }>> = {
   queued: [{ action: 'cancel', icon: <IconPlayerStop size={14} />, label: 'Cancel' }],
@@ -157,7 +149,7 @@ export const JobHistoryTable = ({ jobs, compact = false, showCohort = false }: J
         </Table.Thead>
         <Table.Tbody>
           {sortedJobs.map((job) => {
-            const status = statusConfig[job.status];
+            const status = JOB_STATUS_CONFIG[job.status];
             return (
               <Table.Tr key={job.id} style={{ borderBottom: '1px solid var(--nils-border-subtle)' }}>
                 <Table.Td>

@@ -7,43 +7,17 @@ import { Box, Group, Text, Tooltip } from '@mantine/core';
 import { IconCheck, IconPlayerPlay, IconClock, IconX, IconLock } from '@tabler/icons-react';
 import { Fragment } from 'react';
 import type { StageSummary, StageStatus } from '../../../types';
+import { STAGE_STATUS_CONFIG } from '../../../constants/status';
 
-const statusConfig: Record<StageStatus, { color: string; icon: React.ReactNode; label: string }> = {
-  idle: { 
-    color: 'var(--nils-text-tertiary)', 
-    icon: <IconClock size={10} />,
-    label: 'Idle'
-  },
-  pending: { 
-    color: 'var(--nils-stage-pending)', 
-    icon: <IconClock size={10} />,
-    label: 'Pending'
-  },
-  running: { 
-    color: 'var(--nils-stage-running)', 
-    icon: <IconPlayerPlay size={10} />,
-    label: 'Running'
-  },
-  completed: { 
-    color: 'var(--nils-stage-completed)', 
-    icon: <IconCheck size={10} />,
-    label: 'Completed'
-  },
-  failed: { 
-    color: 'var(--nils-stage-failed)', 
-    icon: <IconX size={10} />,
-    label: 'Failed'
-  },
-  paused: { 
-    color: 'var(--nils-stage-paused)', 
-    icon: <IconClock size={10} />,
-    label: 'Paused'
-  },
-  blocked: { 
-    color: 'var(--nils-text-tertiary)', 
-    icon: <IconLock size={10} />,
-    label: 'Blocked'
-  },
+/** Status icons for MiniPipelineStepper */
+const statusIcons: Record<StageStatus, React.ReactNode> = {
+  idle: <IconClock size={10} />,
+  pending: <IconClock size={10} />,
+  running: <IconPlayerPlay size={10} />,
+  completed: <IconCheck size={10} />,
+  failed: <IconX size={10} />,
+  paused: <IconClock size={10} />,
+  blocked: <IconLock size={10} />,
 };
 
 interface StatusDotProps {
@@ -52,7 +26,7 @@ interface StatusDotProps {
 }
 
 const StatusDot = ({ status, animate }: StatusDotProps) => {
-  const config = statusConfig[status];
+  const config = STAGE_STATUS_CONFIG[status];
   return (
     <Box
       style={{
@@ -86,7 +60,7 @@ export const MiniPipelineStepper = ({ stages }: MiniPipelineStepperProps) => {
         Pipeline:
       </Text>
       {stages.map((stage, idx) => {
-        const config = statusConfig[stage.status];
+        const config = STAGE_STATUS_CONFIG[stage.status];
         const isLast = idx === stages.length - 1;
         
         return (

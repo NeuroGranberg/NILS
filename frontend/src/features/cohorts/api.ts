@@ -28,10 +28,27 @@ export const useCohortQuery = (cohortId: string | undefined) =>
     queryKey: QUERY_KEYS.cohort(cohortId ?? ''),
     queryFn: () => apiClient.get<Cohort>(`/cohorts/${cohortId}`),
     enabled: Boolean(cohortId),
-    staleTime: 10 * 1000, // Cache for 10s (detail view needs fresher data)
-    refetchInterval: 30000, // Poll every 30s for detail view (reduced from 15s)
+    staleTime: 5 * 60 * 1000, // Cache for 5 minutes - invalidate on mutations instead of polling
+    // No refetchInterval - data only changes when jobs run, which triggers invalidation
     refetchOnWindowFocus: false,
   });
+
+/**
+ * Prefetch cohort data on hover for faster navigation.
+ * Call this in onMouseEnter of cohort cards.
+ */
+export const usePrefetchCohort = () => {
+  const queryClient = useQueryClient();
+
+  return (cohortId: number | string) => {
+    const id = String(cohortId);
+    void queryClient.prefetchQuery({
+      queryKey: QUERY_KEYS.cohort(id),
+      queryFn: () => apiClient.get<Cohort>(`/cohorts/${id}`),
+      staleTime: 10 * 1000,
+    });
+  };
+};
 
 export const useCreateCohortMutation = () => {
   const queryClient = useQueryClient();

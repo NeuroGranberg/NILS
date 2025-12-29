@@ -408,9 +408,9 @@ export const AnonymizeStageForm = ({
                     p="xs"
                     style={{
                       overflowY: 'auto',
-                      border: '1px solid var(--mantine-color-default-border)',
-                      borderRadius: 'var(--mantine-radius-md)',
-                      backgroundColor: 'var(--mantine-color-body)',
+                      border: '1px solid var(--nils-border)',
+                      borderRadius: 'var(--nils-radius-md)',
+                      backgroundColor: 'var(--nils-bg-secondary)',
                     }}
                   >
                     <Stack gap="xs">
@@ -452,7 +452,7 @@ export const AnonymizeStageForm = ({
                 onChange={(event) => handleFieldChange('updatePatientIds', event.currentTarget.checked)}
               />
 
-              <Stack gap="sm" ml="lg" pl="lg" style={{ borderLeft: '1px solid var(--mantine-color-default-border)' }}>
+              <Stack gap="sm" ml="lg" pl="lg" style={{ borderLeft: '1px solid var(--nils-border-subtle)' }}>
                 <SegmentedControl
                   value={config.patientIdStrategy}
                   onChange={(value) => handleFieldChange('patientIdStrategy', value as PatientIdStrategy)}
@@ -790,7 +790,7 @@ export const AnonymizeStageForm = ({
                 checked={config.updateStudyDates}
                 onChange={(event) => handleFieldChange('updateStudyDates', event.currentTarget.checked)}
               />
-              <Stack gap="sm" ml="lg" pl="lg" style={{ borderLeft: '1px solid var(--mantine-color-default-border)' }}>
+              <Stack gap="sm" ml="lg" pl="lg" style={{ borderLeft: '1px solid var(--nils-border-subtle)' }}>
                 <Text size="sm" c="dimmed">
                   Dates are converted to MXX offsets relative to the first session per participant.
                 </Text>
@@ -825,7 +825,7 @@ export const AnonymizeStageForm = ({
                 ]}
                 onChange={(value) => handleOutputFormatChange((value ?? 'encrypted_excel') as AnonymizeStageConfig['outputFormat'])}
               />
-              <Stack gap="xs" ml="lg" pl="lg" style={{ borderLeft: '1px solid var(--mantine-color-default-border)' }}>
+              <Stack gap="xs" ml="lg" pl="lg" style={{ borderLeft: '1px solid var(--nils-border-subtle)' }}>
                 <TextInput
                   label="Metadata file name"
                   value={config.metadataFilename}
@@ -856,7 +856,7 @@ export const AnonymizeStageForm = ({
               />
 
               {compressionConfig.enabled && (
-                <Stack gap="sm" ml="lg" pl="lg" style={{ borderLeft: '1px solid var(--mantine-color-default-border)' }}>
+                <Stack gap="sm" ml="lg" pl="lg" style={{ borderLeft: '1px solid var(--nils-border-subtle)' }}>
                   <Text size="sm" c="dimmed">
                     Archives will pack the original DICOMs in <code>derivatives/dcm-original</code> into encrypted
                     7-Zip bundles written to <code>derivatives/archives</code>.
@@ -973,7 +973,7 @@ export const AnonymizeStageForm = ({
                 )}
               </Group>
               {recommendation && (
-                <Stack gap={2} p="sm" style={{ border: '1px solid var(--mantine-color-default-border)', borderRadius: 'var(--mantine-radius-md)' }}>
+                <Stack gap={2} p="sm" style={{ border: '1px solid var(--nils-border)', borderRadius: 'var(--nils-radius-md)' }}>
                   <Text size="xs" c="dimmed">
                     CPU cores: {recommendation.cpu_count}
                   </Text>

@@ -1,17 +1,8 @@
 import { Box, Stepper, Text } from '@mantine/core';
 import { useMemo } from 'react';
 import type { StageSummary } from '../../../types';
+import { STAGE_STATUS_CONFIG } from '../../../constants/status';
 import { findSuggestedActiveIndex } from './pipelineStepperUtils';
-
-const statusConfig: Record<StageSummary['status'], { color: string; mantineColor: string }> = {
-  idle: { color: 'var(--nils-stage-idle)', mantineColor: 'gray' },
-  pending: { color: 'var(--nils-stage-pending)', mantineColor: 'violet' },
-  running: { color: 'var(--nils-stage-running)', mantineColor: 'blue' },
-  completed: { color: 'var(--nils-stage-completed)', mantineColor: 'teal' },
-  failed: { color: 'var(--nils-stage-failed)', mantineColor: 'red' },
-  paused: { color: 'var(--nils-stage-paused)', mantineColor: 'yellow' },
-  blocked: { color: 'var(--nils-stage-blocked)', mantineColor: 'gray' },
-};
 
 interface PipelineStepperProps {
   stages: StageSummary[];
@@ -49,7 +40,7 @@ export const PipelineStepper = ({ stages, activeStageIndex, onStageClick }: Pipe
         }}
       >
         {stages.map((stage) => {
-          const config = statusConfig[stage.status];
+          const config = STAGE_STATUS_CONFIG[stage.status];
           return (
             <Stepper.Step
               key={stage.id}

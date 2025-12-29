@@ -2,17 +2,8 @@ import { Box, Button, Card, Group, Stack, Text } from '@mantine/core';
 import { IconPlayerPlay, IconPlayerPause, IconRefresh } from '@tabler/icons-react';
 import type { ReactNode } from 'react';
 import type { StageSummary } from '../../../types';
+import { STAGE_STATUS_CONFIG } from '../../../constants/status';
 import { formatDateTime } from '../../../utils/formatters';
-
-const statusConfig: Record<StageSummary['status'], { color: string; bgColor: string; label: string }> = {
-  idle: { color: 'var(--nils-stage-idle)', bgColor: 'rgba(110, 118, 129, 0.15)', label: 'Idle' },
-  pending: { color: 'var(--nils-stage-pending)', bgColor: 'rgba(163, 113, 247, 0.15)', label: 'Pending' },
-  running: { color: 'var(--nils-stage-running)', bgColor: 'rgba(88, 166, 255, 0.15)', label: 'Running' },
-  completed: { color: 'var(--nils-stage-completed)', bgColor: 'rgba(63, 185, 80, 0.15)', label: 'Completed' },
-  failed: { color: 'var(--nils-stage-failed)', bgColor: 'rgba(248, 81, 73, 0.15)', label: 'Failed' },
-  paused: { color: 'var(--nils-stage-paused)', bgColor: 'rgba(210, 153, 34, 0.15)', label: 'Paused' },
-  blocked: { color: 'var(--nils-stage-blocked)', bgColor: 'rgba(72, 79, 88, 0.15)', label: 'Blocked' },
-};
 
 interface StageCardProps {
   stage: StageSummary;
@@ -35,7 +26,7 @@ export const StageCard = ({
   children,
   blockedReason,
 }: StageCardProps) => {
-  const status = statusConfig[stage.status];
+  const status = STAGE_STATUS_CONFIG[stage.status];
   const isBlocked = stage.status === 'blocked';
   const reason = isBlocked ? blockedReason ?? 'Complete the previous stage to unlock this step.' : blockedReason;
 

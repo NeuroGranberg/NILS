@@ -119,16 +119,81 @@ def serialize_job(job: JobDTO | None, get_cohort_metrics_fn=None) -> dict | None
 
 def serialize_jobs(jobs: list[JobDTO], get_cohort_metrics_fn=None) -> list[dict]:
     """Serialize list of job DTOs.
-    
+
     Args:
         jobs: List of job DTOs
         get_cohort_metrics_fn: Optional function to get cohort metrics
-        
+
     Returns:
         List of serialized job dicts
     """
     return [
         payload
         for payload in (serialize_job(job, get_cohort_metrics_fn) for job in jobs)
+        if payload is not None
+    ]
+
+
+def serialize_job_slim(job: JobDTO | None) -> dict | None:
+    """Serialize job DTO to slim API response format.
+
+    This is a lightweight version for cohort detail pages that omits
+    large config and metrics payloads to reduce response size and
+    improve page load times.
+
+    Args:
+        job: Job DTO to serialize
+
+    Returns:
+        Serialized job dict or None
+    """
+    if job is None:
+        return None
+
+    config = job.config or {}
+
+    # Extract only essential metrics (counts, not full performance breakdown)
+    metrics = job.metrics or {}
+    slim_metrics = None
+    if metrics:
+        slim_metrics = {
+            k: v for k, v in metrics.items()
+            if k in ('subjects', 'studies', 'series', 'stacks', 'instances')
+        }
+
+    payload = {
+        "id": job.id,
+        "stageId": job.stage,
+        "stepId": config.get("step_id"),
+        "status": job.status.value,
+        "progress": job.progress,
+        "cohortId": config.get("cohort_id"),
+        "cohortName": config.get("cohort_name"),
+        "submittedAt": isoformat(job.created_at),
+        "startedAt": isoformat(job.started_at),
+        "finishedAt": isoformat(job.finished_at),
+        "errorMessage": job.last_error,
+    }
+
+    payload.update(job_time_stats(job))
+
+    if slim_metrics:
+        payload["metrics"] = slim_metrics
+
+    return payload
+
+
+def serialize_jobs_slim(jobs: list[JobDTO]) -> list[dict]:
+    """Serialize list of job DTOs in slim format.
+
+    Args:
+        jobs: List of job DTOs
+
+    Returns:
+        List of serialized job dicts
+    """
+    return [
+        payload
+        for payload in (serialize_job_slim(job) for job in jobs)
         if payload is not None
     ]

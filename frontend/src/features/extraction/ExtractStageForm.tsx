@@ -27,21 +27,13 @@ import type {
   JobSummary,
   SystemResources,
 } from '../../types';
+import { JOB_STATUS_CONFIG } from '../../constants/status';
 import { formatDateTime } from '../../utils/formatters';
 import { apiClient } from '../../utils/api-client';
 import { useCsvColumns } from '../anonymization/queries';
 import { useMetadataIdTypes, type IdTypeInfo } from './queries';
 import { IconPlayerPause, IconPlayerPlay, IconPlayerStop } from '@tabler/icons-react';
 import { useUpdateJobConfig } from '../jobs/api';
-
-const statusBadgeColor: Record<JobStatus, string> = {
-  queued: 'yellow',
-  running: 'blue',
-  paused: 'yellow',
-  completed: 'teal',
-  failed: 'red',
-  canceled: 'gray',
-};
 
 const TERMINAL_JOB_STATUSES: JobStatus[] = ['completed', 'failed', 'canceled'];
 
@@ -104,7 +96,7 @@ const ExtractProgressCard = ({
       <Stack gap="sm">
         <Group justify="space-between" align="center">
           <Text fw={600}>Extraction job</Text>
-          <Badge color={statusBadgeColor[job.status] ?? 'gray'}>{job.status.toUpperCase()}</Badge>
+          <Badge color={JOB_STATUS_CONFIG[job.status]?.mantineColor ?? 'gray'}>{job.status.toUpperCase()}</Badge>
         </Group>
 
         <Stack gap={4}>
@@ -478,7 +470,7 @@ export const ExtractStageForm = ({
       <Stack
         gap={2}
         p="sm"
-        style={{ border: '1px solid var(--mantine-color-default-border)', borderRadius: 'var(--mantine-radius-md)' }}
+        style={{ border: '1px solid var(--nils-border)', borderRadius: 'var(--nils-radius-md)' }}
       >
         <Text size="xs" c="dimmed">
           CPU cores: {recommendation.cpu_count}

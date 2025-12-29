@@ -24,7 +24,7 @@ from metadata_db.session import SessionLocal as MetadataSessionLocal
 from sqlalchemy import select
 from bids import BidsExportConfig, run_bids_export, OutputMode, Layout, OverwriteMode
 
-from api.utils.serializers import serialize_job, serialize_jobs
+from api.utils.serializers import serialize_job, serialize_jobs, serialize_jobs_slim
 from api.utils.csv import csv_file_path, sanitize_csv_token
 from api.stage_sync import start_pipeline_step, complete_pipeline_step, fail_pipeline_step
 from nils_dataset_pipeline import nils_pipeline_service
@@ -128,33 +128,33 @@ def create_cohort(payload: CreateCohortPayload):
 
 @router.get("/{cohort_id}")
 def get_cohort(cohort_id: int):
-    """Get a single cohort by ID with job history."""
-    from metadata_db.metrics import get_cohort_metrics
-    
+    """Get a single cohort by ID with job history.
+
+    Performance optimized:
+    - Uses get_cohort_metrics_fast() to skip expensive instance COUNT on 30M rows
+    - Uses serialize_jobs_slim() to reduce response payload size by ~90%
+    - Jobs are serialized without full config/metrics (use /jobs/{id} for full details)
+    """
+    from metadata_db.metrics import get_cohort_metrics_fast
+
     cohort = cohort_service.get_cohort(cohort_id)
     if not cohort:
         raise HTTPException(status_code=404, detail="Cohort not found")
-    
+
     payload = cohort.model_dump(mode="json")
-    
-    # Pre-fetch cohort metrics ONCE and reuse for all jobs
-    # This avoids running expensive COUNT queries for each job in history
-    cached_metrics = get_cohort_metrics(cohort_id)
-    def get_cached_metrics(_cohort_id: int):
-        return cached_metrics
-    
-    # Add anonymize job history
+
+    # Add anonymize job history (slim format - no full config/metrics)
     anonymize_history_models = job_service.list_jobs_for_stage(cohort_id, "anonymize", limit=10)
-    anonymize_history = serialize_jobs(anonymize_history_models, get_cached_metrics)
+    anonymize_history = serialize_jobs_slim(anonymize_history_models)
     payload["anonymize_job"] = anonymize_history[0] if anonymize_history else None
     payload["anonymize_history"] = anonymize_history
 
-    # Add extract job history
+    # Add extract job history (slim format - no full config/metrics)
     extract_history_models = job_service.list_jobs_for_stage(cohort_id, "extract", limit=10)
-    extract_history = serialize_jobs(extract_history_models, get_cached_metrics)
+    extract_history = serialize_jobs_slim(extract_history_models)
     payload["extract_job"] = extract_history[0] if extract_history else None
     payload["extract_history"] = extract_history
-    
+
     return JSONResponse(payload)
 
 

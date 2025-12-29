@@ -5,6 +5,25 @@ All notable changes to NILS will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.2.1] - 2025-12-29
+
+### Fixed
+
+- **BIDS Export Memory Error**: Fixed `[Errno 12] Cannot allocate memory` when running NIfTI conversion
+  - Affected systems with strict memory overcommit (`vm.overcommit_memory=2`)
+  - Now uses `spawn` instead of `fork` for process pool to avoid virtual memory exhaustion
+- **Database Restore Failures**: Fixed `pg_restore` failing due to foreign key constraint errors
+  - Tables are now dropped in correct dependency order before restore
+
+### Changed
+
+- **Cohort Detail API Performance**: Response payload reduced by ~90%
+  - Job history now uses slim serialization (full details available via `/jobs/{id}`)
+  - Metrics cache extended from 30 seconds to 2 minutes
+- **Frontend Code Organization**: Extracted BIDS configuration into dedicated component
+  - Centralized status colors and configuration
+  - Added cohort prefetching on hover for faster navigation
+
 ## [0.2.0] - 2025-12-25
 
 ### Added

@@ -1,30 +1,23 @@
 /**
  * CohortCard component - displays a cohort summary in the list view.
  *
- * Performance optimized: Wrapped in React.memo to prevent re-renders
- * when other cohorts in the list change.
+ * Performance optimized:
+ * - Wrapped in React.memo to prevent re-renders when other cohorts change
+ * - Prefetches cohort data on hover for faster navigation
  */
-import { memo, useMemo } from 'react';
+import { memo, useCallback, useMemo } from 'react';
 import { Badge, Box, Card, Group, Stack, Text, Tooltip } from '@mantine/core';
 import { IconShieldCheck } from '@tabler/icons-react';
 import { Link } from 'react-router-dom';
 import type { Cohort, StageStatus, StageSummary, StageId } from '../../../types';
 import { STAGE_ORDER } from '../../../types';
+import { STAGE_STATUS_CONFIG } from '../../../constants/status';
+import { usePrefetchCohort } from '../api';
 import { formatDateTime } from '../../../utils/formatters';
 
 interface CohortCardProps {
   cohort: Cohort;
 }
-
-const statusConfig: Record<StageStatus, { color: string; label: string }> = {
-  idle: { color: 'var(--nils-stage-idle)', label: 'Idle' },
-  pending: { color: 'var(--nils-stage-pending)', label: 'Pending' },
-  running: { color: 'var(--nils-stage-running)', label: 'Running' },
-  completed: { color: 'var(--nils-stage-completed)', label: 'Completed' },
-  failed: { color: 'var(--nils-stage-failed)', label: 'Failed' },
-  paused: { color: 'var(--nils-stage-paused)', label: 'Paused' },
-  blocked: { color: 'var(--nils-stage-blocked)', label: 'Blocked' },
-};
 
 const stageAbbreviations: Record<StageId, string> = {
   anonymize: 'A',
@@ -109,12 +102,19 @@ function analyzePipeline(cohort: Cohort): PipelineAnalysis {
 
 const CohortCardInner = ({ cohort }: CohortCardProps) => {
   const pipeline = useMemo(() => analyzePipeline(cohort), [cohort]);
+  const prefetchCohort = usePrefetchCohort();
+
+  // Prefetch cohort data when user hovers over the card
+  const handleMouseEnter = useCallback(() => {
+    prefetchCohort(cohort.id);
+  }, [cohort.id, prefetchCohort]);
 
   return (
     <Card
       component={Link}
       to={`/cohorts/${cohort.id}`}
       padding="lg"
+      onMouseEnter={handleMouseEnter}
       style={{
         backgroundColor: 'var(--nils-bg-secondary)',
         border: '1px solid var(--nils-border-subtle)',
@@ -167,7 +167,7 @@ const CohortCardInner = ({ cohort }: CohortCardProps) => {
           <Group justify="space-between" align="center">
             <Group gap={4}>
               {pipeline.stages.map((stage) => {
-                const stageStatus = statusConfig[stage.status];
+                const stageStatus = STAGE_STATUS_CONFIG[stage.status];
                 
                 // Determine background and text colors based on status
                 let bgColor = 'var(--nils-bg-tertiary)';
