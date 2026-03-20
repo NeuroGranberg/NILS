@@ -24,6 +24,15 @@ from sqlalchemy import text
 from metadata_db.session import SessionLocal as MetadataSessionLocal
 
 # --------------------------------------------------------------------------- #
+# Constants
+# --------------------------------------------------------------------------- #
+
+# Provenances that cannot be converted to NIfTI format.
+# These sequences have special DICOM structures incompatible with dcm2niix:
+# - SyMRI: Multi-parameter synthetic MRI (TI×TE×complex dimensions)
+NIFTI_INCOMPATIBLE_PROVENANCES = frozenset({"SyMRI"})
+
+# --------------------------------------------------------------------------- #
 # Config models
 # --------------------------------------------------------------------------- #
 
@@ -68,6 +77,18 @@ class BidsExportConfig(BaseModel):
     # Subject identifier selection: "subject_code" (default) or an id_type_id integer
     # When set to an id_type_id, uses subject_other_identifiers lookup
     subject_identifier_source: str | int = "subject_code"
+
+    # Cohort filter: when set, only exports stacks from this cohort
+    # This dramatically improves query performance for large databases
+    cohort_name: str | None = None
+
+    # Field strength filter: when set, only exports stacks from specified field strengths (Tesla)
+    # Empty list = include all; [3.0, 7.0] = only 3T and 7T
+    include_field_strengths: list[float] = Field(default_factory=list)
+
+    # Stack ID filter: when set, only exports these specific stacks
+    # Used by standalone export to export a resolved manifest subset
+    include_stack_ids: list[int] = Field(default_factory=list)
 
     @model_validator(mode="before")
     @classmethod
@@ -155,11 +176,15 @@ class BidsExportConfig(BaseModel):
             if not self.bids_dcm_root_name:
                 raise ValueError("BIDS DICOM root name cannot be empty")
             if self.bids_dcm_root_name in reserved_dcm:
-                raise ValueError("BIDS DICOM root name cannot be 'dcm-original' or 'dcm-raw'")
+                raise ValueError(
+                    "BIDS DICOM root name cannot be 'dcm-original' or 'dcm-raw'"
+                )
             if not self.flat_dcm_root_name:
                 raise ValueError("Flat DICOM root name cannot be empty")
             if self.flat_dcm_root_name in reserved_dcm:
-                raise ValueError("Flat DICOM root name cannot be 'dcm-original' or 'dcm-raw'")
+                raise ValueError(
+                    "Flat DICOM root name cannot be 'dcm-original' or 'dcm-raw'"
+                )
 
         # NIfTI roots: allow empty to target raw root; otherwise use provided names
         if not self.bids_nifti_root_name:
@@ -200,6 +225,14 @@ class BidsExportConfig(BaseModel):
                 result.append(item)
         return result
 
+    @field_validator("include_field_strengths")
+    @classmethod
+    def _validate_field_strengths(cls, value: list[float]) -> list[float]:
+        # Valid normalized field strengths in Tesla
+        valid = {0.5, 1.0, 1.5, 3.0, 7.0}
+        # Dedupe and filter to valid values only
+        return [v for v in dict.fromkeys(value) if v in valid]
+
 
 # --------------------------------------------------------------------------- #
 # Data structures
@@ -233,8 +266,12 @@ class StackRecord:
     acceleration_csv: Optional[str]
     post_contrast: Optional[int]
     spinal_cord: Optional[int]
+    body_part: Optional[str]
     stack_orientation: Optional[str]
     dicom_files: list[str]
+    dwi_b_value: Optional[float] = None
+    dwi_pe_direction: Optional[str] = None
+    dwi_n_directions: Optional[int] = None
 
     # Computed fields (filled later)
     dest_rel_dir: Optional[Path] = None
@@ -264,14 +301,37 @@ def _build_stack_name(stack: StackRecord, is_multi_stack_series: bool = False) -
     construct = (stack.construct_csv or "").replace(",", "-")
 
     # Order: orientation, base, acquisition_type, modifiers, technique, acceleration, construct
-    parts = [p for p in (orient_part, base, acq_type, mods, tech, accel, construct) if p]
-    if stack.spinal_cord:
+    parts = [
+        p for p in (orient_part, base, acq_type, mods, tech, accel, construct) if p
+    ]
+    _BODY_PART_PREFIX = {"spine": "SC", "neck": "Neck", "brain-neck": "BrainNeck"}
+    bp_prefix = _BODY_PART_PREFIX.get(stack.body_part or "")
+    if bp_prefix:
+        parts.insert(0, bp_prefix)
+    elif stack.spinal_cord and not stack.body_part:
         parts.insert(0, "SC")
     name = "_".join(parts) if parts else "unknown"
 
     # Mark contrast-enhanced series
     if stack.post_contrast:
         name = f"{name}_CE"
+
+    # Append DWI suffix: _b1000_AP_32dir (each part omitted if NULL)
+    # Skip b=0 for derived constructs (Trace/ADC): scanner writes b=0 as artifact;
+    # genuine b=0 acquisitions (field maps) have no construct_csv.
+    if stack.directory_type == "dwi":
+        dwi_parts = []
+        constructs = {c.strip().lower() for c in (stack.construct_csv or "").split(",") if c.strip()}
+        derived = constructs & {"trace", "adc", "fa", "colfa", "isodwi"}
+        skip_b0 = derived and stack.dwi_b_value == 0
+        if stack.dwi_b_value is not None and not skip_b0:
+            dwi_parts.append(f"b{int(stack.dwi_b_value)}")
+        if stack.dwi_pe_direction:
+            dwi_parts.append(stack.dwi_pe_direction)
+        if stack.dwi_n_directions:
+            dwi_parts.append(f"{stack.dwi_n_directions}dir")
+        if dwi_parts:
+            name = f"{name}_{'_'.join(dwi_parts)}"
 
     # Add echo/inversion suffix for multi-stack series
     if is_multi_stack_series and stack.stack_key:
@@ -302,6 +362,8 @@ def _destination_subfolder(stack: StackRecord, config: BidsExportConfig) -> str:
 
 def _format_subject(subject_code: str) -> str:
     cleaned = subject_code or "unknown"
+    if cleaned.lower().startswith("sub-"):
+        cleaned = cleaned[4:]
     return f"sub-{cleaned}"
 
 
@@ -310,7 +372,9 @@ def _format_session(study_date: str) -> str:
     return f"ses-{cleaned}"
 
 
-def _apply_filters(stacks: Sequence[StackRecord], config: BidsExportConfig) -> list[StackRecord]:
+def _apply_filters(
+    stacks: Sequence[StackRecord], config: BidsExportConfig
+) -> list[StackRecord]:
     result: list[StackRecord] = []
     include_intents = set(config.include_intents or [])
     include_provs = set(config.include_provenance or [])
@@ -359,10 +423,11 @@ def _assign_unique_names(stacks: list[StackRecord], config: BidsExportConfig) ->
         # Build names with echo/inversion suffix where applicable
         for stack in group:
             is_multi_stack = (
-                stack.series_id is not None
-                and series_stack_counts[stack.series_id] > 1
+                stack.series_id is not None and series_stack_counts[stack.series_id] > 1
             )
-            stack.dest_name = _build_stack_name(stack, is_multi_stack_series=is_multi_stack)
+            stack.dest_name = _build_stack_name(
+                stack, is_multi_stack_series=is_multi_stack
+            )
             stack.dest_rel_dir = Path(dest_sub)
 
         # Check for name collisions and add numbered suffix only where needed
@@ -426,7 +491,12 @@ def _clean_root_preserve_child(root: Path, keep_child: str) -> None:
 
 
 def _build_fetch_stacks_sql(config: BidsExportConfig) -> tuple[str, dict]:
-    """Build SQL query for fetching stacks, with optional alternative identifier."""
+    """Build SQL query for fetching stacks, with optional alternative identifier and cohort filter.
+
+    Performance optimization: When cohort_name is set, filters stacks at the SQL level
+    using the dicom_origin_cohort column. This dramatically reduces query time for large
+    databases by avoiding full table scans.
+    """
     use_alt_id = isinstance(config.subject_identifier_source, int)
 
     if use_alt_id:
@@ -437,13 +507,35 @@ def _build_fetch_stacks_sql(config: BidsExportConfig) -> tuple[str, dict]:
         LEFT JOIN subject_other_identifiers soi ON subj.subject_id = soi.subject_id
             AND soi.id_type_id = :id_type_id"""
         group_by_subject = "soi.other_identifier, subj.subject_code"
-        params = {"id_type_id": config.subject_identifier_source}
+        params: dict = {"id_type_id": config.subject_identifier_source}
     else:
         # Default: use subject.subject_code
         subject_select = "COALESCE(subj.subject_code, 'unknown') AS subject_code"
         subject_join = "LEFT JOIN subject subj ON s.subject_id = subj.subject_id"
         group_by_subject = "subj.subject_code"
         params = {}
+
+    # Build WHERE clause with multiple optional filters
+    where_parts = []
+    if config.cohort_name:
+        where_parts.append("scc.dicom_origin_cohort = :cohort_name")
+        params["cohort_name"] = config.cohort_name
+    if config.include_field_strengths:
+        placeholders = ", ".join(
+            f":fs_{i}" for i in range(len(config.include_field_strengths))
+        )
+        where_parts.append(f"msd.magnetic_field_strength IN ({placeholders})")
+        for i, fs in enumerate(config.include_field_strengths):
+            params[f"fs_{i}"] = fs
+    if config.include_stack_ids:
+        placeholders = ", ".join(
+            f":sid_{i}" for i in range(len(config.include_stack_ids))
+        )
+        where_parts.append(f"scc.series_stack_id IN ({placeholders})")
+        for i, sid in enumerate(config.include_stack_ids):
+            params[f"sid_{i}"] = sid
+
+    where_clause = "WHERE " + " AND ".join(where_parts) if where_parts else ""
 
     sql = f"""
         SELECT
@@ -464,8 +556,13 @@ def _build_fetch_stacks_sql(config: BidsExportConfig) -> tuple[str, dict]:
             scc.acceleration_csv,
             scc.post_contrast,
             scc.spinal_cord,
+            scc.body_part,
             sf.stack_orientation,
             sf.mr_acquisition_type,
+            msd.magnetic_field_strength,
+            scc.dwi_b_value,
+            scc.dwi_pe_direction,
+            scc.dwi_n_directions,
             ARRAY_AGG(i.dicom_file_path ORDER BY i.instance_number NULLS LAST) AS dicom_files
         FROM series_classification_cache scc
         JOIN series s ON scc.series_instance_uid = s.series_instance_uid
@@ -473,7 +570,9 @@ def _build_fetch_stacks_sql(config: BidsExportConfig) -> tuple[str, dict]:
         {subject_join}
         LEFT JOIN series_stack ss ON scc.series_stack_id = ss.series_stack_id
         LEFT JOIN stack_fingerprint sf ON scc.series_stack_id = sf.series_stack_id
+        LEFT JOIN mri_series_details msd ON s.series_id = msd.series_id
         LEFT JOIN instance i ON i.series_stack_id = scc.series_stack_id
+        {where_clause}
         GROUP BY
             scc.series_stack_id,
             ss.series_id,
@@ -492,8 +591,13 @@ def _build_fetch_stacks_sql(config: BidsExportConfig) -> tuple[str, dict]:
             scc.acceleration_csv,
             scc.post_contrast,
             scc.spinal_cord,
+            scc.body_part,
             sf.stack_orientation,
-            sf.mr_acquisition_type
+            sf.mr_acquisition_type,
+            msd.magnetic_field_strength,
+            scc.dwi_b_value,
+            scc.dwi_pe_direction,
+            scc.dwi_n_directions
     """
     return sql, params
 
@@ -517,7 +621,7 @@ def fetch_stacks(config: BidsExportConfig) -> list[StackRecord]:
                 stack_key=row.stack_key,
                 subject_code=row.subject_code,
                 study_date=row.study_date,
-                series_time=row.series_time,
+                series_time=row.series_time.isoformat() if row.series_time is not None else None,
                 directory_type=row.directory_type,
                 base=row.base,
                 acquisition_type=row.mr_acquisition_type,
@@ -528,15 +632,34 @@ def fetch_stacks(config: BidsExportConfig) -> list[StackRecord]:
                 acceleration_csv=row.acceleration_csv,
                 post_contrast=row.post_contrast,
                 spinal_cord=row.spinal_cord,
+                body_part=getattr(row, "body_part", None),
                 stack_orientation=row.stack_orientation,
                 dicom_files=files,
+                dwi_b_value=getattr(row, "dwi_b_value", None),
+                dwi_pe_direction=getattr(row, "dwi_pe_direction", None),
+                dwi_n_directions=getattr(row, "dwi_n_directions", None),
             )
         )
 
     return _apply_filters(stacks, config)
 
 
-def _resolve_source(path: str, raw_root: Path) -> Path:
+def _fetch_cohort_raw_roots() -> list[Path]:
+    """Fetch all cohort dcm-raw paths from the metadata database.
+
+    Used as fallback roots when resolving DICOM file paths for subjects
+    that span multiple cohorts (e.g., a subject extracted via iAID whose
+    sessions are also part of an NMOSD export).
+    """
+    sql = "SELECT path FROM cohort WHERE path IS NOT NULL AND path != ''"
+    with MetadataSessionLocal() as meta_db:
+        rows = meta_db.execute(text(sql)).fetchall()
+    return [Path(row.path) for row in rows if row.path]
+
+
+def _resolve_source(
+    path: str, raw_root: Path, fallback_roots: Sequence[Path] = ()
+) -> Path:
     p = Path(path)
     if p.is_absolute():
         return p
@@ -546,9 +669,21 @@ def _resolve_source(path: str, raw_root: Path) -> Path:
     # Fallback: some datasets store dcm-raw under sub-<id>/... while stack paths omit the sub- prefix.
     parts = p.parts
     if parts:
-        alt = raw_root / ("sub-" + parts[0]) / Path(*parts[1:]) if len(parts) > 1 else raw_root / ("sub-" + parts[0])
+        alt = (
+            raw_root / ("sub-" + parts[0]) / Path(*parts[1:])
+            if len(parts) > 1
+            else raw_root / ("sub-" + parts[0])
+        )
         if alt.exists():
             return alt
+    # Cross-cohort fallback: try other cohort raw roots for subjects
+    # that were originally extracted from a different cohort.
+    for fb_root in fallback_roots:
+        if fb_root == raw_root:
+            continue
+        fb_candidate = fb_root / p
+        if fb_candidate.exists():
+            return fb_candidate
     return candidate
 
 
@@ -560,13 +695,18 @@ def _compute_destinations(stacks: list[StackRecord], config: BidsExportConfig) -
             raise RuntimeError("Destination naming failed")
 
 
-def _copy_stack(stack: StackRecord, raw_root: Path, dest_dir: Path) -> tuple[int, int, Optional[str]]:
+def _copy_stack(
+    stack: StackRecord,
+    raw_root: Path,
+    dest_dir: Path,
+    fallback_roots: Sequence[Path] = (),
+) -> tuple[int, int, Optional[str]]:
     """Copy one stack; returns (copied_files, skipped_files, error)."""
     copied = 0
     skipped = 0
     dest_dir.mkdir(parents=True, exist_ok=True)
     for src in stack.dicom_files:
-        src_path = _resolve_source(src, raw_root)
+        src_path = _resolve_source(src, raw_root, fallback_roots)
         if not src_path.exists():
             skipped += 1
             continue
@@ -584,6 +724,7 @@ def _convert_stack(
     dest_dir: Path,
     filename: str,
     config: BidsExportConfig,
+    fallback_roots: Sequence[Path] = (),
 ) -> tuple[bool, Optional[str]]:
     """Convert a stack's DICOM files to NIfTI using dcm2niix.
 
@@ -602,20 +743,25 @@ def _convert_stack(
     # dcm2niix with -s y reads this file and converts only the listed files.
     file_list_path = None
     try:
-        with tempfile.NamedTemporaryFile(mode='w', suffix='.txt', delete=False) as f:
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".txt", delete=False) as f:
             for dicom_file in stack.dicom_files:
-                src_path = _resolve_source(dicom_file, raw_root)
+                src_path = _resolve_source(dicom_file, raw_root, fallback_roots)
                 f.write(f"{src_path}\n")
             file_list_path = f.name
 
         cmd = [
             config.dcm2niix_path,
-            "-s", "y",  # Text file mode: read file list from input path
-            "-z", config.compression_flag,
-            "-b", "y",
+            "-s",
+            "y",  # Text file mode: read file list from input path
+            "-z",
+            config.compression_flag,
+            "-b",
+            "y",
             "--terse",  # Omit filename post-fixes (_e2, _ph, etc.) - we handle naming ourselves
-            "-f", filename,
-            "-o", str(dest_dir),
+            "-f",
+            filename,
+            "-o",
+            str(dest_dir),
             file_list_path,
         ]
         completed = subprocess.run(
@@ -639,15 +785,47 @@ def _convert_stack(
 
 @dataclass
 class ExportResult:
+    """Result of a BIDS export operation.
+
+    Attributes:
+        total_stacks: Total number of stacks considered for export.
+        exported_stacks: Number of stacks successfully exported (DICOM or NIfTI).
+        copied_files: Total DICOM files copied.
+        skipped_files: Files skipped (already exist, missing source, etc.).
+        errors: Critical errors that prevented export of specific stacks.
+        warnings: Non-critical issues (data quality, partial failures, etc.).
+        skipped_nifti_provenances: Counts of stacks skipped for NIfTI by provenance.
+            Example: {"SyMRI": 5, "DTIRecon": 3}
+        nifti_conversion_errors: Count of dcm2niix failures.
+        dicom_copy_errors: Count of DICOM copy failures.
+    """
+
     total_stacks: int = 0
     exported_stacks: int = 0
     copied_files: int = 0
     skipped_files: int = 0
+
+    # Critical errors that prevented export
     errors: list[str] = None  # type: ignore[assignment]
+
+    # Non-critical warnings (data quality issues, etc.)
+    warnings: list[str] = None  # type: ignore[assignment]
+
+    # Stacks intentionally skipped for NIfTI due to incompatible provenance
+    # Still exported as DICOM if DICOM export is enabled
+    skipped_nifti_provenances: dict[str, int] = None  # type: ignore[assignment]
+
+    # Detailed error counts by category
+    nifti_conversion_errors: int = 0
+    dicom_copy_errors: int = 0
 
     def __post_init__(self) -> None:
         if self.errors is None:
             self.errors = []
+        if self.warnings is None:
+            self.warnings = []
+        if self.skipped_nifti_provenances is None:
+            self.skipped_nifti_provenances = {}
 
 
 def run_bids_export(
@@ -662,6 +840,11 @@ def run_bids_export(
     stacks = fetch_stacks(config)
     _compute_destinations(stacks, config)
 
+    # Fetch all cohort raw roots for cross-cohort path resolution.
+    # Subjects that span multiple cohorts may have dicom_file_path entries
+    # relative to a different cohort's dcm-raw directory.
+    fallback_roots = _fetch_cohort_raw_roots()
+
     if not config.has_dicom and not config.is_nifti:
         raise RuntimeError("No outputs selected: enable DICOM and/or NIfTI")
 
@@ -670,12 +853,16 @@ def run_bids_export(
     if config.layout == Layout.BIDS:
         dcm_root = derivatives_root / config.bids_dcm_root_name
         nifti_root = (
-            derivatives_root / config.bids_nifti_root_name if config.bids_nifti_root_name else cohort_root
+            derivatives_root / config.bids_nifti_root_name
+            if config.bids_nifti_root_name
+            else cohort_root
         )
     else:
         dcm_root = derivatives_root / config.flat_dcm_root_name
         nifti_root = (
-            derivatives_root / config.flat_nifti_root_name if config.flat_nifti_root_name else cohort_root
+            derivatives_root / config.flat_nifti_root_name
+            if config.flat_nifti_root_name
+            else cohort_root
         )
 
     # Ensure destinations are ready for the selected outputs
@@ -698,35 +885,70 @@ def run_bids_export(
         subject = _format_subject(stack.subject_code)
         session = _format_session(stack.study_date)
 
+        # Check if this stack's provenance is incompatible with NIfTI conversion
+        is_nifti_incompatible = stack.provenance in NIFTI_INCOMPATIBLE_PROVENANCES
+
         if config.layout == Layout.BIDS:
             dest_base_dcm = dcm_root / subject / session / stack.dest_rel_dir
             dest_base_nifti = nifti_root / subject / session / stack.dest_rel_dir
             if config.has_dicom:
                 dest_dir_dcm = dest_base_dcm / stack.dest_name
-                if config.overwrite_mode == OverwriteMode.SKIP and dest_dir_dcm.exists():
+                if (
+                    config.overwrite_mode == OverwriteMode.SKIP
+                    and dest_dir_dcm.exists()
+                ):
                     skip_events.append(len(stack.dicom_files))
                 else:
                     dcm_tasks.append((stack, dest_dir_dcm))
             if config.is_nifti:
-                target_file = dest_base_nifti / f"{stack.dest_name}.{ 'nii.gz' if config.nifti_mode == OutputMode.NII_GZ else 'nii' }"
-                if config.overwrite_mode == OverwriteMode.SKIP and target_file.exists():
-                    skip_events.append(1)
+                if is_nifti_incompatible:
+                    # Track skipped NIfTI conversions by provenance
+                    prov = stack.provenance or "Unknown"
+                    result.skipped_nifti_provenances[prov] = (
+                        result.skipped_nifti_provenances.get(prov, 0) + 1
+                    )
                 else:
-                    nifti_tasks.append((stack, dest_base_nifti, stack.dest_name))
+                    target_file = (
+                        dest_base_nifti
+                        / f"{stack.dest_name}.{'nii.gz' if config.nifti_mode == OutputMode.NII_GZ else 'nii'}"
+                    )
+                    if (
+                        config.overwrite_mode == OverwriteMode.SKIP
+                        and target_file.exists()
+                    ):
+                        skip_events.append(1)
+                    else:
+                        nifti_tasks.append((stack, dest_base_nifti, stack.dest_name))
         else:
             flat_name = f"{subject}_{session}_{stack.dest_name}"
             if config.has_dicom:
                 dest_dir_dcm = dcm_root / flat_name
-                if config.overwrite_mode == OverwriteMode.SKIP and dest_dir_dcm.exists():
+                if (
+                    config.overwrite_mode == OverwriteMode.SKIP
+                    and dest_dir_dcm.exists()
+                ):
                     skip_events.append(len(stack.dicom_files))
                 else:
                     dcm_tasks.append((stack, dest_dir_dcm))
             if config.is_nifti:
-                target_file = nifti_root / f"{flat_name}.{ 'nii.gz' if config.nifti_mode == OutputMode.NII_GZ else 'nii' }"
-                if config.overwrite_mode == OverwriteMode.SKIP and target_file.exists():
-                    skip_events.append(1)
+                if is_nifti_incompatible:
+                    # Track skipped NIfTI conversions by provenance
+                    prov = stack.provenance or "Unknown"
+                    result.skipped_nifti_provenances[prov] = (
+                        result.skipped_nifti_provenances.get(prov, 0) + 1
+                    )
                 else:
-                    nifti_tasks.append((stack, nifti_root, flat_name))
+                    target_file = (
+                        nifti_root
+                        / f"{flat_name}.{'nii.gz' if config.nifti_mode == OutputMode.NII_GZ else 'nii'}"
+                    )
+                    if (
+                        config.overwrite_mode == OverwriteMode.SKIP
+                        and target_file.exists()
+                    ):
+                        skip_events.append(1)
+                    else:
+                        nifti_tasks.append((stack, nifti_root, flat_name))
 
     processed = 0
     total_tasks = len(dcm_tasks) + len(nifti_tasks) + len(skip_events)
@@ -746,10 +968,14 @@ def run_bids_export(
         # With vm.overcommit_memory=2 (strict), fork() must reserve the parent's
         # entire virtual address space (~12GB) per worker, which can exceed the
         # system's commit limit. Spawn creates fresh interpreters without this overhead.
-        ctx = mp.get_context('spawn')
-        with ProcessPoolExecutor(max_workers=config.convert_workers, mp_context=ctx) as pool:
+        ctx = mp.get_context("spawn")
+        with ProcessPoolExecutor(
+            max_workers=config.convert_workers, mp_context=ctx
+        ) as pool:
             futures = {
-                pool.submit(_convert_stack, stack, raw_root, dest_dir, filename, config): (stack, dest_dir)
+                pool.submit(
+                    _convert_stack, stack, raw_root, dest_dir, filename, config, fallback_roots
+                ): (stack, dest_dir)
                 for stack, dest_dir, filename in nifti_tasks
             }
             for fut in as_completed(futures):
@@ -761,6 +987,7 @@ def run_bids_export(
                 if ok:
                     result.exported_stacks += 1
                 else:
+                    result.nifti_conversion_errors += 1
                     result.errors.append(f"Stack {stack.series_stack_id}: {err}")
 
     if config.has_dicom and dcm_tasks:
@@ -768,7 +995,7 @@ def run_bids_export(
 
         with ThreadPoolExecutor(max_workers=config.copy_workers) as pool:
             futures = {
-                pool.submit(_copy_stack, stack, raw_root, dest_dir): stack
+                pool.submit(_copy_stack, stack, raw_root, dest_dir, fallback_roots): stack
                 for stack, dest_dir in dcm_tasks
             }
             for fut in as_completed(futures):
@@ -780,6 +1007,7 @@ def run_bids_export(
                 result.copied_files += copied
                 result.skipped_files += skipped
                 if err:
+                    result.dicom_copy_errors += 1
                     result.errors.append(f"Stack {stack.series_stack_id}: {err}")
                 else:
                     result.exported_stacks += 1
@@ -795,4 +1023,3 @@ __all__ = [
     "run_bids_export",
     "ExportResult",
 ]
-

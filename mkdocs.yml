@@ -6,7 +6,7 @@ site_author: Nima Chamyani
 repo_url: https://github.com/NeuroGranberg/NILS
 repo_name: NeuroGranberg/NILS
 
-copyright: Copyright &copy; 2025 Nima Chamyani, Karolinska Institutet
+copyright: Copyright &copy; 2025-2026 Nima Chamyani, Karolinska Institutet
 
 theme:
   name: material

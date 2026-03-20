@@ -100,6 +100,7 @@ def create_app() -> FastAPI:
         metadata_subjects_router,
         metadata_cohorts_router,
         imports_router,
+        export_router,
     )
     from api.routes.qc import router as qc_router
     from api.routes.files import set_data_roots
@@ -121,6 +122,7 @@ def create_app() -> FastAPI:
     app.include_router(metadata_subjects_router)
     app.include_router(metadata_cohorts_router)
     app.include_router(imports_router)
+    app.include_router(export_router)
     app.include_router(qc_router)
 
     # Reconcile stage-job status at startup

@@ -202,6 +202,7 @@ class QCClassificationDTO(BaseModel):
     post_contrast: Optional[int] = None
     localizer: Optional[int] = None
     spinal_cord: Optional[int] = None
+    body_part: Optional[str] = None
 
     # Review flags
     manual_review_required: Optional[int] = None
@@ -215,6 +216,11 @@ class QCClassificationDTO(BaseModel):
 
     # Orientation (from stack_fingerprint)
     orientation: Optional[str] = None  # Axial/Coronal/Sagittal
+
+    # DWI enrichment
+    dwi_b_value: Optional[float] = None
+    dwi_pe_direction: Optional[str] = None
+    dwi_n_directions: Optional[int] = None
 
     # Series info
     series_description: Optional[str] = None

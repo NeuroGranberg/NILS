@@ -98,6 +98,12 @@ export const JOB_STATUS_CONFIG: Record<JobStatus, StatusConfig> = {
     mantineColor: 'teal',
     label: 'Completed',
   },
+  completed_with_warnings: {
+    color: 'var(--nils-stage-completed)',
+    bgColor: 'rgba(210, 153, 34, 0.15)',
+    mantineColor: 'yellow',
+    label: 'Completed with Warnings',
+  },
   failed: {
     color: 'var(--nils-stage-failed)',
     bgColor: 'rgba(248, 81, 73, 0.15)',

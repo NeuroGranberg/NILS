@@ -68,6 +68,10 @@ def normalize_birth_date(value: str) -> str:
     if normalized:
         return normalized
 
+    # Year-only input: default to January 1st
+    if re.fullmatch(r"\d{4}", raw):
+        return f"{raw}-01-01"
+
     for kwargs in ({"dayfirst": False, "yearfirst": True}, {"dayfirst": True, "yearfirst": False}):
         try:
             parsed = date_parser.parse(raw, **kwargs)

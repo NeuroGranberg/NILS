@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 from pathlib import Path
+import json
+import time
 
 from fastapi import APIRouter, HTTPException, Query
 from fastapi.responses import JSONResponse, FileResponse, Response
@@ -307,6 +309,13 @@ def get_classification_options():
             {"value": 0, "label": "No (Brain)"},
             {"value": 1, "label": "Yes (Spine)"},
         ],
+        "body_part_options": [
+            {"value": None, "label": "Unknown"},
+            {"value": "brain", "label": "Brain"},
+            {"value": "brain-neck", "label": "Brain + Neck"},
+            {"value": "neck", "label": "Neck"},
+            {"value": "spine", "label": "Spine"},
+        ],
     }
     return JSONResponse(options)
 
@@ -339,7 +348,7 @@ def get_series_metadata(
 
 
 @router.get("/dicom/file/{instance_id}")
-def get_dicom_file(instance_id: int):
+def get_dicom_file(instance_id: int, frame: int | None = Query(None)):
     """
     Serve a raw DICOM file by instance ID.
 
@@ -483,19 +492,34 @@ def get_series_instances(
     stack_index: int = Query(0, ge=0),
 ):
     """
-    Get list of instance IDs for a series (for slice navigation).
+    Get list of frames for a series (for slice navigation).
 
-    Returns instance IDs ordered by slice location for use with
-    the simple image viewer.
+    Returns frame list ordered by slice location. For multi-frame Enhanced DICOM,
+    each frame within an instance is expanded as a separate entry.
+    
+    Response format:
+    - frames: list of {instance_id, frame} objects
+    - total: total number of navigable slices
+    - instance_ids: (legacy) list of unique instance IDs for backwards compatibility
+    
+    Frontend should build image URLs as:
+    - Classic DICOM: wadouri:.../file/{instance_id}
+    - Multi-frame DICOM: wadouri:.../file/{instance_id}?frame={frame}
     """
     try:
+        # Get expanded frame list (handles both classic and Enhanced DICOM)
+        frames = dicom_service.get_series_frame_list(series_uid, stack_index)
+        
+        # Also include legacy instance_ids for backwards compatibility
         instance_ids = dicom_service.get_series_instance_ids(series_uid, stack_index)
+        
         return JSONResponse(
             {
                 "series_uid": series_uid,
                 "stack_index": stack_index,
-                "instance_ids": instance_ids,
-                "total": len(instance_ids),
+                "frames": frames,  # New: expanded frame list
+                "instance_ids": instance_ids,  # Legacy: just instance IDs
+                "total": len(frames),  # Total navigable slices
             }
         )
     except Exception as e:

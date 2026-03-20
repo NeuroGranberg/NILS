@@ -203,26 +203,19 @@ class ClassificationPipeline:
         result.set_axis_result("contrast", contrast_result.to_axis_result())
         
         # =====================================================================
-        # Stage 7: Body part detection (spinal cord focus)
-        # Pass technique and geometry for heuristic spine scan detection
+        # Stage 7: Body part detection (brain / spine / neck / brain-neck)
         # =====================================================================
-        body_part_result = self.body_part_detector.detect_body_part(
-            ctx,
-            technique=tech_result.name,
-            aspect_ratio=ctx.aspect_ratio,
-            slices_count=ctx.stack_n_instances,
-        )
-        result.spinal_cord = body_part_result.spinal_cord
+        body_part_result = self.body_part_detector.detect_body_part(ctx)
+        result.body_part = body_part_result.body_part
+        result.spinal_cord = body_part_result.spinal_cord  # backward compat
         result.set_axis_result("body_part", body_part_result.to_axis_result())
 
-        # Add review flag if spine detected (via keyword or heuristic)
         if body_part_result.triggers_review:
+            reason = self.body_part_detector.get_review_reason(body_part_result.matched_category)
+            if reason:
+                result.add_review_reason(reason)
             if body_part_result.has_conflict:
-                # Heuristic triggered - add specific reason
-                result.add_review_reason("body_part:heuristic")
-            else:
-                # Keyword match - use standard reason
-                result.add_review_reason(self.body_part_detector.get_review_reason())
+                result.add_review_reason(self.body_part_detector.get_conflict_review_reason())
         
         # =====================================================================
         # Stage 8: Intent synthesis (directory_type)

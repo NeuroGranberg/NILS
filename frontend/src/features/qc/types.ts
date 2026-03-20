@@ -48,7 +48,8 @@ export interface AxesQCCurrent {
 
 export interface AxesQCIntent {
   directory_type: string | null;
-  spinal_cord: number | null;  // 1=yes, 0=no, null=unknown
+  spinal_cord: number | null;  // 1=yes, 0=no, null=unknown (backward compat)
+  body_part: string | null;    // "brain", "spine", "neck", "brain-neck", null=unknown
   post_contrast: number | null;  // 1=yes, 0=no, null=unknown
 }
 

@@ -74,6 +74,8 @@ modifiers:
       - "t2 flair"
       - "t1 flair"
       - "dark fluid"
+      - "dark-fluid"
+      - "dark - fluid"
       - "da fl"
       - "da-fl"
       - "da - fl"  # Siemens "da-fl" after hyphen normalization (spaces around hyphen)

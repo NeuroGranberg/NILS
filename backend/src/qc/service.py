@@ -40,7 +40,7 @@ CATEGORY_REASON_PREFIXES = {
     "base": ["base:"],
     "provenance": ["provenance:"],
     "technique": ["technique:"],
-    "body_part": ["body_part:", "bodypart:", "spine", "heuristic:"],
+    "body_part": ["body_part:", "bodypart:", "spine", "neck", "brain_neck"],
     "contrast": ["contrast:"],
     "modifier": ["modifier:"],
     "construct": ["construct:"],
@@ -53,7 +53,7 @@ CATEGORY_EDITABLE_FIELDS = {
     "base": ["base", "directory_type"],
     "provenance": ["provenance"],
     "technique": ["technique"],
-    "body_part": ["spinal_cord", "directory_type"],
+    "body_part": ["body_part", "spinal_cord", "directory_type"],
     "contrast": ["post_contrast"],
     "modifier": ["modifier_csv", "directory_type"],
     "construct": ["construct_csv", "directory_type"],
@@ -73,6 +73,7 @@ ALL_EDITABLE_FIELDS = [
     "post_contrast",
     "localizer",
     "spinal_cord",
+    "body_part",
 ]
 
 
@@ -369,6 +370,7 @@ class QCService:
                     scc.post_contrast,
                     scc.localizer,
                     scc.spinal_cord,
+                    scc.body_part,
                     scc.manual_review_required,
                     scc.manual_review_reasons_csv,
                     scc.aspect_ratio,
@@ -378,7 +380,10 @@ class QCService:
                     s.series_description,
                     s.modality,
                     s.series_time,
-                    sf.stack_orientation
+                    sf.stack_orientation,
+                    scc.dwi_b_value,
+                    scc.dwi_pe_direction,
+                    scc.dwi_n_directions
                 FROM series_classification_cache scc
                 JOIN series s ON scc.series_instance_uid = s.series_instance_uid
                 JOIN study st ON s.study_id = st.study_id
@@ -437,6 +442,7 @@ class QCService:
                         post_contrast=row.post_contrast,
                         localizer=row.localizer,
                         spinal_cord=row.spinal_cord,
+                        body_part=getattr(row, "body_part", None),
                         manual_review_required=row.manual_review_required,
                         manual_review_reasons_csv=row.manual_review_reasons_csv,
                         aspect_ratio=row.aspect_ratio,
@@ -446,6 +452,9 @@ class QCService:
                         orientation=row.stack_orientation,
                         series_description=row.series_description,
                         modality=row.modality,
+                        dwi_b_value=getattr(row, "dwi_b_value", None),
+                        dwi_pe_direction=getattr(row, "dwi_pe_direction", None),
+                        dwi_n_directions=getattr(row, "dwi_n_directions", None),
                     )
                 )
 
@@ -888,6 +897,7 @@ class QCService:
                 scc.post_contrast,
                 scc.localizer,
                 scc.spinal_cord,
+                scc.body_part,
                 scc.manual_review_required,
                 scc.manual_review_reasons_csv,
                 scc.aspect_ratio,
@@ -936,6 +946,7 @@ class QCService:
             post_contrast=row.post_contrast,
             localizer=row.localizer,
             spinal_cord=row.spinal_cord,
+            body_part=getattr(row, "body_part", None),
             manual_review_required=row.manual_review_required,
             manual_review_reasons_csv=row.manual_review_reasons_csv,
             aspect_ratio=row.aspect_ratio,

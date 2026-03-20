@@ -124,6 +124,12 @@ export const CohortDetailPage = () => {
     { label: 'Projections/MPRs', value: 'ProjectionDerived' },
   ];
 
+  const fieldStrengthOptions = [
+    { label: '1.5T', value: '1.5' },
+    { label: '3T', value: '3' },
+    { label: '7T', value: '7' },
+  ];
+
   // Fetch available identifier types for BIDS subject naming
   const { data: idTypesResponse } = useIdTypes();
   const subjectIdentifierOptions = useMemo(() => {
@@ -606,7 +612,7 @@ export const CohortDetailPage = () => {
                   Started {job.startedAt ? formatDateTime(job.startedAt) : formatDateTime(job.submittedAt)}
                 </Text>
               </Stack>
-              <Badge color={job.status === 'completed' ? 'teal' : job.status === 'failed' ? 'red' : 'blue'}>
+              <Badge color={job.status === 'completed' || job.status === 'completed_with_warnings' ? 'teal' : job.status === 'failed' ? 'red' : 'blue'}>
                 {job.progress}%
               </Badge>
             </Group>
@@ -620,7 +626,7 @@ export const CohortDetailPage = () => {
     if (!extractHistory.length) return null;
     const latest = extractHistory[0];
     const badgeColor =
-      latest.status === 'completed'
+      latest.status === 'completed' || latest.status === 'completed_with_warnings'
         ? 'teal'
         : latest.status === 'failed'
           ? 'red'
@@ -738,6 +744,7 @@ export const CohortDetailPage = () => {
       {activeStage && (
         <StageCard
           stage={activeStage}
+          loading={runStageMutation.isPending}
           disabled={
             stageBlocked ||
             (activeStage.id === 'anonymize' && (anonymizeBusy || Boolean(anonymizeConflict)))
@@ -858,6 +865,7 @@ export const CohortDetailPage = () => {
               subjectIdentifierOptions={subjectIdentifierOptions}
               intentOptions={intentOptions}
               provenanceOptions={provenanceOptions}
+              fieldStrengthOptions={fieldStrengthOptions}
               defaultIntentSelection={defaultIntentSelection}
               defaultProvenanceSelection={defaultProvenanceSelection}
               activeBidsJob={activeBidsJob}

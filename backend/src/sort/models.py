@@ -425,6 +425,12 @@ class Step4Metrics:
     # Phase 4B: Contrast conflict detection
     contrast_conflict_count: int = 0
 
+    # Phase 4C: Incomplete 4D data detection
+    incomplete_data_flagged_count: int = 0
+
+    # Phase 4D: DWI enrichment
+    dwi_enriched_count: int = 0
+
     # Review summary
     stacks_newly_flagged: int = 0
     new_review_reasons: dict[str, int] = field(default_factory=dict)
@@ -450,6 +456,8 @@ class Step4Metrics:
             "misc_remaining_count": self.misc_remaining_count,
             "resolved_to": self.resolved_to,
             "contrast_conflict_count": self.contrast_conflict_count,
+            "incomplete_data_flagged_count": self.incomplete_data_flagged_count,
+            "dwi_enriched_count": self.dwi_enriched_count,
             "stacks_newly_flagged": self.stacks_newly_flagged,
             "new_review_reasons": self.new_review_reasons,
             "warnings": self.warnings,

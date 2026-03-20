@@ -56,6 +56,7 @@ class RuleContext:
     post_contrast: Optional[int] = None
     localizer: Optional[int] = None
     spinal_cord: Optional[int] = None
+    body_part: Optional[str] = None
 
     # Geometry fields
     aspect_ratio: Optional[float] = None
@@ -86,6 +87,7 @@ class RuleContext:
             post_contrast=classification.get("post_contrast"),
             localizer=classification.get("localizer"),
             spinal_cord=classification.get("spinal_cord"),
+            body_part=classification.get("body_part"),
             aspect_ratio=classification.get("aspect_ratio"),
             fov_x_mm=classification.get("fov_x_mm"),
             fov_y_mm=classification.get("fov_y_mm"),
@@ -283,8 +285,8 @@ class BrainAspectRatioRule(QCRule):
         if ctx.directory_type != "anat":
             return None
 
-        # Skip if already marked as spine
-        if ctx.spinal_cord == 1:
+        # Skip if marked as non-brain body part
+        if ctx.body_part in ("spine", "neck") or ctx.spinal_cord == 1:
             return None
 
         # Skip localizers
@@ -297,7 +299,7 @@ class BrainAspectRatioRule(QCRule):
         if ctx.aspect_ratio > self.MAX_RATIO:
             return self._create_violation(
                 f"Aspect ratio {ctx.aspect_ratio:.2f} is elongated (>{self.MAX_RATIO}), "
-                f"suggesting spine rather than brain",
+                f"suggesting spine/neck rather than brain",
                 {"aspect_ratio": ctx.aspect_ratio, "threshold": self.MAX_RATIO},
             )
 
@@ -328,16 +330,17 @@ class SpineAspectRatioRule(QCRule):
     MIN_SPINE_RATIO = 1.3  # Spine should be at least this elongated
 
     def evaluate(self, ctx: RuleContext) -> Optional[RuleViolation]:
-        # Only check if explicitly marked as spine
-        if ctx.spinal_cord != 1:
+        # Only check if explicitly marked as spine or neck
+        if ctx.body_part not in ("spine", "neck") and ctx.spinal_cord != 1:
             return None
 
         if ctx.aspect_ratio is None:
             return None
 
         if ctx.aspect_ratio < self.MIN_SPINE_RATIO:
+            label = ctx.body_part or "spine"
             return self._create_violation(
-                f"Marked as spine but aspect ratio {ctx.aspect_ratio:.2f} is nearly square "
+                f"Marked as {label} but aspect ratio {ctx.aspect_ratio:.2f} is nearly square "
                 f"(<{self.MIN_SPINE_RATIO}), suggesting brain",
                 {"aspect_ratio": ctx.aspect_ratio, "threshold": self.MIN_SPINE_RATIO},
             )

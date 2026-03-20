@@ -33,7 +33,8 @@ class ClassificationResult:
         directory_type: BIDS-like intent (anat, dwi, func, etc.)
         post_contrast: 1=yes, 0=no, None=unknown
         localizer: 1 if localizer/scout, 0 otherwise
-        spinal_cord: 1=detected, 0=not, None=uncertain
+        spinal_cord: 1=detected, 0=not, None=uncertain (backward compat)
+        body_part: Detected body part category string (brain, spine, neck, etc.)
         manual_review_required: 1 if review needed, 0 otherwise
         manual_review_reasons_csv: Comma-separated reason codes
     """
@@ -52,7 +53,8 @@ class ClassificationResult:
     # === Three-State Flags ===
     post_contrast: Optional[int] = None  # 1=yes, 0=no, None=unknown
     localizer: int = 0  # 0 or 1
-    spinal_cord: Optional[int] = None  # 1=yes, 0=no, None=uncertain
+    spinal_cord: Optional[int] = None  # 1=yes, 0=no, None=uncertain (backward compat)
+    body_part: Optional[str] = None  # "brain", "spine", "neck", etc.
     
     # === Review ===
     manual_review_required: int = 0  # 0 or 1
@@ -85,6 +87,7 @@ class ClassificationResult:
             "post_contrast": self.post_contrast,
             "localizer": self.localizer,
             "spinal_cord": self.spinal_cord,
+            "body_part": self.body_part,
             "manual_review_required": self.manual_review_required,
             "manual_review_reasons_csv": self.manual_review_reasons_csv,
         }
@@ -308,7 +311,7 @@ REVIEW_REASON_CODES = {
     "modifier": ["ambiguous", "conflict"],
     "contrast": ["ambiguous", "conflict"],
     "intent": ["ambiguous"],
-    "bodypart": ["spine_detected", "uncertain"],
+    "bodypart": ["spine_detected", "neck_detected", "brain_neck_detected", "conflict", "uncertain"],
     "excluded": ["secondary_reformat", "screenshot", "error_map"],
 }
 """

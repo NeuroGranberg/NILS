@@ -66,13 +66,24 @@ async def _queue_put(
     item,
     control: Optional[JobControl],
     job_id: Optional[int],
+    writer_task: Optional[asyncio.Task] = None,
 ) -> None:
     from .profiler import get_global_profiler
     profiler = get_global_profiler()
-    
+
     while True:
         if control:
             await control.checkpoint(job_id)
+        # If the writer task has died, surface its exception immediately rather
+        # than spinning forever on a queue nobody is consuming.
+        if writer_task is not None and writer_task.done():
+            exc = writer_task.exception()
+            if exc is not None:
+                logger.error("Writer task died while producer was enqueuing job_id=%s: %s", job_id, exc)
+                raise exc
+            # Task finished without exception but queue isn't being drained —
+            # nothing left to write to, so just return.
+            return
         queue_start = time.perf_counter()
         try:
             await asyncio.wait_for(queue.put(item), timeout=_QUEUE_TIMEOUT_SECONDS)
@@ -263,9 +274,23 @@ async def _run_async_process_pool(
                 
                 # Stream results to async queue as they arrive
                 while True:
-                    # Get result from thread-safe queue (non-blocking via run_in_executor)
-                    msg_type, data = await loop.run_in_executor(None, result_queue.get)
-                    
+                    # Poll the thread-safe queue with a short timeout so we can
+                    # detect a dead writer_task without waiting for the next result.
+                    import queue as _q
+                    while True:
+                        try:
+                            msg_type, data = await loop.run_in_executor(
+                                None, lambda: result_queue.get(timeout=1.0)
+                            )
+                            break
+                        except _q.Empty:
+                            if not use_writer_pool and writer_task is not None and writer_task.done():
+                                exc = writer_task.exception()
+                                if exc is not None:
+                                    logger.error("Writer task died while producer was waiting for pool results job_id=%s: %s", job_id, exc)
+                                    raise exc
+                                raise RuntimeError("Writer task finished unexpectedly while pool was still running")
+
                     if msg_type == "done":
                         break
                     elif msg_type == "error":
@@ -290,6 +315,7 @@ async def _run_async_process_pool(
                                     (result.subject_key, None, batch, last_uid, False),
                                     control,
                                     job_id,
+                                    writer_task,
                                 )
                         
                         # Mark subject complete
@@ -307,6 +333,7 @@ async def _run_async_process_pool(
                                 (result.subject_key, None, None, None, True),
                                 control,
                                 job_id,
+                                writer_task,
                             )
                         
                         # Update progress
@@ -322,7 +349,7 @@ async def _run_async_process_pool(
                 if writer_pool:
                     await writer_pool.signal_completion()
                 else:
-                    await _queue_put(queue, None, control, job_id)
+                    await _queue_put(queue, None, control, job_id, writer_task)
             
             await process_with_streaming_pool()
             
@@ -489,6 +516,7 @@ async def _run_async(
                 control,
                 job_id,
                 subject_filter,
+                writer_task,
             )
 
             if progress:
@@ -519,7 +547,7 @@ async def _run_async(
                 tasks.append(asyncio.create_task(subject_worker(subject)))
 
             await asyncio.gather(*tasks)
-            await _queue_put(queue, None, control, job_id)
+            await _queue_put(queue, None, control, job_id, writer_task)
             await writer_task
         except JobCancelledError as exc:
             await _shutdown_tasks(exc)
@@ -558,6 +586,7 @@ async def _process_subject(
     control: Optional[JobControl],
     job_id: Optional[int],
     path_filter: SubjectPathEntry | None,
+    writer_task: Optional[asyncio.Task] = None,
 ) -> None:
     if config.series_workers_per_subject <= 1:
         resume_token = None
@@ -573,8 +602,8 @@ async def _process_subject(
             path_filter=path_filter,
         ):
             await _control_checkpoint(control, job_id)
-            await _queue_put(queue, (subject.subject_key, None, batch, last_instance, False), control, job_id)
-        await _queue_put(queue, (subject.subject_key, None, None, last_instance, True), control, job_id)
+            await _queue_put(queue, (subject.subject_key, None, batch, last_instance, False), control, job_id, writer_task)
+        await _queue_put(queue, (subject.subject_key, None, None, last_instance, True), control, job_id, writer_task)
         return
 
     series_plans = plan_subject_series(
@@ -605,10 +634,10 @@ async def _process_subject(
                 paths=plan.paths,
                 path_filter=path_filter,
             ):
-                await _queue_put(queue, (subject.subject_key, plan.series_uid, batch, last_instance, False), control, job_id)
+                await _queue_put(queue, (subject.subject_key, plan.series_uid, batch, last_instance, False), control, job_id, writer_task)
 
     await asyncio.gather(*(process_plan(plan) for plan in series_plans))
-    await _queue_put(queue, (subject.subject_key, None, None, None, True), control, job_id)
+    await _queue_put(queue, (subject.subject_key, None, None, None, True), control, job_id, writer_task)
 
 
 async def _maybe_await(result: Awaitable[None] | None) -> None:

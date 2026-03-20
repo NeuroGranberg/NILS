@@ -71,6 +71,20 @@ INDEXES = [
     # Supports subject identifier queries in database explorer
     ("idx_subject_other_id_subject", "subject_other_identifiers", "subject_id"),
     ("idx_subject_other_id_type", "subject_other_identifiers", "id_type_id"),
+
+    # =========================================================================
+    # BIDS Export Performance (added to fix timeout on large cohorts)
+    # =========================================================================
+    # Critical for BIDS export WHERE clause filtering by cohort
+    # Without this, export query scans ALL stacks across ALL cohorts
+    ("idx_scc_dicom_origin_cohort", "series_classification_cache", "dicom_origin_cohort"),
+    # Covering index for ARRAY_AGG(dicom_file_path ORDER BY instance_number)
+    # Enables index-only scans, avoiding heap access for millions of instance rows
+    (
+        "idx_instance_stack_path_order",
+        "instance",
+        "series_stack_id, instance_number, dicom_file_path",
+    ),
 ]
 
 

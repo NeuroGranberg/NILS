@@ -39,11 +39,12 @@ const jobActions: Record<JobStatus, Array<{ action: JobAction; icon: ReactNode; 
     { action: 'cancel', icon: <IconPlayerStop size={14} />, label: 'Cancel' },
   ],
   completed: [{ action: 'retry', icon: <IconRefresh size={14} />, label: 'Re-run' }],
+  completed_with_warnings: [{ action: 'retry', icon: <IconRefresh size={14} />, label: 'Re-run' }],
   failed: [{ action: 'retry', icon: <IconRefresh size={14} />, label: 'Retry' }],
   canceled: [],
 };
 
-const canDelete = (status: JobStatus) => ['completed', 'failed', 'canceled'].includes(status);
+const canDelete = (status: JobStatus) => ['completed', 'completed_with_warnings', 'failed', 'canceled'].includes(status);
 
 const metricsSummary = (metrics: JobMetrics | Record<string, unknown>) => {
   // Handle extraction job metrics format
@@ -212,9 +213,11 @@ export const JobHistoryTable = ({ jobs, compact = false, showCohort = false }: J
                           backgroundColor:
                             job.status === 'completed'
                               ? 'var(--nils-success)'
-                              : job.status === 'failed'
-                                ? 'var(--nils-error)'
-                                : 'var(--nils-accent-primary)',
+                              : job.status === 'completed_with_warnings'
+                                ? 'var(--nils-warning, #d29922)'
+                                : job.status === 'failed'
+                                  ? 'var(--nils-error)'
+                                  : 'var(--nils-accent-primary)',
                         },
                       }}
                     />

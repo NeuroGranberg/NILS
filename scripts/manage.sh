@@ -59,8 +59,8 @@ generate_override() {
   
   for i in "${!paths[@]}"; do
     local p="${paths[$i]}"
-    volume_mounts_backend="${volume_mounts_backend}      - ${p}:${p}:rw"$'\n'
-    volume_mounts_frontend="${volume_mounts_frontend}      - ${p}:${p}:ro"$'\n'
+    volume_mounts_backend="${volume_mounts_backend}      - ${p}:${p}:Z,rw"$'\n'
+    volume_mounts_frontend="${volume_mounts_frontend}      - ${p}:${p}:Z,ro"$'\n'
     
     if [[ $i -gt 0 ]]; then
       data_roots_json="${data_roots_json},"
@@ -73,14 +73,14 @@ generate_override() {
 services:
   backend:
     volumes:
-      - ./backend/src:/app/src
-      - ./backend/pyproject.toml:/app/pyproject.toml
-      - ./backend/tests:/app/tests
+      - ./backend/src:/app/src:Z
+      - ./backend/pyproject.toml:/app/pyproject.toml:Z
+      - ./backend/tests:/app/tests:Z
 ${volume_mounts_backend}    environment:
       DATA_ROOTS: '${data_roots_json}'
   frontend:
     volumes:
-      - ./frontend:/app
+      - ./frontend:/app:Z
 ${volume_mounts_frontend}    environment:
       VITE_DATA_ROOT: ${paths[0]}
       VITE_USE_REAL_FILES: "true"
@@ -218,6 +218,7 @@ Options:
   --no-cache-image Force docker compose build to bypass cache before starting services
   --forward        Expose ports externally (0.0.0.0) - accessible from Tailscale/network
                    Default: localhost only (127.0.0.1) - accessible only on server
+  --podman         Use Podman and podman-compose instead of Docker
 EOF
 }
 
@@ -234,6 +235,7 @@ CLEAN_SCOPE="both"
 DATA_PATHS=()
 NO_CACHE_IMAGE=false
 FORWARD_PORTS=false  # Default: localhost only (127.0.0.1). With --forward: external (0.0.0.0)
+USE_PODMAN=false
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
@@ -305,6 +307,10 @@ PY
       FORWARD_PORTS=true
       shift
       ;;
+    --podman)
+      USE_PODMAN=true
+      shift
+      ;;
     --help|-h)
       usage
       exit 0
@@ -316,6 +322,12 @@ PY
       ;;
   esac
 done
+
+if $USE_PODMAN; then
+  docker() { podman "$@"; }
+  docker-compose() { podman-compose "$@"; }
+  export -f docker docker-compose
+fi
 
 COMPOSE_ARGS=(-f "$COMPOSE_FILE")
 
@@ -346,6 +358,7 @@ if [[ "$command" == "start" ]]; then
   fi
 
   FRONTEND_PORT="$(find_free_port 5173)"
+  BACKEND_PORT="$(find_free_port 8000)"
   DB_PORT="$(find_free_port 5432)"
   METADATA_DB_PORT="$(find_free_port 5532)"
   
@@ -358,8 +371,9 @@ if [[ "$command" == "start" ]]; then
     echo "Mode: LOCALHOST ONLY (server access only)"
   fi
   
-  export FRONTEND_PORT DB_PORT METADATA_DB_PORT BIND_ADDRESS
+  export FRONTEND_PORT BACKEND_PORT DB_PORT METADATA_DB_PORT BIND_ADDRESS
   echo "Frontend: http://localhost:$FRONTEND_PORT"
+  echo "Backend API: http://localhost:$BACKEND_PORT"
   echo "Database port: $DB_PORT"
   echo "Metadata database port: $METADATA_DB_PORT"
   echo "Database directory: $DB_DIR"

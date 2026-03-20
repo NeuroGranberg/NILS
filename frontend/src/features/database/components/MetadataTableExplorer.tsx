@@ -18,6 +18,12 @@ import {
 import { notifications } from '@mantine/notifications';
 import { useMetadataTables, type MetadataTableInfo } from '../api';
 import SubjectImportPanel from './SubjectImportPanel';
+import ObservationTypeImportTab from './ObservationTypeImportTab';
+import EventImportTab from './EventImportTab';
+import DiseaseImportTab from './DiseaseImportTab';
+import DiseaseTypeImportTab from './DiseaseTypeImportTab';
+import SubjectDiseaseImportTab from './SubjectDiseaseImportTab';
+import SubjectDiseaseTypeImportTab from './SubjectDiseaseTypeImportTab';
 import 'datatables.net-dt/css/dataTables.dataTables.css';
 import 'datatables.net-fixedcolumns-dt/css/fixedColumns.dataTables.css';
 
@@ -361,8 +367,7 @@ export const MetadataTableExplorer = () => {
             <Tabs defaultValue="subjects">
               <Tabs.List>
                 <Tabs.Tab value="subjects">Subjects & Cohorts</Tabs.Tab>
-                <Tabs.Tab value="events">Events & Diseases</Tabs.Tab>
-                <Tabs.Tab value="clinical">Clinical Measures</Tabs.Tab>
+                <Tabs.Tab value="events">Events & Clinical</Tabs.Tab>
                 <Tabs.Tab value="imaging">Imaging</Tabs.Tab>
                 <Tabs.Tab value="system">System</Tabs.Tab>
               </Tabs.List>
@@ -375,11 +380,15 @@ export const MetadataTableExplorer = () => {
               </Tabs.Panel>
 
               <Tabs.Panel value="events" pt="md">
-                {renderTableButtons(['event_types', 'event', 'diseases', 'disease_types', 'subject_diseases', 'subject_disease_types'])}
-              </Tabs.Panel>
-
-              <Tabs.Panel value="clinical" pt="md">
-                {renderTableButtons(['clinical_measure_types', 'numeric_measures', 'text_measures', 'boolean_measures', 'json_measures'])}
+                <Stack gap="md">
+                  {renderTableButtons(['observation_types', 'event', 'diseases', 'disease_types', 'subject_diseases', 'subject_disease_types', 'numeric_measures', 'text_measures', 'boolean_measures', 'json_measures'])}
+                  {selectedTable?.name === 'observation_types' && <ObservationTypeImportTab />}
+                  {selectedTable?.name === 'event' && <EventImportTab />}
+                  {selectedTable?.name === 'diseases' && <DiseaseImportTab />}
+                  {selectedTable?.name === 'disease_types' && <DiseaseTypeImportTab />}
+                  {selectedTable?.name === 'subject_diseases' && <SubjectDiseaseImportTab />}
+                  {selectedTable?.name === 'subject_disease_types' && <SubjectDiseaseTypeImportTab />}
+                </Stack>
               </Tabs.Panel>
 
               <Tabs.Panel value="imaging" pt="md">

@@ -5,6 +5,106 @@ All notable changes to NILS will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.3.0] - 2026-03-20
+
+### Added
+
+- **Classification Engine** — Complete rewrite of MRI sequence classification as a modular, YAML-driven 10-stage pipeline
+  - Six orthogonal detection axes (base contrast, technique, modifier, construct, provenance, acceleration) each backed by its own YAML config and detector class
+  - Semantic text normalizer that tokenizes DICOM descriptions — handles `*` → `star`, vendor-specific abbreviations (`pha` → `phase`, `mag` → `magnitude`), and context-aware replacements (`mt` only maps to magnetization-transfer when not inside "metric")
+  - Branch-based routing: provenance detection runs first and routes multi-output sequences (SWI, SyMRI, EPIMix/NeuroMix, MP2RAGE) into specialized sub-pipelines that override only base contrast and construct — all other axes still run the standard detectors
+  - SWI branch distinguishes 6 output types (QSM, MinIP, MIP, Phase, SWI Processed, Magnitude) using ImageType flags and text keywords with per-type confidence scores
+  - SyMRI branch classifies 16+ outputs across quantitative maps (T1map, T2map, PDmap, Myelin, B1map), synthetic weighted images (SyntheticT1w, SyntheticFLAIR, etc.), and raw source components
+  - EPIMix/NeuroMix branch handles 11 output types with physics-based fallback: uses TI thresholds (T1-FLAIR vs T2-FLAIR), TE ranges (T2*-w vs T2-w), and readout type (EPI vs SSFSE) when text keywords are ambiguous
+  - Technique detector covers 30+ sequences across SE, GRE, EPI, and MIXED physics families — detection via exclusive flags, combination logic (AND of multiple flags), and keyword fallback
+  - Modifier detector with mutual exclusion groups: IR contrasts pick highest priority (FLAIR > STIR > DIR > PSIR > IR), trajectory picks one (Radial > Spiral), independent modifiers always additive (FatSat, WaterExcitation, MT)
+  - Construct detector additively collects derived maps — diffusion (ADC, FA, MD, Trace), perfusion (CBF, CBV, MTT), quantitative (T1map, T2map), SWI (QSM, Phase), projection (MIP, MinIP, MPR), Dixon (Water, Fat, InPhase, OutPhase)
+  - Acceleration detector with bounded regex to avoid false positives — e.g. `\bmb\d` matches "mb2" but not "combat"
+  - Body part detector classifying brain, spine, neck, and brain-neck from DICOM keywords, used for BIDS directory naming (SC_ prefix for spinal cord)
+  - Intent synthesis maps detected axes to BIDS directory types (anat/dwi/func/fmap/perf/misc) using a priority chain: provenance → construct → functional keywords → base+modifier → fallback
+  - 55+ unified boolean flags extracted from DICOM headers, scanner-agnostic
+  - Confidence tracking per axis — stacks below 0.6 are automatically flagged for manual review
+
+- **Sorting Pipeline Rebuild** — Four-step pipeline with independent execution, typed handovers, and real-time progress streaming
+  - Step 1 (Checkup): validates subjects/studies, repairs missing study dates from 4 fallback sources (series_date → acquisition_date → content_date → UID date extraction), filters by modality (MR/CT/PET), supports incremental mode (skip already-classified series)
+  - Step 2 (Stack Fingerprint): single JOIN query loads all stack data, Polars vectorized transforms compute FOV, orientation confidence, text/contrast search blobs, manufacturer normalization; bulk COPY + UPSERT in 50K-row batches — 10-100x faster than v0.2 row-by-row approach
+  - Step 3 (Classification): runs the classification engine on each fingerprint in batches of 1000, bulk upserts results to `series_classification_cache`
+  - Step 4 (Completion): 5-phase post-processing — normalizes field strength (handles Gauss scale, ±tolerance), flags low orientation confidence (<0.85), fills missing 2D/3D acquisition type from scan options/text/technique inference, fills missing base/technique via physics-similarity matching against all previously classified stacks in the database (binned by TR/TE/TI/FA/slice count), re-routes newly-detected SWI through the SWI branch, re-synthesizes intent for stacks stuck in "misc"
+  - Handover mechanism: each step produces a typed dataclass persisted to `nils_dataset_pipeline_step` — stores IDs (not full data) so downstream steps re-query fresh state
+  - Step-wise execution: any step can run independently by loading the previous step's persisted handover, enabling re-runs with different config without starting from scratch
+  - Preview mode: run steps without committing results to database
+  - SSE progress streaming with rolling 100-line log buffer displayed in frontend
+
+- **Quality Control Pipeline** — Full QC review system with draft-based workflow and DICOM viewer
+  - Axes QC Page: image-centric view with Cornerstone.js WebGL rendering, HUD overlays showing acquisition parameters (TE/TR/TI/FA/ImageType) and current classification, keyboard navigation (arrow keys to browse stacks, number keys to select correction options)
+  - QC Viewer Page: three-level hierarchy (subjects → sessions → stacks) with searchable subject list, sessions grouped by study date, stacks grouped by intent with provenance sub-grouping (SyMRI in purple, SWI in green, EPIMix in orange)
+  - Draft-based workflow: changes saved to app_db as drafts, not touching metadata_db until user confirms — discard reverts everything, confirm pushes all drafts atomically and clears manual_review_required flag
+  - Rules engine with 9 configurable rules: TechniqueFamilyMismatch (validates physics family), BrainAspectRatio (flags elongated FOV on brain scans), SpineAspectRatio, LocalizerSliceCount (>20 slices suspicious), ProvenanceMismatch (SWI constructs must have SWI provenance), ContrastUndetermined (T1w without known gadolinium status), BaseMissing
+  - 5 flag severities: missing (red), conflict (orange), low_confidence (yellow), ambiguous (purple), review (gray) — priority scoring determines QC item ordering
+  - Dynamic filtering by axis and flag type, with filters only showing options that have items
+
+- **BIDS Export** — Background job processing with cross-cohort resolution and field strength filtering
+  - Stack naming includes body part prefix (SC_, Neck, BrainNeck), orientation (Ax/Cor/Sag), base contrast, 2D/3D, modifiers, technique, acceleration, constructs, and contrast suffix (_CE)
+  - DWI stacks self-describe: `Ax_DWI_EPI_b1000_AP_32dir` includes b-value, phase encoding direction, and number of gradient directions extracted from vendor-private DICOM tags (Siemens, GE, Philips)
+  - Multi-stack series handling: echo suffixes (_e1, _e2), TI suffixes (_ti1, _ti2), plus collision resolution with numbered suffixes only when names actually collide
+  - Cross-cohort DICOM path resolution: when a subject's files live in a different cohort's dcm-raw folder, the exporter falls back through all known cohort paths
+  - SQL-level field strength filtering (0.5/1.0/1.5/3.0/7.0T) — avoids loading irrelevant stacks from large databases
+  - Provenance filtering with allow-list/block-list: include specific provenances (SyMRI, SWIRecon) or exclude others (ProjectionDerived)
+  - `completed_with_warnings` job status — exports that succeed but had skipped files or NIfTI conversion errors are flagged separately from clean completions
+  - Standalone export system: define a manifest (CSV/JSON) of subject/session/stack selections, resolve to stack IDs, run as a named export job independent of any cohort
+  - `sub-` prefix guard prevents `sub-sub-XXXX` directory names when PatientID already contains the prefix
+  - Process pool uses `spawn` context (not `fork`) to avoid virtual memory exhaustion on systems with strict overcommit
+
+- **Data Import System** — CSV import for 10+ entities with preview/apply pattern
+  - Subjects, cohorts, subject-cohort memberships, subject identifiers (alternative IDs)
+  - Events with observation type registry and imaging session backfill
+  - Diseases, disease types, subject diseases, subject disease types — full longitudinal clinical metadata
+  - Every import has a preview endpoint (dry-run with sample rows + validation errors) and an apply endpoint (commits to database)
+  - Validation: column existence, type coercion, required field enforcement, foreign key checking, duplicate handling policy (skip/update/error)
+
+- **Database Management UI** — Tabbed interface organizing tables by domain (subjects, events, clinical measures, imaging, system)
+  - Identifier type creation with validation
+  - Application and metadata backup/restore with optional user notes
+  - 3-phase parallel restore: schema (sequential) → data (parallel, 4 workers) → indexes/constraints (parallel)
+  - Post-restore migrations automatically apply schema changes from newer versions to older backups
+
+- **Authentication** — Token-based middleware with login page and asset caching
+- **Podman Support** — `--podman` flag in `manage.sh` with `:Z` SELinux labels on all volume mounts
+- **Docker Health Checks** — Startup ordering with health check dependencies to prevent connection errors
+
+### Changed
+
+- **Backend Architecture** — `server.py` refactored from ~2000 lines to ~120 lines
+  - 12+ route modules (cohorts, imports, backups, jobs, qc, export, csv, metadata, database, system, etc.)
+  - `api/schemas` renamed to `api/models`, utility functions extracted to `api/utils/`
+  - GZip middleware added (60-80% response size reduction)
+- **Stack Creation** — Stacks now created during extraction via per-instance signature hashing, eliminating the 30-minute post-extraction UPDATE bottleneck
+  - Signature computed from series UID + modality-specific fields (echo time, inversion time, flip angle, b-value, orientation, image type)
+  - Cache tracks signature → stack_id; new signature triggers immediate stack row creation
+- **Extraction Performance** — Adaptive batch sizing based on execution timing (target: 1000ms/batch), series-level processing with configurable worker pool, comprehensive MRI/CT/PET field mappings
+- **Database** — Date and time columns migrated from text to native PostgreSQL types; new indexes on frequently queried columns; API response caching
+- **Anonymization** — V2 pipeline with compression, audit resume capability, multiprocessing with streaming, leaf event management
+- **Frontend** — Complete redesign with NILS branding, dark-theme-first flat design, Mantine UI components; cohort detail page with pipeline stage stepper and run button loading state; job center with cohort-centric view and progress animations
+- **Observation Types** — Event types and clinical measure types unified into a single observation type taxonomy
+- **SWI/Provenance Reclassification** — SWI reclassified as provenance (not technique), Radial/Spiral reclassified as modifiers (not standalone techniques)
+- **Semantic Token Map** — Expanded to v1.2.0 with vendor-specific mappings for Swedish/Scandinavian protocols (`gd` suffixes, `da-fl` for FLAIR, `direkt`, `syntetisk`)
+
+### Fixed
+
+- **Series time formatting** — `series_time` serialized as ISO string, preventing sorting/export crashes when datetime.time objects were passed raw
+- **Extraction writer crash handling** — Writer task crash now surfaces immediately instead of hanging forever on an undrainable queue
+- **Missing measurement values** — Event import preview handles NULL measurements gracefully
+- **Semantic normalizer** — Correctly tokenizes `+`/`-` characters (contrast notation like `+Gd`) and improves `mp2rage` keyword matching
+- **Diffusion b-values** — Upper bound validation filters garbage data from vendor-private tags
+- **Localizer detection priority** — Scout MPR reformats correctly classified before other detectors claim them
+- **SWI classification** — Robust ImageType-based detection prevents technique override from misclassifying SWI outputs
+- **Bulk classification OOM** — Batched upserts prevent PostgreSQL out-of-memory on large cohorts (450K+ stacks)
+- **Study date format** — Hyphens removed for consistent BIDS session naming (`ses-20250315` not `ses-2025-03-15`)
+- **PostgreSQL cast syntax** — `CAST()` used instead of `::` for migration compatibility
+- **Migration transaction nesting** — Per-index transactions with column validation prevent partial migration failures
+- **Warning handling** — Cohort path resolution no longer raises on non-critical warnings
+- **CHOKIDAR polling** — Enabled in Docker to resolve inotify issues causing phantom file change detection
+
 ## [0.2.1] - 2025-12-29
 
 ### Fixed

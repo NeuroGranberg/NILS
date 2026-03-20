@@ -17,26 +17,44 @@
 
 ## What is NILS?
 
-NILS (Neuroimaging Intelligent Linked System) is a full-stack application designed for research institutions to efficiently manage neuroimaging data. It provides a complete pipeline from raw DICOM ingestion to BIDS-compliant export.
+NILS (Neuroimaging Intelligent Linked System) is a full-stack application designed for research institutions to manage neuroimaging data from raw DICOM ingestion through classification, quality control, and BIDS-compliant export. It also serves as a longitudinal clinical metadata store — linking imaging sessions to diagnoses, clinical events, and study timelines.
 
 ## Core Capabilities
 
 ### Six-Axis Classification System
 
-NILS classifies MRI series using six orthogonal axes:
+NILS classifies MRI series using six orthogonal axes, each backed by a YAML-driven detector with confidence scoring:
 
 | Axis | Description | Examples |
 |------|-------------|----------|
 | **Base** | Contrast weighting | T1w, T2w, PD, DWI, BOLD, SWI |
 | **Technique** | Pulse sequence family | MPRAGE, TSE, FLASH, EPI, GRASE |
 | **Modifier** | Acquisition enhancements | FLAIR, FatSat, MT, IR, PhaseContrast |
-| **Construct** | Derived/map type | ADC, FA, MD, T1Map, T2Map, CBF |
-| **Provenance** | Processing pipeline | SyMRI, SWIRecon, DTIRecon, RawRecon |
-| **Acceleration** | Parallel imaging | GRAPPA, SMS, CAIPIRINHA |
+| **Construct** | Derived/map type | ADC, FA, MD, T1Map, T2Map, CBF, MyelinMap |
+| **Provenance** | Processing pipeline | SyMRI, SWIRecon, DTIRecon, EPIMix |
+| **Acceleration** | Parallel imaging | GRAPPA, SMS, CAIPIRINHA, CompressedSensing |
+
+Specialized branch pipelines handle multi-output acquisitions — provenance detection runs first and routes SWI (6 output types), SyMRI (16+ outputs), EPIMix/NeuroMix (11 outputs), and MP2RAGE into dedicated sub-pipelines.
+
+### 4-Step Sorting Pipeline
+
+| Step | Name | What it does |
+|------|------|-------------|
+| 1 | **Checkup** | Validates subjects/studies, repairs missing dates, filters by modality |
+| 2 | **Stack Fingerprint** | Polars-based feature extraction with orientation computation |
+| 3 | **Classification** | Runs the six-axis detection engine on every stack |
+| 4 | **Completion** | Gap-fills via physics-similarity matching, normalizes field strength, flags for review |
+
+Each step runs independently with typed handovers, enabling re-runs with different config without starting from scratch.
+
+### Quality Control
+
+- Draft-based QC workflow — changes saved as drafts until confirmed
+- Cornerstone.js DICOM viewer with classification HUD overlays
+- Rules engine with 9 configurable rules and 5 flag severities
+- Keyboard-navigable axes review with dynamic filtering
 
 ### Data Hierarchy
-
-NILS organizes imaging data in a 4-level hierarchy:
 
 ```
 Subject (Patient)
@@ -45,7 +63,7 @@ Subject (Patient)
         └── SeriesStack (Homogeneous Instance Group)
 ```
 
-**SeriesStack** is a key concept - it represents a group of instances within a series that share identical acquisition parameters. This handles multi-echo, multi-flip-angle, and other complex acquisitions.
+**SeriesStack** is a key concept — it represents a group of instances within a series that share identical acquisition parameters. This handles multi-echo, multi-flip-angle, and other complex acquisitions.
 
 ## Documentation
 
@@ -60,15 +78,17 @@ Subject (Patient)
 # Clone and start
 git clone https://github.com/NeuroGranberg/NILS.git
 cd NILS
-./scripts/manage.sh start
+./scripts/manage.sh start --data /path/to/dicom
 
 # Access web interface
 open http://localhost:5173
 ```
 
+Podman users: add `--podman` flag. For network access: add `--forward`.
+
 ## Requirements
 
-- Docker & Docker Compose
+- Docker & Docker Compose (or Podman)
 - 4GB RAM minimum (8GB recommended)
 - Modern web browser
 
@@ -80,6 +100,6 @@ MIT License - See [LICENSE](https://github.com/NeuroGranberg/NILS/blob/main/LICE
 
 If you use NILS in your research, please cite:
 
-> Chamyani, N. (2025). NILS - Neuroimaging Intelligent Linked System.
+> Chamyani, N. (2025-2026). NILS - Neuroimaging Intelligent Linked System.
 > Karolinska Institutet, Department of Clinical Neuroscience.
 > [https://github.com/NeuroGranberg/NILS](https://github.com/NeuroGranberg/NILS)

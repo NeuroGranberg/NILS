@@ -87,3 +87,4 @@ resource/db_metadata/*
 
 # Private files (local-only, never pushed to public repo)
 .private/
+temp/

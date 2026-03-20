@@ -21,5 +21,7 @@ export interface BidsStageConfig {
   dcm2niixPath?: string;
   // Subject identifier source: "subject_code" (default) or id_type_id number
   subjectIdentifierSource: string | number;
+  // Field strength filter: empty = all; [3.0, 7.0] = only 3T and 7T
+  includeFieldStrengths: number[];
 }
 

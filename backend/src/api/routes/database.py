@@ -36,13 +36,12 @@ _METADATA_COUNT_TABLES: tuple[tuple[str, str], ...] = (
     ("subject_cohorts", "subject_cohorts"),
     ("id_types", "id_types"),
     ("subject_other_identifiers", "subject_other_identifiers"),
-    ("event_types", "event_types"),
+    ("observation_types", "observation_types"),
     ("events", "event"),
     ("diseases", "diseases"),  # plural
     ("disease_types", "disease_types"),
     ("subject_diseases", "subject_diseases"),  # plural
     ("subject_disease_types", "subject_disease_types"),  # plural
-    ("clinical_measure_types", "clinical_measure_types"),
     ("numeric_measures", "numeric_measures"),  # plural
     ("text_measures", "text_measures"),  # plural
     ("boolean_measures", "boolean_measures"),  # plural

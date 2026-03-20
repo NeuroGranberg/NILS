@@ -35,7 +35,7 @@ import { useMetadataIdTypes, type IdTypeInfo } from './queries';
 import { IconPlayerPause, IconPlayerPlay, IconPlayerStop } from '@tabler/icons-react';
 import { useUpdateJobConfig } from '../jobs/api';
 
-const TERMINAL_JOB_STATUSES: JobStatus[] = ['completed', 'failed', 'canceled'];
+const TERMINAL_JOB_STATUSES: JobStatus[] = ['completed', 'completed_with_warnings', 'failed', 'canceled'];
 
 const ExtractProgressCard = ({
   job,

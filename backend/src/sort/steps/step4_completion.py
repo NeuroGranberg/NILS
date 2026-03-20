@@ -472,12 +472,67 @@ class Step4Completion(BaseStep):
             self.log(f"Phase 4B complete: {metrics.contrast_conflict_count} contrast conflicts detected")
 
             await self.emit_progress(
-                85, f"Detected {metrics.contrast_conflict_count} contrast conflicts",
+                83, f"Detected {metrics.contrast_conflict_count} contrast conflicts",
                 current_action="Phase 4B complete"
             )
 
             # ═══════════════════════════════════════════════════════════
-            # PHASE 5: PERSIST UPDATES (85-95%)
+            # PHASE 4C: INCOMPLETE 4D DATA DETECTION (83-87%)
+            # ═══════════════════════════════════════════════════════════
+            # Detect 4D stacks (DWI, fMRI, perfusion) with missing volumes
+            # This catches interrupted acquisitions or incomplete data transfers
+            self.log("Phase 4C: Checking for incomplete 4D data...")
+            await self.emit_progress(
+                84, "Checking for incomplete 4D data...",
+                current_action="Phase 4C: Data completeness"
+            )
+
+            # Run the detection (database query)
+            incomplete_4d_stacks = self._check_incomplete_4d_data(conn, classified_stack_ids)
+
+            # Update stacks with the new flag
+            for stack_id in incomplete_4d_stacks:
+                new_review_stacks.add(stack_id)
+                s = stacks_by_id.get(stack_id)
+                if s:
+                    existing = s.get("manual_review_reasons_csv") or ""
+                    s["manual_review_reasons_csv"] = add_review_reason(
+                        existing, "data:incomplete_volumes"
+                    )
+
+            metrics.incomplete_data_flagged_count = len(incomplete_4d_stacks)
+            metrics.new_review_reasons["data:incomplete_volumes"] = \
+                metrics.new_review_reasons.get("data:incomplete_volumes", 0) + len(incomplete_4d_stacks)
+            self.log(f"Phase 4C complete: {metrics.incomplete_data_flagged_count} incomplete 4D stacks detected")
+
+            await self.emit_progress(
+                87, f"Detected {metrics.incomplete_data_flagged_count} incomplete 4D stacks",
+                current_action="Phase 4C complete"
+            )
+
+            # ═══════════════════════════════════════════════════════════
+            # PHASE 4D: DWI ENRICHMENT (87-90%)
+            # ═══════════════════════════════════════════════════════════
+            self.log("Phase 4D: Enriching DWI stacks with b-value, PE direction, N-directions...")
+            await self.emit_progress(
+                87, "Enriching DWI stacks...",
+                current_action="Phase 4D: DWI enrichment"
+            )
+
+            dwi_enriched_count = await loop.run_in_executor(
+                None,
+                functools.partial(self._enrich_dwi_stacks, conn, classified_stack_ids)
+            )
+            metrics.dwi_enriched_count = dwi_enriched_count
+            self.log(f"Phase 4D complete: {dwi_enriched_count} DWI stacks enriched")
+
+            await self.emit_progress(
+                90, f"Enriched {dwi_enriched_count} DWI stacks",
+                current_action="Phase 4D complete"
+            )
+
+            # ═══════════════════════════════════════════════════════════
+            # PHASE 5: PERSIST UPDATES (90-95%)
             # ═══════════════════════════════════════════════════════════
             self.log("Phase 5: Persisting updates...")
             await self.emit_progress(
@@ -927,6 +982,118 @@ class Step4Completion(BaseStep):
         ])
 
     # =========================================================================
+    # Phase 4D: DWI Enrichment
+    # =========================================================================
+
+    def _enrich_dwi_stacks(self, conn, stack_ids: list[int]) -> int:
+        """Compute and persist DWI enrichment columns for all DWI stacks.
+
+        Queries all stacks with directory_type='dwi' from the provided stack_ids,
+        fetches per-instance private-tag data and text fields, calls dwi_enrichment
+        helpers, then batch-updates series_classification_cache.
+
+        Returns the number of DWI stacks updated.
+        """
+        from ..dwi_enrichment import aggregate_b_values, derive_pe_direction, count_gradient_directions
+
+        if not stack_ids:
+            return 0
+
+        # --- Fetch DWI stacks with metadata needed for enrichment ---
+        dwi_stacks_result = conn.execute(text("""
+            SELECT
+                scc.series_stack_id,
+                st.manufacturer,
+                s.image_orientation_patient AS iop_string,
+                s.series_description,
+                s.protocol_name,
+                s.series_comments,
+                s.sequence_name,
+                s.scan_options
+            FROM series_classification_cache scc
+            JOIN series_stack ss ON ss.series_stack_id = scc.series_stack_id
+            JOIN series s ON s.series_id = ss.series_id
+            JOIN study st ON st.study_id = s.study_id
+            WHERE scc.series_stack_id = ANY(:ids)
+              AND scc.directory_type = 'dwi'
+        """), {"ids": stack_ids})
+
+        dwi_stacks = [dict(row._mapping) for row in dwi_stacks_result]
+        if not dwi_stacks:
+            return 0
+
+        dwi_stack_ids = [s["series_stack_id"] for s in dwi_stacks]
+
+        # --- Batch-fetch per-instance private tag data for all DWI stacks ---
+        instances_result = conn.execute(text("""
+            SELECT
+                i.series_stack_id,
+                msd.dwi_siemens_b_value,
+                msd.dwi_siemens_directionality,
+                msd.dwi_siemens_pe_dir_positive,
+                msd.dwi_ge_b_value,
+                msd.dwi_ge_n_directions,
+                msd.dwi_philips_b_value,
+                msd.diffusion_b_value,
+                msd.diffusion_gradient_orientation,
+                msd.diffusion_directionality,
+                msd.phase_encoding_direction
+            FROM instance i
+            JOIN mri_series_details msd ON msd.series_id = i.series_id
+            WHERE i.series_stack_id = ANY(:ids)
+        """), {"ids": dwi_stack_ids})
+
+        # Group instance rows by stack_id
+        from collections import defaultdict
+        instances_by_stack: dict[int, list[dict]] = defaultdict(list)
+        for row in instances_result:
+            instances_by_stack[row._mapping["series_stack_id"]].append(dict(row._mapping))
+
+        # --- Compute enrichment per stack and collect UPDATE params ---
+        updates: list[dict] = []
+        for stack in dwi_stacks:
+            stack_id = stack["series_stack_id"]
+            manufacturer = stack.get("manufacturer") or ""
+            iop_string = stack.get("iop_string")
+            text_blobs = [
+                stack.get("series_description") or "",
+                stack.get("protocol_name") or "",
+                stack.get("series_comments") or "",
+                stack.get("sequence_name") or "",
+                stack.get("scan_options") or "",
+            ]
+            instance_rows = instances_by_stack.get(stack_id, [])
+
+            b_value, b_values_csv = aggregate_b_values(instance_rows, manufacturer, text_blobs)
+            pe_direction = derive_pe_direction(instance_rows, iop_string, text_blobs, manufacturer)
+            n_directions = count_gradient_directions(instance_rows, manufacturer, text_blobs)
+
+            updates.append({
+                "stack_id": stack_id,
+                "dwi_b_value": b_value,
+                "dwi_b_values_csv": b_values_csv,
+                "dwi_pe_direction": pe_direction,
+                "dwi_n_directions": n_directions,
+            })
+
+        # --- Batch UPDATE in chunks of 500 ---
+        _BATCH = 500
+        for i in range(0, len(updates), _BATCH):
+            batch = updates[i : i + _BATCH]
+            for params in batch:
+                conn.execute(text("""
+                    UPDATE series_classification_cache
+                    SET dwi_b_value      = :dwi_b_value,
+                        dwi_b_values_csv = :dwi_b_values_csv,
+                        dwi_pe_direction = :dwi_pe_direction,
+                        dwi_n_directions = :dwi_n_directions
+                    WHERE series_stack_id = :stack_id
+                """), params)
+
+        logger.info("Step 4 Phase 4D: enriched %d DWI stacks", len(updates))
+        return len(updates)
+
+    # =========================================================================
     # Phase 5: Persistence
     # =========================================================================
 
@@ -991,3 +1158,80 @@ class Step4Completion(BaseStep):
                 "value": new_value,
             })
         # NOTE: Do NOT commit here - let caller manage transaction
+
+    def _check_incomplete_4d_data(
+        self,
+        conn,
+        stack_ids: list[int],
+    ) -> list[int]:
+        """Detect 4D stacks with incomplete volume data.
+
+        A 4D stack (DWI, fMRI, perfusion) should have the same number of 
+        instances at each slice position. If some slices have fewer instances,
+        the acquisition was likely interrupted or data transfer was incomplete.
+
+        Detection algorithm:
+        1. Only check stacks with directory_type in (dwi, func, perf) - 4D sequences
+        2. Only check stacks with provenance='RawRecon' - derived data has different structure
+        3. Only check stacks with >50 instances - small stacks are likely 3D
+        4. Skip single-slice time series (unique_slices = 1)
+        5. Skip 3D single volumes (unique_slices = stack_n_instances)
+        6. Skip multi-frame DICOM (number_of_frames > 1)
+        7. Flag if MIN(instances_per_slice) != MAX(instances_per_slice)
+
+        Args:
+            conn: Database connection
+            stack_ids: List of stack IDs in scope for this cohort
+
+        Returns:
+            List of stack IDs with incomplete 4D data
+        """
+        if not stack_ids:
+            return []
+
+        # Use a CTE-based query for efficiency
+        # This runs entirely in the database, avoiding Python loops
+        result = conn.execute(text("""
+            WITH stack_metrics AS (
+                -- Get basic metrics for 4D candidate stacks
+                SELECT 
+                    ss.series_stack_id,
+                    ss.stack_n_instances,
+                    COUNT(DISTINCT ROUND(i.slice_location::numeric, 1)) as unique_slices,
+                    MAX(COALESCE(i.number_of_frames, 1)) as max_frames
+                FROM series_stack ss
+                JOIN series_classification_cache scc ON ss.series_stack_id = scc.series_stack_id
+                JOIN instance i ON i.series_stack_id = ss.series_stack_id
+                WHERE ss.series_stack_id = ANY(:stack_ids)
+                  AND scc.provenance = 'RawRecon'
+                  AND scc.directory_type IN ('dwi', 'func', 'perf')
+                  AND ss.stack_n_instances > 50
+                GROUP BY ss.series_stack_id, ss.stack_n_instances
+            ),
+            volume_uniformity AS (
+                -- For each stack, get min/max volume counts per slice
+                SELECT 
+                    sm.series_stack_id,
+                    sm.unique_slices,
+                    sm.max_frames,
+                    sm.stack_n_instances,
+                    MIN(vol_count) as min_vol,
+                    MAX(vol_count) as max_vol
+                FROM stack_metrics sm
+                JOIN LATERAL (
+                    SELECT COUNT(*) as vol_count
+                    FROM instance i
+                    WHERE i.series_stack_id = sm.series_stack_id
+                    GROUP BY ROUND(i.slice_location::numeric, 1)
+                ) vc ON true
+                GROUP BY sm.series_stack_id, sm.unique_slices, sm.max_frames, sm.stack_n_instances
+            )
+            SELECT series_stack_id
+            FROM volume_uniformity
+            WHERE unique_slices > 1                          -- Not single-slice time series
+              AND unique_slices != stack_n_instances         -- Not 3D single-volume
+              AND max_frames <= 1                            -- Not multi-frame DICOM
+              AND min_vol != max_vol                         -- Inconsistent = INCOMPLETE
+        """), {"stack_ids": stack_ids})
+
+        return [row[0] for row in result.fetchall()]

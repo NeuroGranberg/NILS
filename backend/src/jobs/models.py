@@ -20,6 +20,7 @@ class JobStatus(str, enum.Enum):
     RUNNING = "running"
     PAUSED = "paused"
     COMPLETED = "completed"
+    COMPLETED_WITH_WARNINGS = "completed_with_warnings"
     FAILED = "failed"
     CANCELED = "canceled"
 

@@ -1346,6 +1346,10 @@ def _run_bids_stage(cohort, stage_idx: int, merged_config: dict):
             flat_nifti_root_name=merged_config.get('flatNiftiRootName', 'nii-flat'),
             dcm2niix_path=merged_config.get('dcm2niixPath', 'dcm2niix'),
             subject_identifier_source=subject_id_source,
+            # Pass cohort name for SQL-level filtering (critical for performance on large DBs)
+            cohort_name=cohort.name,
+            # Field strength filter (e.g., [3.0, 7.0] for only 3T and 7T)
+            include_field_strengths=merged_config.get('includeFieldStrengths', []),
         )
     except Exception as exc:
         raise HTTPException(status_code=400, detail=f"Invalid config: {exc}")
@@ -1401,17 +1405,35 @@ def _run_bids_stage(cohort, stage_idx: int, merged_config: dict):
         "copied_files": result.copied_files,
         "skipped_files": result.skipped_files,
         "errors": result.errors,
+        "warnings": result.warnings,
+        "skipped_nifti_provenances": result.skipped_nifti_provenances,
+        "nifti_conversion_errors": result.nifti_conversion_errors,
+        "dicom_copy_errors": result.dicom_copy_errors,
     }
     job_service.update_metrics(job.id, metrics)
     job_service.update_progress(job.id, 100)
 
-    if result.errors:
-        err_msg = "; ".join(result.errors)
+    # Determine final job status based on results
+    has_errors = bool(result.errors)
+    has_warnings = bool(result.warnings)
+    exported_something = result.exported_stacks > 0
+
+    if has_errors and not exported_something:
+        # Total failure - nothing was exported
+        err_msg = "All exports failed: " + "; ".join(result.errors[:3])
+        if len(result.errors) > 3:
+            err_msg += f" ... and {len(result.errors) - 3} more"
         job_service.mark_failed(job.id, err_msg)
         fail_pipeline_step(cohort.id, 'bids', error=err_msg)
         raise HTTPException(status_code=500, detail=err_msg)
-
-    job_service.mark_completed(job.id)
-    complete_pipeline_step(cohort.id, 'bids', metrics=metrics)
+    elif has_errors or has_warnings:
+        # Partial success - some exported, some had issues
+        warning_count = len(result.errors) + len(result.warnings)
+        job_service.mark_completed_with_warnings(job.id, warning_count)
+        complete_pipeline_step(cohort.id, 'bids', metrics=metrics)
+    else:
+        # Complete success - everything worked
+        job_service.mark_completed(job.id)
+        complete_pipeline_step(cohort.id, 'bids', metrics=metrics)
 
     return JSONResponse({"job": serialize_job(job_service.get_job(job.id))})

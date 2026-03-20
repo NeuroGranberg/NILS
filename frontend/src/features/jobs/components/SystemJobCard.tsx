@@ -70,7 +70,7 @@ export const SystemJobCard = ({ jobs, defaultExpanded = false }: SystemJobCardPr
     return 'var(--nils-border-subtle)';
   };
 
-  const canDelete = (status: JobStatus) => ['completed', 'failed', 'canceled'].includes(status);
+  const canDelete = (status: JobStatus) => ['completed', 'completed_with_warnings', 'failed', 'canceled'].includes(status);
 
   // Sort jobs by submittedAt descending
   const sortedJobs = [...jobs].sort((a, b) => (a.submittedAt > b.submittedAt ? -1 : 1));

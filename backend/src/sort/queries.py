@@ -361,11 +361,14 @@ def get_cohort_info(conn: Connection, cohort_id: int) -> dict[str, Any] | None:
 # Step 2: Stack Finalization Queries
 # =============================================================================
 
+# NOTE: For Enhanced DICOM (multi-frame), a single instance can contain multiple
+# frames (e.g., SWI with 72 frames in one file). We use SUM(COALESCE(number_of_frames, 1))
+# to correctly count total slices, not just instance count.
 UPDATE_STACK_INSTANCE_COUNTS = """
 UPDATE series_stack ss
-SET stack_n_instances = sub.cnt
+SET stack_n_instances = sub.total_slices
 FROM (
-    SELECT series_stack_id, COUNT(*) as cnt
+    SELECT series_stack_id, SUM(COALESCE(number_of_frames, 1)) as total_slices
     FROM instance
     WHERE series_stack_id IS NOT NULL
     GROUP BY series_stack_id

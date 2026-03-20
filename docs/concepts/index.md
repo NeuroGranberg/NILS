@@ -171,11 +171,26 @@ Links subjects to diseases with:
 - `onset_event_id` - Reference to disease onset event
 - `diagnosis_event_id` - Reference to diagnosis event
 
+### Observation Types
+
+A single lookup table (`observation_types`) defines all types of observations
+that can be recorded for a subject. Each type has a `category`, `name`,
+`value_type`, and optional validation constraints.
+
+Categories include:
+
+- **Clinical Measurement** — EDSS, SDMT, etc. (value stored in measure tables)
+- **Intervention** — Treatment (drug name stored in text_measures)
+- **Assessment** — Diagnosis, Disease Onset (no stored value; the event IS the record)
+- **Imaging** — MRI Scan, CT Scan, PET Scan (linked via study.event_id)
+
+See [Observation Types Refactor](observation-types-refactor.md) for full details.
+
 ### Events
 
-Clinical events with:
+Clinical events recorded on the timeline:
 
-- `event_type` (category + name)
+- `observation_type_id` (references observation_types)
 - `event_date` and `event_time`
 - `notes`
 
@@ -188,7 +203,7 @@ Four measure types based on value type:
 - **BooleanMeasure** - Yes/No values (e.g., relapse occurred)
 - **JsonMeasure** - Complex structured data
 
-Each measure links to a **ClinicalMeasureType** that defines:
+Each measure links to an **ObservationType** that defines:
 
 - Category and name
 - Unit of measurement

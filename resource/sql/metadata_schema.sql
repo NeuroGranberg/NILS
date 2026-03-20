@@ -61,27 +61,34 @@ CREATE TABLE IF NOT EXISTS subject_other_identifiers (
 );
 CREATE INDEX IF NOT EXISTS idx_other_ids_lookup ON subject_other_identifiers(id_type_id, other_identifier);
 
-CREATE TABLE IF NOT EXISTS event_types (
-  event_type_id  INTEGER PRIMARY KEY,
-  event_category TEXT NOT NULL,
-  event_name     TEXT NOT NULL,
-  description    TEXT,
-  created_at     TEXT NOT NULL DEFAULT (datetime('now')),
-  updated_at     TEXT NOT NULL DEFAULT (datetime('now'))
+CREATE TABLE IF NOT EXISTS observation_types (
+  observation_type_id INTEGER PRIMARY KEY,
+  category            TEXT NOT NULL,
+  name                TEXT NOT NULL,
+  description         TEXT,
+  unit                TEXT,
+  value_type          TEXT,
+  min_value           REAL,
+  max_value           REAL,
+  is_active           INTEGER NOT NULL DEFAULT 1 CHECK(is_active IN (0,1)),
+  is_primary          INTEGER NOT NULL DEFAULT 0 CHECK(is_primary IN (0,1)),
+  created_at          TEXT NOT NULL DEFAULT (datetime('now')),
+  updated_at          TEXT NOT NULL DEFAULT (datetime('now'))
 );
 
 CREATE TABLE IF NOT EXISTS event (
-  event_id     INTEGER PRIMARY KEY,
-  subject_id   INTEGER NOT NULL REFERENCES subject(subject_id) ON DELETE CASCADE,
-  event_type_id INTEGER NOT NULL REFERENCES event_types(event_type_id),
-  event_date   TEXT NOT NULL,
-  event_time   TEXT,
-  notes        TEXT,
-  created_at   TEXT NOT NULL DEFAULT (datetime('now')),
-  updated_at   TEXT NOT NULL DEFAULT (datetime('now'))
+  event_id            INTEGER PRIMARY KEY,
+  subject_id          INTEGER NOT NULL REFERENCES subject(subject_id) ON DELETE CASCADE,
+  observation_type_id INTEGER NOT NULL REFERENCES observation_types(observation_type_id),
+  event_date          TEXT NOT NULL,
+  event_time          TEXT,
+  notes               TEXT,
+  created_at          TEXT NOT NULL DEFAULT (datetime('now')),
+  updated_at          TEXT NOT NULL DEFAULT (datetime('now')),
+  UNIQUE(subject_id, observation_type_id, event_date)
 );
 CREATE INDEX IF NOT EXISTS idx_event_subj_date ON event(subject_id, event_date);
-CREATE INDEX IF NOT EXISTS idx_event_type_date ON event(event_type_id, event_date);
+CREATE INDEX IF NOT EXISTS idx_event_type_date ON event(observation_type_id, event_date);
 
 CREATE TABLE IF NOT EXISTS diseases (
   disease_id   INTEGER PRIMARY KEY,
@@ -120,7 +127,7 @@ CREATE TABLE IF NOT EXISTS subject_disease_types (
   subject_disease_type_id INTEGER PRIMARY KEY,
   subject_disease_id      INTEGER NOT NULL REFERENCES subject_diseases(subject_disease_id) ON DELETE CASCADE,
   disease_type_id         INTEGER NOT NULL REFERENCES disease_types(disease_type_id),
-  assignment_date         TEXT NOT NULL,
+  assignment_date         TEXT,
   transition_event_id     INTEGER REFERENCES event(event_id),
   notes                   TEXT,
   is_active               INTEGER NOT NULL DEFAULT 1 CHECK(is_active IN (0,1)),
@@ -130,25 +137,10 @@ CREATE TABLE IF NOT EXISTS subject_disease_types (
 CREATE INDEX IF NOT EXISTS idx_sdt_assign ON subject_disease_types(subject_disease_id, assignment_date);
 CREATE INDEX IF NOT EXISTS idx_sdt_type_active ON subject_disease_types(disease_type_id, is_active);
 
-CREATE TABLE IF NOT EXISTS clinical_measure_types (
-  measure_type_id INTEGER PRIMARY KEY,
-  category_name   TEXT NOT NULL,
-  measure_name    TEXT NOT NULL,
-  description     TEXT,
-  unit            TEXT,
-  value_type      TEXT,
-  min_value       REAL,
-  max_value       REAL,
-  is_active       INTEGER NOT NULL DEFAULT 1 CHECK(is_active IN (0,1)),
-  is_primary      INTEGER NOT NULL DEFAULT 0 CHECK(is_primary IN (0,1)),
-  created_at      TEXT NOT NULL DEFAULT (datetime('now')),
-  updated_at      TEXT NOT NULL DEFAULT (datetime('now'))
-);
-
 CREATE TABLE IF NOT EXISTS numeric_measures (
-  measure_id      INTEGER PRIMARY KEY,
-  subject_id      INTEGER NOT NULL REFERENCES subject(subject_id) ON DELETE CASCADE,
-  measure_type_id INTEGER NOT NULL REFERENCES clinical_measure_types(measure_type_id),
+  measure_id          INTEGER PRIMARY KEY,
+  subject_id          INTEGER NOT NULL REFERENCES subject(subject_id) ON DELETE CASCADE,
+  observation_type_id INTEGER NOT NULL REFERENCES observation_types(observation_type_id),
   numeric_value   REAL NOT NULL,
   unit            TEXT,
   source_system   TEXT,
@@ -158,14 +150,14 @@ CREATE TABLE IF NOT EXISTS numeric_measures (
   created_at      TEXT NOT NULL DEFAULT (datetime('now')),
   updated_at      TEXT NOT NULL DEFAULT (datetime('now'))
 );
-CREATE INDEX IF NOT EXISTS idx_num_meas ON numeric_measures(subject_id, measure_type_id);
+CREATE INDEX IF NOT EXISTS idx_num_meas ON numeric_measures(subject_id, observation_type_id);
 CREATE INDEX IF NOT EXISTS idx_num_meas_event ON numeric_measures(event_id);
 CREATE INDEX IF NOT EXISTS idx_num_meas_value ON numeric_measures(numeric_value);
 
 CREATE TABLE IF NOT EXISTS text_measures (
-  measure_id      INTEGER PRIMARY KEY,
-  subject_id      INTEGER NOT NULL REFERENCES subject(subject_id) ON DELETE CASCADE,
-  measure_type_id INTEGER NOT NULL REFERENCES clinical_measure_types(measure_type_id),
+  measure_id          INTEGER PRIMARY KEY,
+  subject_id          INTEGER NOT NULL REFERENCES subject(subject_id) ON DELETE CASCADE,
+  observation_type_id INTEGER NOT NULL REFERENCES observation_types(observation_type_id),
   text_value      TEXT NOT NULL,
   source_system   TEXT,
   quality_flag    TEXT,
@@ -174,13 +166,13 @@ CREATE TABLE IF NOT EXISTS text_measures (
   created_at      TEXT NOT NULL DEFAULT (datetime('now')),
   updated_at      TEXT NOT NULL DEFAULT (datetime('now'))
 );
-CREATE INDEX IF NOT EXISTS idx_text_meas ON text_measures(subject_id, measure_type_id);
+CREATE INDEX IF NOT EXISTS idx_text_meas ON text_measures(subject_id, observation_type_id);
 CREATE INDEX IF NOT EXISTS idx_text_meas_event ON text_measures(event_id);
 
 CREATE TABLE IF NOT EXISTS boolean_measures (
-  measure_id      INTEGER PRIMARY KEY,
-  subject_id      INTEGER NOT NULL REFERENCES subject(subject_id) ON DELETE CASCADE,
-  measure_type_id INTEGER NOT NULL REFERENCES clinical_measure_types(measure_type_id),
+  measure_id          INTEGER PRIMARY KEY,
+  subject_id          INTEGER NOT NULL REFERENCES subject(subject_id) ON DELETE CASCADE,
+  observation_type_id INTEGER NOT NULL REFERENCES observation_types(observation_type_id),
   boolean_value   INTEGER NOT NULL CHECK(boolean_value IN (0,1)),
   source_system   TEXT,
   quality_flag    TEXT,
@@ -189,14 +181,14 @@ CREATE TABLE IF NOT EXISTS boolean_measures (
   created_at      TEXT NOT NULL DEFAULT (datetime('now')),
   updated_at      TEXT NOT NULL DEFAULT (datetime('now'))
 );
-CREATE INDEX IF NOT EXISTS idx_bool_meas ON boolean_measures(subject_id, measure_type_id);
+CREATE INDEX IF NOT EXISTS idx_bool_meas ON boolean_measures(subject_id, observation_type_id);
 CREATE INDEX IF NOT EXISTS idx_bool_meas_event ON boolean_measures(event_id);
 CREATE INDEX IF NOT EXISTS idx_bool_meas_value ON boolean_measures(boolean_value);
 
 CREATE TABLE IF NOT EXISTS json_measures (
-  measure_id      INTEGER PRIMARY KEY,
-  subject_id      INTEGER NOT NULL REFERENCES subject(subject_id) ON DELETE CASCADE,
-  measure_type_id INTEGER NOT NULL REFERENCES clinical_measure_types(measure_type_id),
+  measure_id          INTEGER PRIMARY KEY,
+  subject_id          INTEGER NOT NULL REFERENCES subject(subject_id) ON DELETE CASCADE,
+  observation_type_id INTEGER NOT NULL REFERENCES observation_types(observation_type_id),
   json_value      TEXT NOT NULL,
   source_system   TEXT,
   quality_flag    TEXT,
@@ -205,7 +197,7 @@ CREATE TABLE IF NOT EXISTS json_measures (
   created_at      TEXT NOT NULL DEFAULT (datetime('now')),
   updated_at      TEXT NOT NULL DEFAULT (datetime('now'))
 );
-CREATE INDEX IF NOT EXISTS idx_json_meas ON json_measures(subject_id, measure_type_id);
+CREATE INDEX IF NOT EXISTS idx_json_meas ON json_measures(subject_id, observation_type_id);
 CREATE INDEX IF NOT EXISTS idx_json_meas_event ON json_measures(event_id);
 
 CREATE TABLE IF NOT EXISTS study (
@@ -221,6 +213,7 @@ CREATE TABLE IF NOT EXISTS study (
   station_name            TEXT,
   institution_name        TEXT,
   subject_id              INTEGER NOT NULL REFERENCES subject(subject_id) ON DELETE CASCADE,
+  event_id                INTEGER REFERENCES event(event_id),
   quality_control         TEXT
 );
 CREATE INDEX IF NOT EXISTS idx_study_subject ON study(subject_id);
@@ -446,6 +439,7 @@ CREATE TABLE IF NOT EXISTS series_classification_cache (
   post_contrast           INTEGER CHECK(post_contrast IN (0,1)),
   localizer               INTEGER CHECK(localizer IN (0,1)),
   spinal_cord             INTEGER CHECK(spinal_cord IN (0,1)),
+  body_part               TEXT,
   study_id                INTEGER REFERENCES study(study_id)   ON DELETE CASCADE,
   subject_id              INTEGER REFERENCES subject(subject_id) ON DELETE CASCADE,
   manual_review_required  INTEGER CHECK(manual_review_required IN (0,1)),

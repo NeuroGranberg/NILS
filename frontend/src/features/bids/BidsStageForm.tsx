@@ -38,6 +38,7 @@ export interface BidsConfig {
   subjectIdentifierSource?: string | number;
   includeIntents?: string[];
   includeProvenance?: string[];
+  includeFieldStrengths?: number[];
 }
 
 interface BidsStageFormProps {
@@ -46,6 +47,7 @@ interface BidsStageFormProps {
   subjectIdentifierOptions: Array<{ value: string; label: string }>;
   intentOptions: Array<{ value: string; label: string }>;
   provenanceOptions: Array<{ value: string; label: string }>;
+  fieldStrengthOptions: Array<{ value: string; label: string }>;
   defaultIntentSelection: string[];
   defaultProvenanceSelection: string[];
   activeBidsJob?: JobSummary;
@@ -60,6 +62,7 @@ export const BidsStageForm = ({
   subjectIdentifierOptions,
   intentOptions,
   provenanceOptions,
+  fieldStrengthOptions,
   defaultIntentSelection,
   defaultProvenanceSelection,
   activeBidsJob,
@@ -292,6 +295,23 @@ export const BidsStageForm = ({
             </FormFieldGroup>
           )}
         </Stack>
+      </SectionCard>
+
+      {/* Field Strength Section */}
+      <SectionCard title="Field Strength" description="Filter by scanner field strength (MR only)">
+        <Checkbox.Group
+          value={(config.includeFieldStrengths ?? []).map(String)}
+          onChange={(values) => onChange('includeFieldStrengths', values.map(Number))}
+        >
+          <Group mt="xs">
+            {fieldStrengthOptions.map((option) => (
+              <Checkbox key={option.value} value={option.value} label={option.label} />
+            ))}
+          </Group>
+        </Checkbox.Group>
+        <Text size="xs" c="dimmed" mt="xs">
+          Leave empty to include all field strengths
+        </Text>
       </SectionCard>
 
       {/* Performance Section */}

@@ -400,5 +400,152 @@ EXTRACT_REQUIRED_KEYWORDS: set[str] = (
     | {m.keyword for m in PET_SERIES_FIELD_MAP.values()}
 )
 
-# Convert keywords to Tag tuple for use with pydicom.dcmread(specific_tags=...)
-EXTRACT_SPECIFIC_TAGS: tuple[Tag, ...] = _keywords_to_tags(EXTRACT_REQUIRED_KEYWORDS)
+# DWI private tag addresses (manufacturer-specific, cannot be fetched by keyword).
+DWI_PRIVATE_TAGS: tuple[Tag, ...] = (
+    Tag(0x0019, 0x100C),  # Siemens B_value
+    Tag(0x0019, 0x100D),  # Siemens DiffusionDirectionality
+    Tag(0x0029, 0x1010),  # Siemens CSA image header (PhaseEncodingDirectionPositive)
+    Tag(0x0043, 0x1039),  # GE b-value array
+    Tag(0x0043, 0x1030),  # GE number of diffusion directions
+    Tag(0x2001, 0x1003),  # Philips DiffusionBValueNumber
+)
+
+# Tag list kept for reference / non-NFS use cases.
+# In the main extract path (process_pool + worker) we do NOT pass specific_tags
+# to pydicom. Benchmarks show that stop_before_pixels=True without specific_tags
+# is ~10% faster on NFS than with a specific_tags filter, because pydicom's
+# native early-exit doesn't need to maintain a "remaining tags" checklist.
+# It also gives us private tags (incl. CSA at 0029,1010) for free with no
+# reliability risk from fixed-size partial reads.
+EXTRACT_SPECIFIC_TAGS: tuple[Tag, ...] = (
+    _keywords_to_tags(EXTRACT_REQUIRED_KEYWORDS) + DWI_PRIVATE_TAGS
+)
+
+
+# ---------------------------------------------------------------------------
+# DWI private-tag getters
+# ---------------------------------------------------------------------------
+# These functions read manufacturer-specific private DICOM tags that cannot
+# be accessed via pydicom keyword attributes. Each returns None on missing /
+# malformed data rather than raising.
+
+def _parse_siemens_csa_pe_dir_positive(dataset: Any) -> int | None:
+    """Parse Siemens CSA SV10 header to extract PhaseEncodingDirectionPositive.
+
+    The CSA header at (0029,1010) is a proprietary binary format. This parser
+    implements the SV10 variant only (magic bytes b'SV10'). Returns 1 (positive),
+    0 (negative), or None if the field is absent or the format is not recognised.
+    """
+    import struct
+
+    csa_tag = Tag(0x0029, 0x1010)
+    elem = dataset.get(csa_tag)
+    if elem is None:
+        return None
+    try:
+        data = bytes(elem.value)
+    except Exception:
+        return None
+    if len(data) < 8 or not data.startswith(b"SV10"):
+        return None
+    try:
+        pos = 8
+        n_tags = struct.unpack_from("<I", data, pos)[0]
+        pos += 8  # skip n_tags (4 bytes) + unused (4 bytes)
+        target = b"PhaseEncodingDirectionPositive"
+        for _ in range(n_tags):
+            if pos + 84 > len(data):
+                break
+            name_bytes = data[pos : pos + 64]
+            # Split at first null byte — Siemens appends frequency-table bytes after the null
+            null_pos = name_bytes.find(b"\x00")
+            name = name_bytes[:null_pos] if null_pos >= 0 else name_bytes
+            pos += 64
+            pos += 12  # skip vm (4), vr (4), syngo_dt (4)
+            n_items = struct.unpack_from("<I", data, pos)[0]
+            pos += 4
+            pos += 4  # unused
+            values: list[str] = []
+            for _ in range(n_items):
+                if pos + 16 > len(data):
+                    break
+                length = struct.unpack_from("<I", data, pos)[0]
+                pos += 4
+                pos += 12  # unused
+                if length > 0:
+                    aligned = (length + 3) & ~3
+                    raw_val = data[pos : pos + length].rstrip(b"\x00").decode("latin-1", errors="replace").strip()
+                    values.append(raw_val)
+                    pos += aligned
+            if name == target and values:
+                try:
+                    return int(values[0])
+                except (ValueError, TypeError):
+                    return None
+    except Exception:
+        return None
+    return None
+
+
+def get_dwi_siemens_b_value(dataset: Any) -> int | None:
+    """Read Siemens private b-value from (0019,100C)."""
+    elem = dataset.get(Tag(0x0019, 0x100C))
+    if elem is None:
+        return None
+    try:
+        return int(str(elem.value).strip())
+    except (ValueError, TypeError):
+        return None
+
+
+def get_dwi_siemens_directionality(dataset: Any) -> str | None:
+    """Read Siemens DiffusionDirectionality from (0019,100D): 'DIRECTIONAL' or 'NONE'."""
+    elem = dataset.get(Tag(0x0019, 0x100D))
+    if elem is None:
+        return None
+    return str(elem.value).strip() or None
+
+
+def get_dwi_siemens_pe_dir_positive(dataset: Any) -> int | None:
+    """Extract PhaseEncodingDirectionPositive from Siemens CSA header (0029,1010)."""
+    return _parse_siemens_csa_pe_dir_positive(dataset)
+
+
+def get_dwi_ge_b_value(dataset: Any) -> int | None:
+    """Read GE private b-value from (0043,1039): a 4-element IS array; first element is b-value."""
+    elem = dataset.get(Tag(0x0043, 0x1039))
+    if elem is None:
+        return None
+    try:
+        val = elem.value
+        first = val[0] if isinstance(val, (list, tuple)) else val
+        return int(str(first).strip())
+    except (ValueError, TypeError, IndexError):
+        return None
+
+
+def get_dwi_ge_n_directions(dataset: Any) -> int | None:
+    """Read GE number of diffusion directions from (0043,1030)."""
+    elem = dataset.get(Tag(0x0043, 0x1030))
+    if elem is None:
+        return None
+    try:
+        return int(elem.value)
+    except (ValueError, TypeError):
+        return None
+
+
+def get_dwi_philips_b_value(dataset: Any) -> float | None:
+    """Read Philips private DiffusionBValueNumber from (2001,1003).
+
+    Filters the Philips sentinel value (~1.7e+38) used for non-DW volumes.
+    """
+    _PHILIPS_SENTINEL = 1e37
+    elem = dataset.get(Tag(0x2001, 0x1003))
+    if elem is None:
+        return None
+    try:
+        v = float(elem.value)
+        return None if v > _PHILIPS_SENTINEL else v
+    except (ValueError, TypeError):
+        return None

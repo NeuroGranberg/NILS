@@ -129,13 +129,19 @@ class SubjectOtherIdentifier(Base):
     )
 
 
-class EventType(Base):
-    __tablename__ = "event_types"
+class ObservationType(Base):
+    __tablename__ = "observation_types"
 
-    event_type_id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
-    event_category: Mapped[str] = mapped_column(Text, nullable=False)
-    event_name: Mapped[str] = mapped_column(Text, nullable=False)
+    observation_type_id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    category: Mapped[str] = mapped_column(Text, nullable=False)
+    name: Mapped[str] = mapped_column(Text, nullable=False)
     description: Mapped[str | None] = mapped_column(Text, nullable=True)
+    unit: Mapped[str | None] = mapped_column(Text, nullable=True)
+    value_type: Mapped[str | None] = mapped_column(Text, nullable=True)
+    min_value: Mapped[float | None] = mapped_column(Float, nullable=True)
+    max_value: Mapped[float | None] = mapped_column(Float, nullable=True)
+    is_active: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
+    is_primary: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     created_at: Mapped[str] = mapped_column(
         Text,
         nullable=False,
@@ -153,10 +159,13 @@ class EventType(Base):
 
 class Event(Base):
     __tablename__ = "event"
+    __table_args__ = (
+        UniqueConstraint("subject_id", "observation_type_id", "event_date", name="uq_event_subject_type_date"),
+    )
 
     event_id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     subject_id: Mapped[int] = mapped_column(Integer, nullable=False)
-    event_type_id: Mapped[int] = mapped_column(Integer, nullable=False)
+    observation_type_id: Mapped[int] = mapped_column(Integer, nullable=False)
     event_date: Mapped[date] = mapped_column(Date, nullable=False)
     event_time: Mapped[time | None] = mapped_column(Time, nullable=True)
     notes: Mapped[str | None] = mapped_column(Text, nullable=True)
@@ -253,38 +262,10 @@ class SubjectDiseaseType(Base):
     subject_disease_type_id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     subject_disease_id: Mapped[int] = mapped_column(Integer, nullable=False)
     disease_type_id: Mapped[int] = mapped_column(Integer, nullable=False)
-    assignment_date: Mapped[date] = mapped_column(Date, nullable=False)
+    assignment_date: Mapped[date | None] = mapped_column(Date, nullable=True)
     transition_event_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
     notes: Mapped[str | None] = mapped_column(Text, nullable=True)
     is_active: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
-    created_at: Mapped[str] = mapped_column(
-        Text,
-        nullable=False,
-        default=_utc_now_iso,
-        server_default=text("CURRENT_TIMESTAMP"),
-    )
-    updated_at: Mapped[str] = mapped_column(
-        Text,
-        nullable=False,
-        default=_utc_now_iso,
-        server_default=text("CURRENT_TIMESTAMP"),
-        server_onupdate=text("CURRENT_TIMESTAMP"),
-    )
-
-
-class ClinicalMeasureType(Base):
-    __tablename__ = "clinical_measure_types"
-
-    measure_type_id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
-    category_name: Mapped[str] = mapped_column(Text, nullable=False)
-    measure_name: Mapped[str] = mapped_column(Text, nullable=False)
-    description: Mapped[str | None] = mapped_column(Text, nullable=True)
-    unit: Mapped[str | None] = mapped_column(Text, nullable=True)
-    value_type: Mapped[str | None] = mapped_column(Text, nullable=True)
-    min_value: Mapped[float | None] = mapped_column(Float, nullable=True)
-    max_value: Mapped[float | None] = mapped_column(Float, nullable=True)
-    is_active: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
-    is_primary: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     created_at: Mapped[str] = mapped_column(
         Text,
         nullable=False,
@@ -305,7 +286,7 @@ class NumericMeasure(Base):
 
     measure_id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     subject_id: Mapped[int] = mapped_column(Integer, nullable=False)
-    measure_type_id: Mapped[int] = mapped_column(Integer, nullable=False)
+    observation_type_id: Mapped[int] = mapped_column(Integer, nullable=False)
     numeric_value: Mapped[float] = mapped_column(Float, nullable=False)
     unit: Mapped[str | None] = mapped_column(Text, nullable=True)
     source_system: Mapped[str | None] = mapped_column(Text, nullable=True)
@@ -332,7 +313,7 @@ class TextMeasure(Base):
 
     measure_id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     subject_id: Mapped[int] = mapped_column(Integer, nullable=False)
-    measure_type_id: Mapped[int] = mapped_column(Integer, nullable=False)
+    observation_type_id: Mapped[int] = mapped_column(Integer, nullable=False)
     text_value: Mapped[str] = mapped_column(Text, nullable=False)
     source_system: Mapped[str | None] = mapped_column(Text, nullable=True)
     quality_flag: Mapped[str | None] = mapped_column(Text, nullable=True)
@@ -358,7 +339,7 @@ class BooleanMeasure(Base):
 
     measure_id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     subject_id: Mapped[int] = mapped_column(Integer, nullable=False)
-    measure_type_id: Mapped[int] = mapped_column(Integer, nullable=False)
+    observation_type_id: Mapped[int] = mapped_column(Integer, nullable=False)
     boolean_value: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     source_system: Mapped[str | None] = mapped_column(Text, nullable=True)
     quality_flag: Mapped[str | None] = mapped_column(Text, nullable=True)
@@ -384,7 +365,7 @@ class JsonMeasure(Base):
 
     measure_id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     subject_id: Mapped[int] = mapped_column(Integer, nullable=False)
-    measure_type_id: Mapped[int] = mapped_column(Integer, nullable=False)
+    observation_type_id: Mapped[int] = mapped_column(Integer, nullable=False)
     json_value: Mapped[str] = mapped_column(Text, nullable=False)
     source_system: Mapped[str | None] = mapped_column(Text, nullable=True)
     quality_flag: Mapped[str | None] = mapped_column(Text, nullable=True)
@@ -421,6 +402,7 @@ class Study(Base):
     subject_id: Mapped[int] = mapped_column(
         Integer, ForeignKey("subject.subject_id", ondelete="CASCADE"), nullable=False
     )
+    event_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
     quality_control: Mapped[str | None] = mapped_column(Text, nullable=True)
 
 
@@ -508,6 +490,13 @@ class MRISeriesDetails(Base):
     diffusion_directionality: Mapped[str | None] = mapped_column(Text, nullable=True)
     parallel_acquisition_technique: Mapped[str | None] = mapped_column(Text, nullable=True)
     parallel_reduction_factor_in_plane: Mapped[str | None] = mapped_column(Text, nullable=True)
+    # DWI private tag raw values (manufacturer-specific, populated during extraction)
+    dwi_siemens_b_value: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    dwi_siemens_directionality: Mapped[str | None] = mapped_column(Text, nullable=True)
+    dwi_siemens_pe_dir_positive: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    dwi_ge_b_value: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    dwi_ge_n_directions: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    dwi_philips_b_value: Mapped[float | None] = mapped_column(Float, nullable=True)
 
 
 class CTSeriesDetails(Base):
@@ -818,10 +807,16 @@ class SeriesClassificationCache(Base):
     post_contrast: Mapped[int | None] = mapped_column(Integer, nullable=True)
     localizer: Mapped[int | None] = mapped_column(Integer, nullable=True)
     spinal_cord: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    body_part: Mapped[str | None] = mapped_column(Text, nullable=True)
     study_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
     subject_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
     manual_review_required: Mapped[int | None] = mapped_column(Integer, nullable=True)
     manual_review_reasons_csv: Mapped[str | None] = mapped_column(Text, nullable=True)
+    # DWI enrichment — computed per-stack during Sort Step 4
+    dwi_b_value: Mapped[float | None] = mapped_column(Float, nullable=True)
+    dwi_b_values_csv: Mapped[str | None] = mapped_column(Text, nullable=True)
+    dwi_pe_direction: Mapped[str | None] = mapped_column(Text, nullable=True)
+    dwi_n_directions: Mapped[int | None] = mapped_column(Integer, nullable=True)
 
 
 class IngestConflict(Base):

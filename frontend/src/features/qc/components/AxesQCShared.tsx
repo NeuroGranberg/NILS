@@ -253,8 +253,14 @@ export const ClassificationHUD = ({
         {intent.post_contrast === 1 && (
           <Badge size="sm" color="red" variant="light">Gd+</Badge>
         )}
-        {intent.spinal_cord === 1 && (
-          <Badge size="sm" color="orange" variant="light">Spinal</Badge>
+        {(intent.body_part === 'spine' || (!intent.body_part && intent.spinal_cord === 1)) && (
+          <Badge size="sm" color="teal" variant="light">Spine</Badge>
+        )}
+        {intent.body_part === 'neck' && (
+          <Badge size="sm" color="cyan" variant="light">Neck</Badge>
+        )}
+        {intent.body_part === 'brain-neck' && (
+          <Badge size="sm" color="indigo" variant="light">Brain+Neck</Badge>
         )}
       </Group>
       <Text 

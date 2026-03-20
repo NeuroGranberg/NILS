@@ -5,6 +5,8 @@ import { JobsPage } from '../../features/jobs/pages/JobsPage';
 import { DatabaseManagementPage } from '../../features/database/pages/DatabaseManagementPage';
 import { SettingsPage } from '../../features/settings/pages/SettingsPage';
 import { QCPipelinePage } from '../../features/qc/pages/QCPipelinePage';
+import { ExportPage } from '../../features/export/pages/ExportPage';
+import { ExportDetailPage } from '../../features/export/pages/ExportDetailPage';
 import { NotFoundPage } from '../../features/shared/pages/NotFoundPage';
 import { AppLayout } from '../layout/AppLayout';
 
@@ -18,6 +20,8 @@ export const AppRoutes = () =>
         { path: 'cohorts/:cohortId', element: <CohortDetailPage /> },
         { path: 'jobs', element: <JobsPage /> },
         { path: 'qc', element: <QCPipelinePage /> },
+        { path: 'export', element: <ExportPage /> },
+        { path: 'export/:jobId', element: <ExportDetailPage /> },
         { path: 'database', element: <DatabaseManagementPage /> },
         { path: 'settings', element: <SettingsPage /> },
         { path: '*', element: <NotFoundPage /> },

@@ -9,7 +9,7 @@ services:
     ports:
       - "${BIND_ADDRESS:-127.0.0.1}:${DB_PORT:-5432}:5432"
     volumes:
-      - ${DB_DATA_DIR:-./resource/db}:/var/lib/postgresql/data
+      - ${DB_DATA_DIR:-./resource/db}:/var/lib/postgresql/data:Z
 
   backend:
     build:
@@ -23,13 +23,13 @@ services:
       - db
       - metadata-db
     volumes:
-      - ./backend/src:/app/src
-      - ./backend/pyproject.toml:/app/pyproject.toml
-      - ./backend/tests:/app/tests
-      - ./resource/backups:/app/resource/backups
-      - ./resource/cache:/app/resource/cache
+      - ./backend/src:/app/src:Z
+      - ./backend/pyproject.toml:/app/pyproject.toml:Z
+      - ./backend/tests:/app/tests:Z
+      - ./resource/backups:/app/resource/backups:Z
+      - ./resource/cache:/app/resource/cache:Z
     ports:
-      - "${BIND_ADDRESS:-127.0.0.1}:8000:8000"
+      - "${BIND_ADDRESS:-127.0.0.1}:${BACKEND_PORT:-8000}:8000"
     healthcheck:
       test: ["CMD", "wget", "-q", "-O", "-", "http://localhost:8000/api/jobs"]
       interval: 5s
@@ -75,7 +75,7 @@ services:
     ports:
       - "${BIND_ADDRESS:-127.0.0.1}:${METADATA_DB_PORT:-5532}:5432"
     volumes:
-      - ${METADATA_DB_DATA_DIR:-./resource/db_metadata}:/var/lib/postgresql/data
+      - ${METADATA_DB_DATA_DIR:-./resource/db_metadata}:/var/lib/postgresql/data:Z
     deploy:
       resources:
         limits:
@@ -89,7 +89,7 @@ services:
     ports:
       - "${BIND_ADDRESS:-127.0.0.1}:${FRONTEND_PORT:-5173}:5173"
     environment:
-      VITE_API_URL: http://localhost:8000
+      VITE_API_URL: http://localhost:${BACKEND_PORT:-8000}
       VITE_DATA_ROOT: ${FRONTEND_DATA_ROOT:-/data}
       VITE_USE_REAL_FILES: ${VITE_USE_REAL_FILES:-false}
       # STABILITY FIX: Use polling mode to avoid inotify issues with Docker bind mounts
@@ -98,7 +98,7 @@ services:
       NODE_OPTIONS: "--max-old-space-size=1536"
       APP_ACCESS_TOKEN: ${APP_ACCESS_TOKEN:-}
     volumes:
-      - ./frontend:/app
+      - ./frontend:/app:Z
       - /app/node_modules
     # NOTE: No depends_on backend - frontend can start independently and will
     # gracefully handle backend unavailability. This prevents frontend restarts

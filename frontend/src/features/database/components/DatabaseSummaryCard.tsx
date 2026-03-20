@@ -43,7 +43,7 @@ const TABLE_CONFIG: Record<string, { icon: React.ElementType; color: string; lab
   subject_other_identifiers: { icon: IconId, color: 'violet', label: 'Other IDs' },
   
   // Metadata DB - Events & Diseases
-  event_types: { icon: IconTag, color: 'orange', label: 'Event Types' },
+  observation_types: { icon: IconTag, color: 'orange', label: 'Observation Types' },
   events: { icon: IconCalendar, color: 'yellow', label: 'Events' },
   diseases: { icon: IconHeart, color: 'red', label: 'Diseases' },
   disease_types: { icon: IconNotes, color: 'pink', label: 'Disease Types' },
@@ -51,7 +51,6 @@ const TABLE_CONFIG: Record<string, { icon: React.ElementType; color: string; lab
   subject_disease_types: { icon: IconNotes, color: 'grape', label: 'Subject Disease Types' },
   
   // Metadata DB - Clinical Measures
-  clinical_measure_types: { icon: IconTag, color: 'teal', label: 'Measure Types' },
   numeric_measures: { icon: IconHash, color: 'green', label: 'Numeric Measures' },
   text_measures: { icon: IconFileText, color: 'lime', label: 'Text Measures' },
   boolean_measures: { icon: IconCheck, color: 'cyan', label: 'Boolean Measures' },

@@ -140,6 +140,33 @@ class JobService:
             config=job.config if job else None,
         )
 
+    def mark_completed_with_warnings(self, job_id: int, warning_count: int = 0) -> None:
+        """Mark job as completed with warnings (partial success).
+        
+        Use this when a job exported some data successfully but had non-critical
+        issues like NIfTI conversion failures or data quality warnings.
+        
+        Args:
+            job_id: The job ID
+            warning_count: Number of warnings/issues encountered
+        """
+        self._ensure_initialized()
+        with session_scope() as session:
+            repository.update_job_status(session, job_id, JobStatus.COMPLETED_WITH_WARNINGS)
+            repository.update_job_progress(session, job_id, 100)
+            job = repository.get_job(session, job_id)
+        self._reset_progress_log(job_id)
+        _log_job_event(
+            "completed_with_warnings",
+            job_id,
+            stage=job.stage if job else None,
+            status=JobStatus.COMPLETED_WITH_WARNINGS.value,
+            progress=100,
+            config=job.config if job else None,
+            extra={"warning_count": warning_count},
+            level=logging.WARNING,
+        )
+
     def mark_failed(self, job_id: int, error: str) -> None:
         self._ensure_initialized()
         with session_scope() as session:

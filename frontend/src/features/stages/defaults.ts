@@ -29,5 +29,6 @@ export const buildNonAnonymizeStageDefaults = (): NonAnonymizeStageConfigDefault
     flatDcmRootName: 'flat-dcm',
     flatNiftiRootName: 'flat-nifti',
     subjectIdentifierSource: 'subject_code',
+    includeFieldStrengths: [],
   },
 });

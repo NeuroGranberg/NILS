@@ -19,6 +19,7 @@ import {
   IconDatabase,
   IconActivity,
   IconShieldCheck,
+  IconFileExport,
 } from '@tabler/icons-react';
 import { useMemo } from 'react';
 import { Link, Outlet, useLocation } from 'react-router-dom';
@@ -27,6 +28,7 @@ import { useJobsQuery } from '../../features/jobs/api';
 const navigationItems = [
   { label: 'Cohorts', icon: IconStack2, to: '/cohorts', description: 'Manage datasets' },
   { label: 'QC Pipeline', icon: IconShieldCheck, to: '/qc', description: 'Quality control' },
+  { label: 'Export', icon: IconFileExport, to: '/export', description: 'Subset export' },
   { label: 'Database', icon: IconDatabase, to: '/database', description: 'Data management' },
 ];
 

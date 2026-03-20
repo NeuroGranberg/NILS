@@ -338,7 +338,12 @@ class DicomService:
     def get_series_instance_ids(
         self, series_uid: str, stack_index: int = 0
     ) -> list[int]:
-        """Get list of instance IDs for a specific stack within a series, ordered by slice location."""
+        """Get list of instance IDs for a specific stack within a series, ordered by slice location.
+        
+        Note: For classic DICOM, returns one ID per slice.
+        For multi-frame Enhanced DICOM, returns one ID for all frames in that instance.
+        Use get_series_frame_list() for frame-aware navigation.
+        """
         with MetadataSessionLocal() as meta_db:
             # Join with series_stack to filter by stack_index
             query = """
@@ -356,6 +361,46 @@ class DicomService:
                 {"series_uid": series_uid, "stack_index": stack_index}
             )
             return [row.instance_id for row in result.fetchall()]
+
+    def get_series_frame_list(
+        self, series_uid: str, stack_index: int = 0
+    ) -> list[dict]:
+        """Get list of frames for a series, expanding multi-frame Enhanced DICOM.
+        
+        For classic DICOM (1 slice per file): returns [{"instance_id": X, "frame": 0}, ...]
+        For Enhanced DICOM (N frames per file): expands to N entries with frame indices
+        
+        This enables proper slice navigation for both classic and multi-frame DICOM.
+        """
+        with MetadataSessionLocal() as meta_db:
+            # Get instances with their frame counts
+            query = """
+                SELECT i.instance_id, COALESCE(i.number_of_frames, 1) as num_frames
+                FROM instance i
+                JOIN series_stack ss ON i.series_stack_id = ss.series_stack_id
+                WHERE i.series_instance_uid = :series_uid
+                  AND ss.stack_index = :stack_index
+                ORDER BY
+                    COALESCE(i.slice_location, i.instance_number, 0) ASC,
+                    i.instance_number ASC
+            """
+            result = meta_db.execute(
+                text(query),
+                {"series_uid": series_uid, "stack_index": stack_index}
+            )
+            
+            # Expand frames: for each instance, create entries for each frame
+            frames = []
+            for row in result.fetchall():
+                instance_id = row.instance_id
+                num_frames = row.num_frames
+                for frame_idx in range(num_frames):
+                    frames.append({
+                        "instance_id": instance_id,
+                        "frame": frame_idx
+                    })
+            
+            return frames
 
     def get_middle_instance_id(self, series_uid: str, stack_index: int = 0) -> Optional[int]:
         """Get the middle instance ID for thumbnail generation."""

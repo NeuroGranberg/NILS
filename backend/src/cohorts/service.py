@@ -137,6 +137,14 @@ class CohortService:
                 pass
             return dto
 
+    def get_cohort_by_name(self, name: str) -> Optional[CohortDTO]:
+        self._ensure_initialized()
+        with session_scope() as session:
+            cohort = repository.get_cohort_by_name(session, name)
+            if not cohort:
+                return None
+            return CohortDTO.model_validate(cohort)
+
     def list_cohorts(self) -> list[CohortDTO]:
         self._ensure_initialized()
         with session_scope() as session:

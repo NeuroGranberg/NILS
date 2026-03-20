@@ -52,11 +52,12 @@ export interface StageSummary<Id extends StageId = StageId> {
   config?: StageConfigById[Id];
 }
 
-export const STAGE_LABELS: Record<StageId, string> = {
+export const STAGE_LABELS: Record<string, string> = {
   anonymize: 'Anonymization',
   extract: 'Metadata Extraction',
   sort: 'Sorting',
   bids: 'BIDS Export',
+  subset_export: 'Subset Export',
 };
 
 export const STAGE_ORDER: StageId[] = [

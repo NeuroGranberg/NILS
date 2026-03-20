@@ -93,6 +93,16 @@ def list_jobs():
     return JSONResponse(_serialize_jobs(jobs, get_cohort_metrics))
 
 
+@router.get("/{job_id}")
+def get_job(job_id: int):
+    """Get a single job by ID."""
+    job = job_service.get_job(job_id)
+    if not job:
+        raise HTTPException(status_code=404, detail="Job not found")
+    from metadata_db.metrics import get_cohort_metrics
+    return JSONResponse(_serialize_job(job, get_cohort_metrics))
+
+
 @router.post("/{job_id}/{action}")
 def job_action(job_id: int, action: str):
     """Perform an action on a job (pause/resume/cancel/retry)."""

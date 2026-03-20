@@ -9,30 +9,35 @@ import { IconFolderOff } from '@tabler/icons-react';
 import { useMemo } from 'react';
 import { useJobsQuery } from '../api';
 import { useCohortsQuery } from '../../cohorts/api';
-import { CohortJobCard, SystemJobCard } from '../components';
+import { CohortJobCard, ExportJobCard, SystemJobCard } from '../components';
 import type { Cohort, Job } from '../../../types';
 
-// System job stages (not associated with cohorts)
 const SYSTEM_STAGES = ['restore', 'backup'];
+const EXPORT_STAGES = ['subset_export'];
 
 /**
- * Separate jobs into cohort jobs and system jobs.
+ * Separate jobs into cohort jobs, system jobs, and export jobs.
  */
-const separateJobs = (jobs: Job[] | undefined): { cohortJobs: Job[]; systemJobs: Job[] } => {
-  if (!jobs) return { cohortJobs: [], systemJobs: [] };
+const separateJobs = (
+  jobs: Job[] | undefined,
+): { cohortJobs: Job[]; systemJobs: Job[]; exportJobs: Job[] } => {
+  if (!jobs) return { cohortJobs: [], systemJobs: [], exportJobs: [] };
 
   const cohortJobs: Job[] = [];
   const systemJobs: Job[] = [];
+  const exportJobs: Job[] = [];
 
   jobs.forEach((job) => {
     if (SYSTEM_STAGES.includes(job.stageId)) {
       systemJobs.push(job);
+    } else if (EXPORT_STAGES.includes(job.stageId)) {
+      exportJobs.push(job);
     } else {
       cohortJobs.push(job);
     }
   });
 
-  return { cohortJobs, systemJobs };
+  return { cohortJobs, systemJobs, exportJobs };
 };
 
 /**
@@ -106,8 +111,8 @@ export const JobsPage = () => {
 
   const isLoading = jobsLoading || cohortsLoading;
 
-  // Separate system jobs from cohort jobs
-  const { cohortJobs, systemJobs } = useMemo(() => separateJobs(jobs), [jobs]);
+  // Separate into three groups
+  const { cohortJobs, systemJobs, exportJobs } = useMemo(() => separateJobs(jobs), [jobs]);
 
   // Group cohort jobs by cohort ID
   const jobsByCohort = useMemo(() => groupJobsByCohort(cohortJobs), [cohortJobs]);
@@ -124,10 +129,14 @@ export const JobsPage = () => {
     [jobs]
   );
 
-  // Check if there are active system jobs
   const hasActiveSystemJob = useMemo(
     () => systemJobs.some((j) => ['running', 'queued', 'paused'].includes(j.status)),
     [systemJobs]
+  );
+
+  const hasActiveExportJob = useMemo(
+    () => exportJobs.some((j) => ['running', 'queued', 'paused'].includes(j.status)),
+    [exportJobs]
   );
 
   return (
@@ -163,7 +172,7 @@ export const JobsPage = () => {
         </Box>
       )}
 
-      {/* System Jobs Card (backup/restore) - shown at top if there are system jobs */}
+      {/* System Jobs Card (backup/restore) */}
       {!isLoading && systemJobs.length > 0 && (
         <SystemJobCard
           jobs={systemJobs}
@@ -171,8 +180,16 @@ export const JobsPage = () => {
         />
       )}
 
+      {/* Subset Export Jobs Card */}
+      {!isLoading && exportJobs.length > 0 && (
+        <ExportJobCard
+          jobs={exportJobs}
+          defaultExpanded={hasActiveExportJob || exportJobs.length <= 3}
+        />
+      )}
+
       {/* Empty State - No cohorts */}
-      {!isLoading && sortedCohorts.length === 0 && systemJobs.length === 0 && (
+      {!isLoading && sortedCohorts.length === 0 && systemJobs.length === 0 && exportJobs.length === 0 && (
         <Box
           py="xl"
           style={{

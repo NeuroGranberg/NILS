@@ -8,6 +8,7 @@ import { formatDateTime } from '../../../utils/formatters';
 interface StageCardProps {
   stage: StageSummary;
   disabled?: boolean;
+  loading?: boolean;
   onRun?: () => void;
   onRetry?: () => void;
   onPause?: () => void;
@@ -19,6 +20,7 @@ interface StageCardProps {
 export const StageCard = ({
   stage,
   disabled,
+  loading,
   onRun,
   onRetry,
   onPause,
@@ -141,6 +143,7 @@ export const StageCard = ({
                 size="xs"
                 leftSection={<IconPlayerPlay size={14} />}
                 onClick={onRun}
+                loading={loading}
                 disabled={disabled || stage.status === 'running' || isBlocked}
                 style={{
                   backgroundColor: disabled || stage.status === 'running' || isBlocked

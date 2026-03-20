@@ -72,6 +72,7 @@ provenances:
         - "syntetisk"
         - "synthetic"
         - "synt"
+        - "qrapmaster"
       
       # Combination: ALL must be true (AND logic)
       combination:

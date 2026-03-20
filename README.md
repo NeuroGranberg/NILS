@@ -21,7 +21,7 @@
     <img src="https://img.shields.io/badge/License-MIT-yellow.svg" alt="License: MIT">
   </a>
   <a href="CHANGELOG.md">
-    <img src="https://img.shields.io/badge/version-0.1.0-green.svg" alt="Version">
+    <img src="https://img.shields.io/badge/version-0.3.0-green.svg" alt="Version">
   </a>
 </p>
 
@@ -31,23 +31,32 @@
 
 ### Six-Axis Classification System
 
-NILS classifies MRI series using six orthogonal axes:
+NILS classifies MRI series using six orthogonal axes, each backed by its own YAML-driven detector:
 
 | Axis | Description | Examples |
 |------|-------------|----------|
 | **Base** | Contrast weighting | T1w, T2w, PD, DWI, BOLD, SWI |
-| **Technique** | Pulse sequence family | MPRAGE, TSE, FLASH, EPI |
-| **Modifier** | Acquisition enhancements | FLAIR, FatSat, MT, IR |
-| **Construct** | Derived/map type | ADC, FA, T1Map, QSM |
-| **Provenance** | Processing pipeline | SyMRI, SWIRecon, DTIRecon |
-| **Acceleration** | Parallel imaging | GRAPPA, SMS, CAIPIRINHA |
+| **Technique** | Pulse sequence family | MPRAGE, TSE, FLASH, EPI, GRASE |
+| **Modifier** | Acquisition enhancements | FLAIR, FatSat, MT, IR, PhaseContrast |
+| **Construct** | Derived/map type | ADC, FA, T1Map, QSM, CBF, MyelinMap |
+| **Provenance** | Processing pipeline | SyMRI, SWIRecon, DTIRecon, EPIMix |
+| **Acceleration** | Parallel imaging | GRAPPA, SMS, CAIPIRINHA, CompressedSensing |
+
+Specialized branch pipelines handle multi-output acquisitions (SWI, SyMRI, EPIMix/NeuroMix, MP2RAGE) — provenance detection runs first and routes to the correct branch.
 
 ### Complete Pipeline
 
-- **Extraction** - Import DICOM metadata into database
-- **Sorting** - Classify all series with 4-step pipeline
-- **Anonymization** - De-identify with multiple ID strategies
-- **Export** - Generate BIDS-compliant output
+- **Extraction** — Import DICOM metadata with adaptive batching and per-instance stack creation
+- **Sorting** — 4-step pipeline: Checkup → Stack Fingerprint → Classification → Completion
+- **QC Review** — Draft-based quality control with Cornerstone.js DICOM viewer and rules engine
+- **Anonymization** — De-identify with configurable ID strategies and compression
+- **BIDS Export** — Self-describing filenames, cross-cohort resolution, field strength filtering
+
+### Clinical Data Management
+
+- CSV import for subjects, events, diseases, observation types, and identifiers
+- Longitudinal tracking: link imaging sessions to diagnoses and clinical timelines
+- Preview/validate before applying any import
 
 ---
 
@@ -102,6 +111,7 @@ Full documentation available at: **[neurogranberg.github.io/NILS](https://neurog
 | `--forward` | Expose ports externally (default: localhost only) |
 | `--clean` | Remove containers and volumes before starting |
 | `--db-dir PATH` | Override database storage directory |
+| `--podman` | Use Podman instead of Docker (adds `:Z` SELinux labels) |
 
 ### Examples
 
@@ -151,18 +161,19 @@ Environment variables in `.env`:
 ## Architecture
 
 ```
-┌─────────────────────────────────────────────────────┐
-│                 Docker Network                       │
-│  ┌──────────┐  ┌──────────┐  ┌──────────────────┐  │
-│  │    db    │  │ metadata │  │     backend      │  │
-│  │ postgres │  │    db    │  │   FastAPI API    │  │
-│  └──────────┘  └──────────┘  └──────────────────┘  │
-│                                       ▲             │
-│                              ┌────────┴─────────┐  │
-│                              │     frontend     │  │
-│                              │   Vite + React   │  │
-│                              └──────────────────┘  │
-└─────────────────────────────────────────────────────┘
+┌───────────────────────────────────────────────────────┐
+│                   Docker Network                       │
+│  ┌──────────┐  ┌───────────┐  ┌───────────────────┐  │
+│  │    db    │  │ metadata  │  │     backend       │  │
+│  │ postgres │  │    db     │  │  FastAPI + Async  │  │
+│  └──────────┘  └───────────┘  └───────────────────┘  │
+│       │              │                ▲               │
+│       │              │       ┌────────┴────────┐     │
+│       └──────────────┘       │    frontend     │     │
+│     Dual Database System     │  Vite + React   │     │
+│  (app state + DICOM metadata)│  + Cornerstone  │     │
+│                              └─────────────────┘     │
+└───────────────────────────────────────────────────────┘
 ```
 
 ---
@@ -189,7 +200,7 @@ MIT License - see [LICENSE](LICENSE) file.
 
 If you use NILS in your research, please cite:
 
-> Chamyani, N. (2025). NILS - Neuroimaging Intelligent Linked System.
+> Chamyani, N. (2025-2026). NILS - Neuroimaging Intelligent Linked System.
 > Karolinska Institutet, Department of Clinical Neuroscience.
 > https://github.com/NeuroGranberg/NILS
 

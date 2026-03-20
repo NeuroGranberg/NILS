@@ -340,14 +340,14 @@ class Step3Classification(BaseStep):
             subject_id, study_id, dicom_origin_cohort,
             directory_type, base, technique, modifier_csv, construct_csv,
             provenance, acceleration_csv, post_contrast, localizer,
-            spinal_cord, manual_review_required, manual_review_reasons_csv,
+            spinal_cord, body_part, manual_review_required, manual_review_reasons_csv,
             fov_x_mm, fov_y_mm, slices_count, orientation_patient, echo_number
         ) VALUES (
             :series_stack_id, :series_id, :series_instance_uid,
             :subject_id, :study_id, :dicom_origin_cohort,
             :directory_type, :base, :technique, :modifier_csv, :construct_csv,
             :provenance, :acceleration_csv, :post_contrast, :localizer,
-            :spinal_cord, :manual_review_required, :manual_review_reasons_csv,
+            :spinal_cord, :body_part, :manual_review_required, :manual_review_reasons_csv,
             :fov_x_mm, :fov_y_mm, :slices_count, :orientation_patient, :echo_number
         )
         ON CONFLICT (series_stack_id) DO UPDATE SET
@@ -366,6 +366,7 @@ class Step3Classification(BaseStep):
             post_contrast = EXCLUDED.post_contrast,
             localizer = EXCLUDED.localizer,
             spinal_cord = EXCLUDED.spinal_cord,
+            body_part = EXCLUDED.body_part,
             manual_review_required = EXCLUDED.manual_review_required,
             manual_review_reasons_csv = EXCLUDED.manual_review_reasons_csv,
             fov_x_mm = EXCLUDED.fov_x_mm,
@@ -408,6 +409,7 @@ class Step3Classification(BaseStep):
                 "post_contrast": result.post_contrast,
                 "localizer": result.localizer,
                 "spinal_cord": result.spinal_cord,
+                "body_part": result.body_part,
                 "manual_review_required": result.manual_review_required,
                 "manual_review_reasons_csv": result.manual_review_reasons_csv,
                 # Geometry from fingerprint

@@ -15,13 +15,18 @@ import pydicom
 from .batching import BatchSizeController
 from .dicom_mappings import (
     CT_SERIES_FIELD_MAP,
-    EXTRACT_SPECIFIC_TAGS,
     INSTANCE_FIELD_MAP,
     MRI_SERIES_FIELD_MAP,
     PET_SERIES_FIELD_MAP,
     SERIES_FIELD_MAP,
     STUDY_FIELD_MAP,
     extract_fields,
+    get_dwi_ge_b_value,
+    get_dwi_ge_n_directions,
+    get_dwi_philips_b_value,
+    get_dwi_siemens_b_value,
+    get_dwi_siemens_directionality,
+    get_dwi_siemens_pe_dir_positive,
 )
 from .profiler import get_global_profiler
 from .resume_index import SubjectPathEntry
@@ -233,15 +238,7 @@ def extract_subject_batches(
             logger.debug("Resume-by-path skipping %s/%s", subject.subject_key, relative_path)
             continue
         start_parse = time.perf_counter()
-        if use_specific_tags:
-            dataset = pydicom.dcmread(
-                path,
-                force=True,
-                stop_before_pixels=True,
-                specific_tags=EXTRACT_SPECIFIC_TAGS,
-            )
-        else:
-            dataset = pydicom.dcmread(path, force=True, stop_before_pixels=True)
+        dataset = pydicom.dcmread(path, force=True, stop_before_pixels=True)
         parse_duration = time.perf_counter() - start_parse
         
         if profiler:
@@ -306,6 +303,13 @@ def extract_subject_batches(
         mri_fields = extract_fields(dataset, MRI_SERIES_FIELD_MAP) if modality == "MR" else {}
         ct_fields = extract_fields(dataset, CT_SERIES_FIELD_MAP) if modality == "CT" else {}
         pet_fields = extract_fields(dataset, PET_SERIES_FIELD_MAP) if modality in {"PT", "PET"} else {}
+        if modality == "MR":
+            mri_fields["dwi_siemens_b_value"] = get_dwi_siemens_b_value(dataset)
+            mri_fields["dwi_siemens_directionality"] = get_dwi_siemens_directionality(dataset)
+            mri_fields["dwi_siemens_pe_dir_positive"] = get_dwi_siemens_pe_dir_positive(dataset)
+            mri_fields["dwi_ge_b_value"] = get_dwi_ge_b_value(dataset)
+            mri_fields["dwi_ge_n_directions"] = get_dwi_ge_n_directions(dataset)
+            mri_fields["dwi_philips_b_value"] = get_dwi_philips_b_value(dataset)
         payload = InstancePayload(
             subject_key=subject.subject_key,
             subject_code=subject_code,

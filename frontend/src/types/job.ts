@@ -1,6 +1,6 @@
 import type { StageId } from './stage';
 
-export type JobStatus = 'queued' | 'running' | 'paused' | 'completed' | 'failed' | 'canceled';
+export type JobStatus = 'queued' | 'running' | 'paused' | 'completed' | 'completed_with_warnings' | 'failed' | 'canceled';
 
 export interface JobPerformanceMetrics {
   [key: string]: unknown;

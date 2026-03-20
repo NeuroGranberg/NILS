@@ -12,6 +12,7 @@ from api.routes.cohorts import router as cohorts_router
 from api.routes.metadata_subjects import router as metadata_subjects_router
 from api.routes.metadata_cohorts import router as metadata_cohorts_router
 from api.routes.imports import router as imports_router
+from api.routes.export import router as export_router
 
 __all__ = [
     "system_router",
@@ -27,4 +28,5 @@ __all__ = [
     "metadata_subjects_router",
     "metadata_cohorts_router",
     "imports_router",
+    "export_router",
 ]

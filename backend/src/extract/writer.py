@@ -17,6 +17,7 @@ from metadata_db import bootstrap
 from metadata_db.schema import (
     Cohort,
     CTSeriesDetails,
+    Event,
     IngestConflict,
     Instance,
     MRISeriesDetails,
@@ -48,6 +49,9 @@ logger = logging.getLogger(__name__)
 
 ProgressCallback = Callable[[int, int], Awaitable[None] | None]
 _CONTROL_POLL_SECONDS = 0.5
+
+# Imaging modality -> observation_type_id for session event creation
+_MODALITY_TO_OBSERVATION_TYPE: dict[str, int] = {"MR": 11, "CT": 12, "PT": 13, "PET": 13}
 
 # Retry configuration for transient database errors (e.g., OOM under memory pressure)
 # We retry indefinitely for transient errors - never skip data
@@ -81,6 +85,7 @@ class Writer(AbstractAsyncContextManager["Writer"]):
         self._normalized_cohort_name = (config.cohort_name or "").strip().lower()
         self._subject_cache: dict[tuple[str, str], int] = {}
         self._study_cache: dict[str, int] = {}
+        self._event_cache: dict[tuple[int, int, str], int] = {}  # (subject_id, obs_type_id, date_str) -> event_id
         self._series_cache: dict[str, int] = {}
         # Stack caches: keyed by series_instance_uid for stable lookups
         self._stack_cache: dict[tuple, int] = {}  # signature -> series_stack_id
@@ -117,44 +122,64 @@ class Writer(AbstractAsyncContextManager["Writer"]):
         assert self._session is not None
         session = self._session
         profiler = get_global_profiler()
-        
-        while True:
-            await self._checkpoint()
-            queue_start = time.perf_counter()
-            try:
-                item = await asyncio.wait_for(self.queue.get(), timeout=_CONTROL_POLL_SECONDS)
-                if profiler:
-                    profiler.record("queue_get", time.perf_counter() - queue_start)
-            except asyncio.TimeoutError:
-                continue
-            if item is None:
-                break
-            subject_key, series_uid, batch, last_instance, completed = item
-            if batch:
+        current_subject_key: str | None = None
+        current_batch: list | None = None
+
+        try:
+            while True:
                 await self._checkpoint()
-                start = time.perf_counter()
-                # Use retry wrapper to handle transient errors (OOM, timeouts)
-                await self._write_batch_with_retry(session, batch)
-                self._update_path_index(batch)
-                write_duration = time.perf_counter() - start
-                
-                commit_start = time.perf_counter()
-                session.commit()
-                commit_duration = time.perf_counter() - commit_start
-                
-                total_duration = time.perf_counter() - start
-                self._batch_controller.record(len(batch), total_duration)
-                
-                if profiler:
-                    profiler.record("db_write_batch", write_duration)
-                    profiler.record("db_commit", commit_duration)
-            if completed:
-                await self._checkpoint()
-                commit_start = time.perf_counter()
-                session.commit()
-                if profiler:
-                    profiler.record("db_commit_final", time.perf_counter() - commit_start)
-                self._prune_caches_if_needed()
+                queue_start = time.perf_counter()
+                try:
+                    item = await asyncio.wait_for(self.queue.get(), timeout=_CONTROL_POLL_SECONDS)
+                    if profiler:
+                        profiler.record("queue_get", time.perf_counter() - queue_start)
+                except asyncio.TimeoutError:
+                    continue
+                if item is None:
+                    break
+                subject_key, series_uid, batch, last_instance, completed = item
+                current_subject_key = subject_key
+                current_batch = batch
+                if batch:
+                    await self._checkpoint()
+                    start = time.perf_counter()
+                    # Use retry wrapper to handle transient errors (OOM, timeouts)
+                    await self._write_batch_with_retry(session, batch)
+                    self._update_path_index(batch)
+                    write_duration = time.perf_counter() - start
+
+                    commit_start = time.perf_counter()
+                    session.commit()
+                    commit_duration = time.perf_counter() - commit_start
+
+                    total_duration = time.perf_counter() - start
+                    self._batch_controller.record(len(batch), total_duration)
+
+                    if profiler:
+                        profiler.record("db_write_batch", write_duration)
+                        profiler.record("db_commit", commit_duration)
+                if completed:
+                    await self._checkpoint()
+                    commit_start = time.perf_counter()
+                    session.commit()
+                    if profiler:
+                        profiler.record("db_commit_final", time.perf_counter() - commit_start)
+                    self._prune_caches_if_needed()
+
+        except Exception as exc:
+            import traceback
+            sample_paths: list[str] = []
+            if current_batch:
+                sample_paths = [p.dicom_file_path for p in current_batch[:5] if hasattr(p, "dicom_file_path") and p.dicom_file_path]
+            logger.error(
+                "Writer task crashed job_id=%s subject=%s batch_size=%s sample_files=%s\n%s",
+                self.job_id,
+                current_subject_key,
+                len(current_batch) if current_batch else 0,
+                sample_paths,
+                traceback.format_exc(),
+            )
+            raise
 
     def _prune_caches_if_needed(self) -> None:
         """Prune lookup caches periodically to prevent unbounded memory growth.
@@ -185,11 +210,12 @@ class Writer(AbstractAsyncContextManager["Writer"]):
                 logger.warning("Failed to update job metrics: %s", exc)
         
         logger.info(
-            "Pruning caches after %d subjects: stacks=%d, series=%d, studies=%d, subjects=%d, counters=%d",
+            "Pruning caches after %d subjects: stacks=%d, series=%d, studies=%d, events=%d, subjects=%d, counters=%d",
             self._subjects_completed,
             len(self._stack_cache),
             len(self._series_cache),
             len(self._study_cache),
+            len(self._event_cache),
             len(self._subject_cache),
             len(self._series_stack_counter),
         )
@@ -197,6 +223,7 @@ class Writer(AbstractAsyncContextManager["Writer"]):
         # Clear all lookup caches - they will be rebuilt from DB on cache miss
         self._subject_cache.clear()
         self._study_cache.clear()
+        self._event_cache.clear()
         self._series_cache.clear()
         self._stack_cache.clear()
         self._series_stack_counter.clear()
@@ -226,7 +253,7 @@ class Writer(AbstractAsyncContextManager["Writer"]):
             self._stack_cache.pop(sig, None)
             
             # Clear subject cache entry
-            subject_key = (payload.patient_id, self._cohort_name)
+            subject_key = (payload.patient_id, self._normalized_cohort_name)
             self._subject_cache.pop(subject_key, None)
         
         logger.debug(
@@ -386,13 +413,53 @@ class Writer(AbstractAsyncContextManager["Writer"]):
         )
         return True
 
+    def _ensure_subject_cohort_membership(self, session, batch: list[InstancePayload]) -> None:
+        """Ensure every subject in the batch is linked to the current cohort.
+
+        Called unconditionally before SOP deduplication so that cross-cohort
+        subjects (same subject_code, different cohort) are always registered,
+        even when all their instance SOPs already exist in the DB.
+        """
+        seen: dict[str, InstancePayload] = {}
+        for payload in batch:
+            if payload.subject_code and payload.subject_code not in seen:
+                seen[payload.subject_code] = payload
+
+        for subject_code, payload in seen.items():
+            # Resolve subject_id — check subject_cache first, then DB by subject_code
+            subject_id = self._subject_cache.get((payload.patient_id, self._normalized_cohort_name))
+            if subject_id is None:
+                subject_id = session.execute(
+                    select(Subject.subject_id).where(Subject.subject_code == subject_code)
+                ).scalar_one_or_none()
+            if subject_id is None:
+                continue  # subject doesn't exist yet — _bulk_ensure_subjects will create it
+
+            if subject_id in self._subject_identifier_cache:
+                continue  # already handled this session
+
+            # Link to current cohort (idempotent)
+            if self._cohort_id is not None:
+                session.execute(
+                    insert(SubjectCohort)
+                    .values(subject_id=subject_id, cohort_id=self._cohort_id)
+                    .on_conflict_do_nothing(
+                        index_elements=[SubjectCohort.subject_id, SubjectCohort.cohort_id]
+                    )
+                )
+
+            # Ensure cohort-specific identifier (idempotent)
+            self._ensure_subject_identifier(session, subject_id, payload)
+            self._subject_identifier_cache.add(subject_id)
+
     def _write_batch(self, session, batch: list[InstancePayload]) -> None:
         """Write a batch of instances using parents-first pattern for efficiency.
         
         This method uses a parents-first insertion pattern within a single transaction:
-        1. Pre-filter batch to only new SOPs (SELECT existing, filter out duplicates)
-        2. Create parent records (subject/study/series/stack) for new instances
-        3. Insert instances WITH correct series_id and stack_id already set
+        1. Ensure subject-cohort linkage (always, even for fully-duplicate batches)
+        2. Pre-filter batch to only new SOPs (SELECT existing, filter out duplicates)
+        3. Create parent records (subject/study/series/stack) for new instances
+        4. Insert instances WITH correct series_id and stack_id already set
         
         Benefits over instance-first pattern:
         - No dead rows: Instances are inserted once with correct FK, no UPDATE needed
@@ -404,8 +471,13 @@ class Writer(AbstractAsyncContextManager["Writer"]):
         """
         if not batch:
             return
-        
-        # Step 1: Pre-filter to only new SOPs (no INSERT yet)
+
+        # Step 1: Always ensure subject-cohort linkage before SOP deduplication.
+        # A subject from cohort A appearing in cohort B has all SOPs already in DB,
+        # but must still be linked to the new cohort and have its identifier recorded.
+        self._ensure_subject_cohort_membership(session, batch)
+
+        # Step 2: Pre-filter to only new SOPs (no INSERT yet)
         existing_sops = self._get_existing_sops(session, batch)
         new_batch = [p for p in batch if p.sop_uid not in existing_sops]
         
@@ -414,14 +486,15 @@ class Writer(AbstractAsyncContextManager["Writer"]):
             self._log_duplicate_sops(session, batch, existing_sops)
             return
         
-        # Step 2: Create parent hierarchy FIRST (in same transaction)
+        # Step 3: Create parent hierarchy FIRST (in same transaction)
         # If INSERT fails later, these will rollback too - no orphans
         subject_ids = self._bulk_ensure_subjects(session, new_batch)
         study_ids = self._bulk_ensure_studies(session, new_batch, subject_ids)
+        self._link_studies_to_events(session, new_batch, study_ids, subject_ids)
         series_ids = self._bulk_ensure_series(session, new_batch, subject_ids, study_ids)
         stack_ids = self._bulk_ensure_stacks(session, new_batch, series_ids)
         
-        # Step 3: Insert instances WITH correct FKs (no NULL, no UPDATE needed)
+        # Step 4: Insert instances WITH correct FKs (no NULL, no UPDATE needed)
         self._insert_instances_with_fks(session, new_batch, series_ids, stack_ids)
         
         # Log any duplicates we skipped
@@ -731,6 +804,135 @@ class Writer(AbstractAsyncContextManager["Writer"]):
             raise RuntimeError("Failed to resolve study identifiers for batch")
 
         return study_ids
+
+    def _link_studies_to_events(
+        self,
+        session,
+        batch: list[InstancePayload],
+        study_ids: list[int],
+        subject_ids: list[int],
+    ) -> None:
+        """Ensure each study has a corresponding imaging session event.
+
+        A session is defined as (subject_id, observation_type_id, study_date).
+        Multiple studies on the same day for the same subject and modality share
+        one event row.
+        """
+        # Collect unique sessions needing events from this batch
+        # session_key = (subject_id, obs_type_id, date_key_str)
+        # We also track the original date value for insertion.
+        sessions_needed: dict[tuple[int, int, str], list[int]] = {}
+        session_date_values: dict[tuple[int, int, str], object] = {}  # key -> original date value
+        for idx, payload in enumerate(batch):
+            obs_type_id = _MODALITY_TO_OBSERVATION_TYPE.get(payload.modality)
+            if obs_type_id is None:
+                continue
+            study_date = (payload.study_fields or {}).get("study_date")
+            if study_date is None:
+                continue
+            date_key = str(study_date)
+            key = (subject_ids[idx], obs_type_id, date_key)
+            sessions_needed.setdefault(key, []).append(study_ids[idx])
+            if key not in session_date_values:
+                session_date_values[key] = study_date
+
+        if not sessions_needed:
+            return
+
+        # Resolve event_ids from cache or DB
+        event_map: dict[tuple[int, int, str], int] = {}
+        uncached_keys: list[tuple[int, int, str]] = []
+        for key in sessions_needed:
+            cached = self._event_cache.get(key)
+            if cached:
+                event_map[key] = cached
+            else:
+                uncached_keys.append(key)
+
+        # Batch-lookup existing events for uncached keys
+        if uncached_keys:
+            from sqlalchemy import and_, or_, cast, Date
+            conditions = [
+                and_(
+                    Event.subject_id == k[0],
+                    Event.observation_type_id == k[1],
+                    Event.event_date == cast(session_date_values.get(k, k[2]), Date),
+                )
+                for k in uncached_keys
+            ]
+            if conditions:
+                existing = session.execute(
+                    select(Event).where(or_(*conditions))
+                ).scalars().all()
+                for evt in existing:
+                    k = (evt.subject_id, evt.observation_type_id, str(evt.event_date))
+                    event_map[k] = evt.event_id
+                    self._event_cache[k] = evt.event_id
+
+        # Insert missing events
+        still_missing = [k for k in uncached_keys if k not in event_map]
+        if still_missing:
+            event_rows = [
+                {
+                    "subject_id": k[0],
+                    "observation_type_id": k[1],
+                    "event_date": session_date_values.get(k, k[2]),
+                }
+                for k in still_missing
+            ]
+            try:
+                inserted = (
+                    session.execute(
+                        insert(Event)
+                        .values(event_rows)
+                        .on_conflict_do_nothing()
+                        .returning(Event.event_id, Event.subject_id, Event.observation_type_id, Event.event_date)
+                    )
+                    .mappings()
+                    .all()
+                )
+                for row in inserted:
+                    k = (row["subject_id"], row["observation_type_id"], str(row["event_date"]))
+                    event_map[k] = row["event_id"]
+                    self._event_cache[k] = row["event_id"]
+            except Exception:
+                # Fallback: ON CONFLICT may not return rows; fetch them
+                session.flush()
+                pass
+
+            # Fetch any that were skipped by ON CONFLICT DO NOTHING
+            refetch_keys = [k for k in still_missing if k not in event_map]
+            if refetch_keys:
+                conditions = [
+                    and_(
+                        Event.subject_id == k[0],
+                        Event.observation_type_id == k[1],
+                        Event.event_date == session_date_values.get(k, k[2]),
+                    )
+                    for k in refetch_keys
+                ]
+                existing = session.execute(
+                    select(Event).where(or_(*conditions))
+                ).scalars().all()
+                for evt in existing:
+                    k = (evt.subject_id, evt.observation_type_id, str(evt.event_date))
+                    event_map[k] = evt.event_id
+                    self._event_cache[k] = evt.event_id
+
+        # Update study.event_id for all studies in this batch
+        for key, sids in sessions_needed.items():
+            event_id = event_map.get(key)
+            if event_id is None:
+                continue
+            for study_id in sids:
+                session.execute(
+                    update(Study)
+                    .where(Study.study_id == study_id)
+                    .where(Study.event_id.is_(None))
+                    .values(event_id=event_id)
+                )
+
+        session.flush()
 
     def _bulk_ensure_series(
         self,

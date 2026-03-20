@@ -358,6 +358,7 @@ class AxesQCService:
                     -- Intent fields
                     scc.directory_type,
                     scc.spinal_cord,
+                    scc.body_part,
                     scc.post_contrast
 
                 FROM series_classification_cache scc
@@ -464,6 +465,7 @@ class AxesQCService:
                     -- Intent fields
                     scc.directory_type,
                     scc.spinal_cord,
+                    scc.body_part,
                     scc.post_contrast
 
                 FROM series_classification_cache scc
@@ -573,6 +575,7 @@ class AxesQCService:
         intent = {
             "directory_type": row.directory_type,
             "spinal_cord": row.spinal_cord,
+            "body_part": getattr(row, "body_part", None),
             "post_contrast": row.post_contrast,
         }
 

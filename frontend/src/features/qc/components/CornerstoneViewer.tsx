@@ -78,26 +78,44 @@ export const CornerstoneViewer = ({
   const playIntervalRef = useRef<number | null>(null);
 
   // Build image IDs from the DICOM file endpoint
+  // Supports both classic DICOM (1 slice per file) and Enhanced DICOM (multi-frame)
   const buildImageIds = useCallback(async () => {
     try {
-      // Fetch instance list from our API
+      // Fetch frame list from our API (handles multi-frame expansion)
       const response = await fetch(`/api/qc/dicom/${seriesUid}/instances?stack_index=${stackIndex}`);
       if (!response.ok) {
         throw new Error('Failed to fetch instances');
       }
 
       const data = await response.json();
+      
+      // Use the new frames array if available, fallback to legacy instance_ids
+      // frames format: [{instance_id: number, frame: number}, ...]
+      const frames: Array<{instance_id: number, frame: number}> = data.frames || [];
       const instanceIds: number[] = data.instance_ids || [];
-
-      if (instanceIds.length === 0) {
-        throw new Error('No instances found');
+      let ids: string[] = [];
+      
+      if (frames.length > 0) {
+        // Detect multi-frame DICOM: more frames than unique instance IDs
+        const uniqueInstanceIdsInFrames = new Set(frames.map(({ instance_id }) => instance_id)).size;
+        const isMultiFrame = frames.length > uniqueInstanceIdsInFrames;
+        
+        // For multi-frame DICOM (Enhanced DICOM), include ?frame=N parameter
+        // For classic DICOM (1 frame per instance), omit frame parameter
+        ids = frames.map(({ instance_id, frame }) => {
+          const baseUrl = `wadouri:${window.location.origin}/api/qc/dicom/file/${instance_id}`;
+          return isMultiFrame ? `${baseUrl}?frame=${frame}` : baseUrl;
+        });
+      } else {
+        // Legacy fallback: use instance_ids directly (for backwards compatibility)
+        if (instanceIds.length === 0) {
+          throw new Error('No instances found');
+        }
+        
+        ids = instanceIds.map(
+          (id) => `wadouri:${window.location.origin}/api/qc/dicom/file/${id}`
+        );
       }
-
-      // Build Cornerstone image IDs using our raw DICOM endpoint
-      // Format: wadouri:/api/qc/dicom/file/{instance_id}
-      const ids = instanceIds.map(
-        (id) => `wadouri:${window.location.origin}/api/qc/dicom/file/${id}`
-      );
 
       return ids;
     } catch (err) {

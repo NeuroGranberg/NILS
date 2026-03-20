@@ -53,12 +53,19 @@ export const QUERY_KEYS = {
   cohortImportFields: ['cohort-import-fields'] as const,
   subjectCohortImportFields: ['subject-cohort-import-fields'] as const,
   subjectIdentifierFields: ['subject-identifier-import-fields'] as const,
+  observationTypeImportFields: ['observation-type-import-fields'] as const,
+  eventImportFields: ['event-import-fields'] as const,
+  diseaseImportFields: ['disease-import-fields'] as const,
+  diseaseTypeFields: ['disease-type-fields'] as const,
+  subjectDiseaseFields: ['subject-disease-fields'] as const,
+  sdtFields: ['sdt-fields'] as const,
   
   // Details
   subjectDetail: (code: string) => ['subject-detail', code] as const,
   cohortDetail: (name: string) => ['cohort-detail', name] as const,
   subjectCohortMemberships: (code: string) => ['subject-cohort-memberships', code] as const,
   subjectIdentifiers: (code: string) => ['subject-identifiers', code] as const,
+  observationTypeDetail: (id: string) => ['observation-type-detail', id] as const,
   
   // System
   systemResources: ['system-resources'] as const,

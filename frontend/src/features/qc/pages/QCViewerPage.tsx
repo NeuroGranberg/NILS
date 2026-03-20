@@ -53,8 +53,12 @@ interface StackItem {
     provenance: string | null;
     acceleration_csv: string | null;
     post_contrast: number | null;  // 0=pre, 1=post, null=unknown
-    spinal_cord: number | null;    // 0=brain, 1=spine, null=unknown
+    spinal_cord: number | null;    // 0=brain, 1=spine, null=unknown (backward compat)
+    body_part: string | null;      // "brain", "spine", "neck", "brain-neck", null=unknown
     orientation: string | null;    // Axial/Coronal/Sagittal
+    dwi_b_value: number | null;
+    dwi_pe_direction: string | null;
+    dwi_n_directions: number | null;
     // QC Review fields
     manual_review_required: number | null;
     manual_review_reasons_csv: string | null;
@@ -79,6 +83,16 @@ const buildStackName = (stack: StackItem): string => {
     const construct = stack.construct_csv?.replace(/,/g, '-') || '';
     
     const parts = [orient, base, mods, tech, accel, construct].filter(Boolean);
+
+    if (stack.directory_type === 'dwi') {
+        const derived = new Set((stack.construct_csv || '').split(',').map(c => c.trim().toLowerCase()));
+        const isDerived = ['trace', 'adc', 'fa', 'colfa', 'isodwi'].some(d => derived.has(d));
+        const skipB0 = isDerived && stack.dwi_b_value === 0;
+        if (stack.dwi_b_value != null && !skipB0) parts.push(`b${Math.round(stack.dwi_b_value)}`);
+        if (stack.dwi_pe_direction) parts.push(stack.dwi_pe_direction);
+        if (stack.dwi_n_directions) parts.push(`${stack.dwi_n_directions}dir`);
+    }
+
     return parts.join('_') || stack.series_description || 'Unknown';
 };
 
@@ -105,7 +119,14 @@ const groupStacksByIntent = (stacks: StackItem[]): Record<string, StackItem[]> =
 };
 
 // Status badges for contrast and spinal cord - subtle styling for dark theme
-const StackBadges = ({ postContrast, spinalCord }: { postContrast: number | null; spinalCord: number | null }) => {
+const BODY_PART_BADGE: Record<string, { label: string; color: string; title: string }> = {
+    spine: { label: 'SC', color: 'teal', title: 'Spine' },
+    neck: { label: 'Neck', color: 'cyan', title: 'Neck' },
+    'brain-neck': { label: 'B+N', color: 'indigo', title: 'Brain + Neck' },
+};
+
+const StackBadges = ({ postContrast, bodyPart, spinalCord }: { postContrast: number | null; bodyPart: string | null; spinalCord: number | null }) => {
+    const bpBadge = bodyPart ? BODY_PART_BADGE[bodyPart] : (!bodyPart && spinalCord === 1 ? BODY_PART_BADGE['spine'] : null);
     return (
         <Group gap={4}>
             {postContrast === 1 && (
@@ -113,9 +134,9 @@ const StackBadges = ({ postContrast, spinalCord }: { postContrast: number | null
                     CE
                 </Badge>
             )}
-            {spinalCord === 1 && (
-                <Badge size="xs" color="teal" variant="light" title="Spinal Cord">
-                    SC
+            {bpBadge && (
+                <Badge size="xs" color={bpBadge.color} variant="light" title={bpBadge.title}>
+                    {bpBadge.label}
                 </Badge>
             )}
         </Group>
@@ -130,8 +151,8 @@ const PROVENANCE_STYLES: Record<string, { border: string; bg: string; label: str
     'ProjectionDerived':  { border: 'var(--mantine-color-orange-7)', bg: 'rgba(251, 146, 60, 0.1)', label: 'Projections & MPRs' },
 };
 
-// Spinal cord styling
-const SPINAL_CORD_STYLE = { border: 'var(--mantine-color-teal-6)', bg: 'rgba(20, 184, 166, 0.1)', label: 'Spinal Cord' };
+// Non-brain body part styling
+const NON_BRAIN_STYLE = { border: 'var(--mantine-color-teal-6)', bg: 'rgba(20, 184, 166, 0.1)', label: 'Non-Brain' };
 
 // --- Stack Card Component ---
 // Map flag types to badge colors (severity order: missing > conflict > low_confidence > ambiguous > review)
@@ -246,7 +267,7 @@ const StackCard = ({ stack, onClick, onQCClick }: StackCardProps) => {
                 <Text size="xs" fw={500} truncate style={{ flex: 1 }}>
                     {buildStackName(stack)}
                 </Text>
-                <StackBadges postContrast={stack.post_contrast} spinalCord={stack.spinal_cord} />
+                <StackBadges postContrast={stack.post_contrast} bodyPart={stack.body_part} spinalCord={stack.spinal_cord} />
             </Group>
         </Card>
     );
@@ -281,15 +302,23 @@ const IntentFolder = ({
         return a.stack_index - b.stack_index;
     };
     
-    // Spinal cord stacks (not in provenance groups)
-    const spinalCordStacks = stacks.filter(s => 
-        s.spinal_cord === 1 && !PROVENANCE_STYLES[s.provenance || '']
-    ).sort(sortByTimeAndStack);
+    // Non-brain stacks (spine, neck -- NOT brain-neck which is still a brain scan)
+    const NON_BRAIN_CATEGORIES = new Set(['spine', 'neck']);
+    const nonBrainStacks = stacks.filter(s => {
+        const bp = s.body_part || (s.spinal_cord === 1 ? 'spine' : null);
+        return bp != null && NON_BRAIN_CATEGORIES.has(bp) && !PROVENANCE_STYLES[s.provenance || ''];
+    }).sort(sortByTimeAndStack);
     
-    // Regular stacks (not spinal cord, not in provenance groups)
-    const regularStacks = stacks.filter(s => 
-        s.spinal_cord !== 1 && !PROVENANCE_STYLES[s.provenance || '']
-    ).sort(sortByTimeAndStack);
+    // Dynamic label for non-brain section based on actual categories present
+    const nonBrainCategories = [...new Set(nonBrainStacks.map(s => s.body_part || 'spine'))];
+    const CATEGORY_LABELS: Record<string, string> = { spine: 'Spine', neck: 'Neck' };
+    const nonBrainLabel = nonBrainCategories.map(c => CATEGORY_LABELS[c] || c).join(' & ');
+
+    // Regular stacks (brain, brain-neck, or unknown -- not in provenance groups)
+    const regularStacks = stacks.filter(s => {
+        const bp = s.body_part || (s.spinal_cord === 1 ? 'spine' : null);
+        return (!bp || !NON_BRAIN_CATEGORIES.has(bp)) && !PROVENANCE_STYLES[s.provenance || ''];
+    }).sort(sortByTimeAndStack);
     
     // Provenance groups (SyMRI, SWI, EPIMix)
     const provenanceGroups = Object.keys(PROVENANCE_STYLES)
@@ -332,7 +361,7 @@ const IntentFolder = ({
                 <Box p="md">
                     {/* Regular stacks */}
                     {regularStacks.length > 0 && (
-                        <SimpleGrid cols={{ base: 2, sm: 3, md: 4 }} mb={(provenanceGroups.length || spinalCordStacks.length) ? 'md' : 0}>
+                        <SimpleGrid cols={{ base: 2, sm: 3, md: 4 }} mb={(provenanceGroups.length || nonBrainStacks.length) ? 'md' : 0}>
                             {regularStacks.map(stack => (
                                 <StackCard 
                                     key={stack.series_stack_id} 
@@ -373,22 +402,22 @@ const IntentFolder = ({
                         </Box>
                     ))}
                     
-                    {/* Spinal Cord stacks (at the end) */}
-                    {spinalCordStacks.length > 0 && (
+                    {/* Non-brain stacks (spine, neck, etc.) */}
+                    {nonBrainStacks.length > 0 && (
                         <Box 
                             p="sm" 
                             mt={(regularStacks.length > 0 || provenanceGroups.length > 0) ? 'md' : 0}
                             style={{ 
-                                border: `2px solid ${SPINAL_CORD_STYLE.border}`,
+                                border: `2px solid ${NON_BRAIN_STYLE.border}`,
                                 borderRadius: 8,
-                                background: SPINAL_CORD_STYLE.bg
+                                background: NON_BRAIN_STYLE.bg
                             }}
                         >
-                            <Text size="xs" fw={600} mb="xs" c={SPINAL_CORD_STYLE.border}>
-                                {SPINAL_CORD_STYLE.label}
+                            <Text size="xs" fw={600} mb="xs" c={NON_BRAIN_STYLE.border}>
+                                {nonBrainLabel}
                             </Text>
                             <SimpleGrid cols={{ base: 2, sm: 3, md: 4 }}>
-                                {spinalCordStacks.map(stack => (
+                                {nonBrainStacks.map(stack => (
                                     <StackCard 
                                         key={stack.series_stack_id} 
                                         stack={stack}

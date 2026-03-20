@@ -60,6 +60,39 @@ import type {
   SubjectIdentifierImportPreviewRow,
   SubjectIdentifierImportPreview,
   SubjectIdentifierImportResult,
+  ObservationTypeDetail,
+  ObservationTypeImportFieldDefinition,
+  ObservationTypeFieldsResponse,
+  ObservationTypeImportPayload,
+  ObservationTypeImportPreviewRow,
+  ObservationTypeImportPreview,
+  ObservationTypeImportResult,
+  EventImportFieldsResponse,
+  EventImportPayload,
+  EventImportPreview,
+  EventImportResult,
+  DiseaseDetail,
+  DiseaseImportFieldDefinition,
+  DiseaseFieldsResponse,
+  DiseaseImportPayload,
+  DiseaseImportPreview,
+  DiseaseImportResult,
+  DiseaseTypeFieldsResponse,
+  DiseaseTypeDetail,
+  DiseaseTypeUpsertPayload,
+  DiseaseTypeUpsertResult,
+  SubjectDiseaseFieldsResponse,
+  SubjectDiseaseImportPayload,
+  SubjectDiseaseImportPreview,
+  SubjectDiseaseImportResult,
+  CohortAssignPayload,
+  CohortAssignResult,
+  SDTFieldsResponse,
+  SDTImportPayload,
+  SDTImportPreview,
+  SDTImportResult,
+  SDTManualPayload,
+  SDTManualResult,
 } from '../../types';
 
 // Re-export types for backwards compatibility
@@ -117,6 +150,13 @@ export type {
   SubjectIdentifierImportPreviewRow,
   SubjectIdentifierImportPreview,
   SubjectIdentifierImportResult,
+  ObservationTypeDetail,
+  ObservationTypeImportFieldDefinition,
+  ObservationTypeFieldsResponse,
+  ObservationTypeImportPayload,
+  ObservationTypeImportPreviewRow,
+  ObservationTypeImportPreview,
+  ObservationTypeImportResult,
 };
 
 // Also re-export DatabaseKey for backwards compatibility
@@ -541,6 +581,264 @@ export const useDeleteSubjectIdentifier = () => {
     },
     onError: (error) => {
       showErrorNotification('Delete Failed', error.message);
+    },
+  });
+};
+
+// =============================================================================
+// Observation Type Import Hooks
+// =============================================================================
+
+export const useObservationTypeImportFields = () =>
+  useQuery<ObservationTypeFieldsResponse>({
+    queryKey: QUERY_KEYS.observationTypeImportFields,
+    queryFn: () => apiClient.get<ObservationTypeFieldsResponse>('/metadata/imports/observation-types/fields'),
+    staleTime: STALE_TIMES.long,
+  });
+
+export const useObservationTypeImportPreview = () =>
+  useMutation<ObservationTypeImportPreview, Error, ObservationTypeImportPayload>({
+    mutationFn: (payload) =>
+      apiClient.post<ObservationTypeImportPreview>('/metadata/imports/observation-types/preview', payload),
+    onError: (error) => {
+      showErrorNotification('Preview Failed', error.message);
+    },
+  });
+
+export const useObservationTypeImportApply = () => {
+  const queryClient = useQueryClient();
+  return useMutation<ObservationTypeImportResult, Error, ObservationTypeImportPayload>({
+    mutationFn: (payload) =>
+      apiClient.post<ObservationTypeImportResult>('/metadata/imports/observation-types/apply', payload),
+    onSuccess: (data) => {
+      void queryClient.invalidateQueries({ queryKey: QUERY_KEYS.metadataTables });
+      void queryClient.invalidateQueries({ queryKey: QUERY_KEYS.observationTypeImportFields });
+      showSuccessNotification('Import Complete', `Inserted: ${data.typesInserted}, Updated: ${data.typesUpdated}`);
+    },
+    onError: (error) => {
+      showErrorNotification('Import Failed', error.message);
+    },
+  });
+};
+
+// =============================================================================
+// Event Import Hooks
+// =============================================================================
+
+export const useEventImportFields = () =>
+  useQuery<EventImportFieldsResponse>({
+    queryKey: QUERY_KEYS.eventImportFields,
+    queryFn: () => apiClient.get<EventImportFieldsResponse>('/metadata/imports/events/fields'),
+    staleTime: STALE_TIMES.long,
+  });
+
+export const useEventImportPreview = () =>
+  useMutation<EventImportPreview, Error, EventImportPayload>({
+    mutationFn: (payload) =>
+      apiClient.post<EventImportPreview>('/metadata/imports/events/preview', payload),
+    onError: (error) => {
+      showErrorNotification('Preview Failed', error.message);
+    },
+  });
+
+export const useEventImportApply = () => {
+  const queryClient = useQueryClient();
+  return useMutation<EventImportResult, Error, EventImportPayload>({
+    mutationFn: (payload) =>
+      apiClient.post<EventImportResult>('/metadata/imports/events/apply', payload),
+    onSuccess: (data) => {
+      void queryClient.invalidateQueries({ queryKey: QUERY_KEYS.metadataTables });
+      void queryClient.invalidateQueries({ queryKey: QUERY_KEYS.eventImportFields });
+      showSuccessNotification(
+        'Event Import Complete',
+        `Events: ${data.eventsInserted} inserted, ${data.eventsUpdated} updated. Measures: ${data.measuresInserted} inserted, ${data.measuresUpdated} updated.${data.subjectsMissing > 0 ? ` ${data.subjectsMissing} subjects not found.` : ''}`,
+      );
+    },
+    onError: (error) => {
+      showErrorNotification('Event Import Failed', error.message);
+    },
+  });
+};
+
+// =============================================================================
+// Disease Import Hooks
+// =============================================================================
+
+export const useDiseaseImportFields = () =>
+  useQuery<DiseaseFieldsResponse>({
+    queryKey: QUERY_KEYS.diseaseImportFields,
+    queryFn: () => apiClient.get<DiseaseFieldsResponse>('/metadata/imports/diseases/fields'),
+    staleTime: STALE_TIMES.long,
+  });
+
+export const useDiseaseImportPreview = () =>
+  useMutation<DiseaseImportPreview, Error, DiseaseImportPayload>({
+    mutationFn: (payload) =>
+      apiClient.post<DiseaseImportPreview>('/metadata/imports/diseases/preview', payload),
+    onError: (error) => {
+      showErrorNotification('Preview Failed', error.message);
+    },
+  });
+
+export const useDiseaseImportApply = () => {
+  const queryClient = useQueryClient();
+  return useMutation<DiseaseImportResult, Error, DiseaseImportPayload>({
+    mutationFn: (payload) =>
+      apiClient.post<DiseaseImportResult>('/metadata/imports/diseases/apply', payload),
+    onSuccess: (data) => {
+      void queryClient.invalidateQueries({ queryKey: QUERY_KEYS.metadataTables });
+      void queryClient.invalidateQueries({ queryKey: QUERY_KEYS.diseaseImportFields });
+      showSuccessNotification('Disease Import Complete', `Inserted: ${data.diseasesInserted}, Updated: ${data.diseasesUpdated}`);
+    },
+    onError: (error) => {
+      showErrorNotification('Disease Import Failed', error.message);
+    },
+  });
+};
+
+// =============================================================================
+// Disease Type Hooks
+// =============================================================================
+
+export const useDiseaseTypeFields = () =>
+  useQuery<DiseaseTypeFieldsResponse>({
+    queryKey: QUERY_KEYS.diseaseTypeFields,
+    queryFn: () => apiClient.get<DiseaseTypeFieldsResponse>('/metadata/imports/disease-types/fields'),
+    staleTime: STALE_TIMES.long,
+  });
+
+export const useDiseaseTypeUpsert = () => {
+  const queryClient = useQueryClient();
+  return useMutation<DiseaseTypeUpsertResult, Error, DiseaseTypeUpsertPayload>({
+    mutationFn: (payload) =>
+      apiClient.post<DiseaseTypeUpsertResult>('/metadata/imports/disease-types/upsert', payload),
+    onSuccess: (data) => {
+      void queryClient.invalidateQueries({ queryKey: QUERY_KEYS.metadataTables });
+      void queryClient.invalidateQueries({ queryKey: QUERY_KEYS.diseaseTypeFields });
+      const action = data.inserted ? 'Created' : data.updated ? 'Updated' : 'No changes';
+      showSuccessNotification('Disease Type', `${action} disease type (ID: ${data.diseaseTypeId})`);
+    },
+    onError: (error) => {
+      showErrorNotification('Disease Type Failed', error.message);
+    },
+  });
+};
+
+// =============================================================================
+// Subject Disease Import Hooks
+// =============================================================================
+
+export const useSubjectDiseaseFields = () =>
+  useQuery<SubjectDiseaseFieldsResponse>({
+    queryKey: QUERY_KEYS.subjectDiseaseFields,
+    queryFn: () => apiClient.get<SubjectDiseaseFieldsResponse>('/metadata/imports/subject-diseases/fields'),
+    staleTime: STALE_TIMES.long,
+  });
+
+export const useSubjectDiseaseImportPreview = () =>
+  useMutation<SubjectDiseaseImportPreview, Error, SubjectDiseaseImportPayload>({
+    mutationFn: (payload) =>
+      apiClient.post<SubjectDiseaseImportPreview>('/metadata/imports/subject-diseases/preview', payload),
+    onError: (error) => {
+      showErrorNotification('Preview Failed', error.message);
+    },
+  });
+
+export const useSubjectDiseaseImportApply = () => {
+  const queryClient = useQueryClient();
+  return useMutation<SubjectDiseaseImportResult, Error, SubjectDiseaseImportPayload>({
+    mutationFn: (payload) =>
+      apiClient.post<SubjectDiseaseImportResult>('/metadata/imports/subject-diseases/apply', payload),
+    onSuccess: (data) => {
+      void queryClient.invalidateQueries({ queryKey: QUERY_KEYS.metadataTables });
+      void queryClient.invalidateQueries({ queryKey: QUERY_KEYS.subjectDiseaseFields });
+      const parts = [`Inserted: ${data.inserted}`, `Updated: ${data.updated}`];
+      if (data.diagnosisEventsLinked) parts.push(`Diagnosis linked: ${data.diagnosisEventsLinked}`);
+      if (data.onsetEventsLinked) parts.push(`Onset linked: ${data.onsetEventsLinked}`);
+      if (data.subjectsMissing) parts.push(`Missing subjects: ${data.subjectsMissing}`);
+      showSuccessNotification('Subject Disease Import', parts.join(', '));
+    },
+    onError: (error) => {
+      showErrorNotification('Subject Disease Import Failed', error.message);
+    },
+  });
+};
+
+export const useCohortDiseaseAssign = () => {
+  const queryClient = useQueryClient();
+  return useMutation<CohortAssignResult, Error, CohortAssignPayload>({
+    mutationFn: (payload) =>
+      apiClient.post<CohortAssignResult>('/metadata/imports/subject-diseases/cohort-assign', payload),
+    onSuccess: (data) => {
+      void queryClient.invalidateQueries({ queryKey: QUERY_KEYS.metadataTables });
+      void queryClient.invalidateQueries({ queryKey: QUERY_KEYS.subjectDiseaseFields });
+      const parts = [
+        `${data.inserted} assigned out of ${data.totalSubjects}`,
+        `${data.skipped} already existed`,
+      ];
+      if (data.diagnosisEventsLinked) parts.push(`${data.diagnosisEventsLinked} diagnosis events linked`);
+      if (data.onsetEventsLinked) parts.push(`${data.onsetEventsLinked} onset events linked`);
+      showSuccessNotification('Cohort Disease Assign', parts.join(', '));
+    },
+    onError: (error) => {
+      showErrorNotification('Cohort Assign Failed', error.message);
+    },
+  });
+};
+
+// =============================================================================
+// Subject Disease Type Import Hooks
+// =============================================================================
+
+export const useSDTFields = () =>
+  useQuery<SDTFieldsResponse>({
+    queryKey: QUERY_KEYS.sdtFields,
+    queryFn: () => apiClient.get<SDTFieldsResponse>('/metadata/imports/subject-disease-types/fields'),
+    staleTime: STALE_TIMES.long,
+  });
+
+export const useSDTImportPreview = () =>
+  useMutation<SDTImportPreview, Error, SDTImportPayload>({
+    mutationFn: (payload) =>
+      apiClient.post<SDTImportPreview>('/metadata/imports/subject-disease-types/preview', payload),
+    onError: (error) => {
+      showErrorNotification('Preview Failed', error.message);
+    },
+  });
+
+export const useSDTImportApply = () => {
+  const queryClient = useQueryClient();
+  return useMutation<SDTImportResult, Error, SDTImportPayload>({
+    mutationFn: (payload) =>
+      apiClient.post<SDTImportResult>('/metadata/imports/subject-disease-types/apply', payload),
+    onSuccess: (data) => {
+      void queryClient.invalidateQueries({ queryKey: QUERY_KEYS.metadataTables });
+      void queryClient.invalidateQueries({ queryKey: QUERY_KEYS.sdtFields });
+      const parts = [`Inserted: ${data.inserted}`, `Updated: ${data.updated}`];
+      if (data.transitionEventsLinked) parts.push(`Transitions linked: ${data.transitionEventsLinked}`);
+      if (data.subjectsMissing) parts.push(`Missing subjects: ${data.subjectsMissing}`);
+      if (data.typesUnresolved) parts.push(`Unresolved types: ${data.typesUnresolved}`);
+      showSuccessNotification('Subject Disease Type Import', parts.join(', '));
+    },
+    onError: (error) => {
+      showErrorNotification('SDT Import Failed', error.message);
+    },
+  });
+};
+
+export const useSDTManualUpsert = () => {
+  const queryClient = useQueryClient();
+  return useMutation<SDTManualResult, Error, SDTManualPayload>({
+    mutationFn: (payload) =>
+      apiClient.post<SDTManualResult>('/metadata/imports/subject-disease-types/upsert', payload),
+    onSuccess: (data) => {
+      void queryClient.invalidateQueries({ queryKey: QUERY_KEYS.metadataTables });
+      void queryClient.invalidateQueries({ queryKey: QUERY_KEYS.sdtFields });
+      const action = data.inserted ? 'Created' : data.updated ? 'Updated' : 'No changes';
+      showSuccessNotification('Subject Disease Type', `${action} (ID: ${data.subjectDiseaseTypeId})`);
+    },
+    onError: (error) => {
+      showErrorNotification('SDT Upsert Failed', error.message);
     },
   });
 };

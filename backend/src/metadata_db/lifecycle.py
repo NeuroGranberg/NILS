@@ -212,6 +212,115 @@ def _run_rename_provenance_csv_to_provenance_migration(connection) -> None:
         raise
 
 
+def _needs_observation_types_migration(connection) -> bool:
+    """Check if the observation_types migration needs to be applied."""
+    from .migrations.migrate_observation_types import _needs_migration
+    return _needs_migration(connection)
+
+
+def _run_observation_types_migration(connection) -> None:
+    """Run the observation_types unification migration."""
+    from .migrations.migrate_observation_types import run_migration
+
+    logger.info("Running observation_types unification migration...")
+    try:
+        results = run_migration(engine, dry_run=False)
+        if results["success"]:
+            if results["already_migrated"]:
+                logger.info("Observation types migration already applied")
+            else:
+                logger.info(
+                    "Observation types migration completed: %s (%.1fs)",
+                    ", ".join(results["changes_made"]),
+                    results["elapsed_seconds"],
+                )
+    except Exception as exc:
+        logger.error("Observation types migration failed: %s", exc)
+        raise
+
+
+def _needs_seed_diseases(connection) -> bool:
+    """Check if the diseases seed migration needs to be applied."""
+    from .migrations.seed_diseases import _needs_migration
+    return _needs_migration(connection)
+
+
+def _run_seed_diseases(connection) -> None:
+    """Run the diseases seed migration."""
+    from .migrations.seed_diseases import run_migration
+
+    logger.info("Running diseases seed migration...")
+    try:
+        results = run_migration(engine, dry_run=False)
+        if results["success"]:
+            if results["already_migrated"]:
+                logger.info("Diseases seed already applied")
+            else:
+                logger.info(
+                    "Diseases seed completed: %s (%.1fs)",
+                    ", ".join(results["changes_made"]),
+                    results["elapsed_seconds"],
+                )
+    except Exception as exc:
+        logger.error("Diseases seed migration failed: %s", exc)
+        raise
+
+
+def _needs_sdt_assignment_date_nullable(connection) -> bool:
+    """Check if subject_disease_types.assignment_date is still NOT NULL."""
+    from .migrations.migrate_sdt_assignment_date_nullable import _needs_migration
+    return _needs_migration(connection)
+
+
+def _run_sdt_assignment_date_nullable(connection) -> None:
+    """Make subject_disease_types.assignment_date nullable."""
+    from .migrations.migrate_sdt_assignment_date_nullable import run_migration
+
+    logger.info("Detected NOT NULL on subject_disease_types.assignment_date - running migration...")
+    try:
+        results = run_migration(engine, dry_run=False)
+        if results["success"]:
+            if results["already_migrated"]:
+                logger.info("assignment_date nullable migration already applied")
+            else:
+                logger.info(
+                    "assignment_date nullable migration completed: %s (%.1fs)",
+                    ", ".join(results["changes_made"]),
+                    results["elapsed_seconds"],
+                )
+    except Exception as exc:
+        logger.error("assignment_date nullable migration failed: %s", exc)
+        raise
+
+
+def _needs_backfill_study_events(connection) -> bool:
+    """Check if imaging session events need to be backfilled for existing studies."""
+    from .migrations.backfill_study_events import _needs_migration
+    return _needs_migration(connection)
+
+
+def _run_backfill_study_events(connection) -> None:
+    """Run the migration to backfill imaging session events."""
+    from .migrations.backfill_study_events import run_migration
+
+    logger.info("Backfilling imaging session events for studies...")
+    try:
+        results = run_migration(engine, dry_run=False)
+        if results["success"]:
+            if results["already_migrated"]:
+                logger.info("Study event backfill already applied")
+            else:
+                logger.info(
+                    "Study event backfill completed: %d events inserted, %d studies linked (%.1fs)",
+                    results["events_inserted"],
+                    results["studies_linked"],
+                    results["elapsed_seconds"],
+                )
+    except Exception as exc:
+        logger.error("Study event backfill failed: %s", exc)
+        raise
+
+
 def _needs_performance_indexes_migration(connection) -> bool:
     """Check if performance indexes need to be added."""
     from .migrations.add_performance_indexes import _needs_migration
@@ -240,7 +349,77 @@ def _run_performance_indexes_migration(connection) -> None:
         raise
 
 
-SCHEMA_VERSION = "1.2.0"
+def _run_multiframe_slice_counts_migration() -> None:
+    """Run migration to fix slice counts for multi-frame Enhanced DICOM.
+    
+    This migration is idempotent and safe to run multiple times.
+    It corrects stack_n_instances and slices_count for Enhanced DICOM
+    where a single file contains multiple frames.
+    """
+    from .migrations.fix_multiframe_slice_counts import run_migration
+    
+    try:
+        run_migration(engine)
+    except Exception as exc:
+        logger.error("Multi-frame slice counts migration failed: %s", exc)
+        raise
+
+
+def _needs_dwi_enrichment_migration(connection) -> bool:
+    """Check if DWI enrichment columns need to be added."""
+    from .migrations.add_dwi_enrichment_columns import _needs_migration
+    return _needs_migration(connection)
+
+
+def _run_dwi_enrichment_migration(connection) -> None:
+    """Add DWI enrichment columns to mri_series_details and series_classification_cache."""
+    from .migrations.add_dwi_enrichment_columns import run_migration
+
+    logger.info("Detected missing DWI enrichment columns - running automatic migration...")
+    try:
+        results = run_migration(engine, dry_run=False)
+        if results["success"]:
+            if results["already_migrated"]:
+                logger.info("DWI enrichment migration already applied")
+            else:
+                logger.info(
+                    "DWI enrichment migration completed: %s (%.1fs)",
+                    ", ".join(results["changes_made"]),
+                    results["elapsed_seconds"],
+                )
+    except Exception as exc:
+        logger.error("DWI enrichment migration failed: %s", exc)
+        raise
+
+
+def _needs_body_part_migration(connection) -> bool:
+    """Check if body_part column needs to be added to series_classification_cache."""
+    from .migrations.migrate_spinal_cord_to_body_part import _needs_migration
+    return _needs_migration(connection)
+
+
+def _run_body_part_migration(connection) -> None:
+    """Add body_part column and backfill from spinal_cord."""
+    from .migrations.migrate_spinal_cord_to_body_part import run_migration
+
+    logger.info("Detected missing body_part column - running automatic migration...")
+    try:
+        results = run_migration(engine, dry_run=False)
+        if results["success"]:
+            if results["already_migrated"]:
+                logger.info("body_part migration already applied")
+            else:
+                logger.info(
+                    "body_part migration completed: %s (%.1fs)",
+                    ", ".join(results["changes_made"]),
+                    results["elapsed_seconds"],
+                )
+    except Exception as exc:
+        logger.error("body_part migration failed: %s", exc)
+        raise
+
+
+SCHEMA_VERSION = "1.3.0"
 SCHEMA_SQL_PATH = Path(__file__).resolve().parents[3] / "resource" / "sql" / "metadata_schema.sql"
 
 DEPRECATED_TABLES = ("instance_header", "contrast_agents")
@@ -510,10 +689,43 @@ def _apply_schema_upgrades() -> None:
         if _needs_rename_provenance_csv_to_provenance_migration(connection):
             _run_rename_provenance_csv_to_provenance_migration(connection)
 
+    # Unify event_types + clinical_measure_types into observation_types
+    with engine.connect() as connection:
+        if _needs_observation_types_migration(connection):
+            _run_observation_types_migration(connection)
+
+    # Seed diseases table
+    with engine.connect() as connection:
+        if _needs_seed_diseases(connection):
+            _run_seed_diseases(connection)
+
+    # Make subject_disease_types.assignment_date nullable (old backups had NOT NULL)
+    with engine.connect() as connection:
+        if _needs_sdt_assignment_date_nullable(connection):
+            _run_sdt_assignment_date_nullable(connection)
+
+    # Backfill imaging session events for existing studies
+    with engine.connect() as connection:
+        if _needs_backfill_study_events(connection):
+            _run_backfill_study_events(connection)
+
     # Add performance indexes for DICOM viewer optimization
     with engine.connect() as connection:
         if _needs_performance_indexes_migration(connection):
             _run_performance_indexes_migration(connection)
+    
+    # Fix multi-frame Enhanced DICOM slice counts (always run - idempotent)
+    _run_multiframe_slice_counts_migration()
+
+    # Add body_part column and backfill from spinal_cord
+    with engine.connect() as connection:
+        if _needs_body_part_migration(connection):
+            _run_body_part_migration(connection)
+
+    # Add DWI enrichment columns
+    with engine.connect() as connection:
+        if _needs_dwi_enrichment_migration(connection):
+            _run_dwi_enrichment_migration(connection)
 
 
 def ensure_schema() -> str:
