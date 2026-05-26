@@ -344,6 +344,9 @@ techniques:
       - "medic"
       - "merge"
       - "mffe"
+      - "me2d"          # Siemens t2_me2d naming convention (multi-echo 2D GRE)
+    detection:
+      exclusive: is_medic   # Siemens sequence names: *me2d1r4, *me3d1r4
     implied_base:
       base: "T2*w"
       confidence: 0.85
@@ -399,12 +402,14 @@ techniques:
       - "fiesta"
       - "balanced ffe"
       - "b-ffe"
+      - "bffe"
       - "trufi"
     detection:
-      exclusive: is_ssfp        # SSFP indicator (from has_steady_state)
-      combination:
-        - has_steady_state
-        - has_gre
+      exclusive: is_ssfp        # Sequence name: tfi2d/tfi3d (Siemens)
+      # NOTE: No combination rule. The old rule (has_steady_state + has_gre)
+      # was far too broad — DICOM SS flag fires for ALL short-TR GRE, not
+      # just balanced SSFP. Detection relies on sequence name (exclusive)
+      # and keywords (fiesta/trufi/bssfp/bffe etc.) which are unambiguous.
     notes: |
       bSSFP has fully balanced gradients for high SNR.
       Siemens: TrueFISP, GE: FIESTA, Philips: bFFE.
@@ -430,10 +435,8 @@ techniques:
       - "psif"
       - "t2-ffe"
       - "ce-fast"
-    detection:
-      combination:
-        - has_steady_state
-        - has_gre
+    # NOTE: No combination rule. Same reason as bSSFP — has_steady_state is
+    # too generic (fires for all short-TR GRE). Detection is keyword-only.
     notes: |
       Generic SSFP - checked after bSSFP/CISS.
       PSIF uses reversed echo (T2-like contrast).
@@ -498,7 +501,8 @@ techniques:
       - "turbo flash"
       - "tfe"
       - "fspgr"
-      - "fgre"
+      # "fgre" removed — GE fgre is basic fast GRE without magnetization
+      # preparation. TurboFLASH requires IR/SR prep per Siemens definition.
     detection:
       exclusive: is_tfl         # Definitive: TurboFLASH/TFE sequence name
     notes: |
@@ -716,10 +720,9 @@ techniques:
       - "grase"
       - "turbogse"
       - "tgse"
-    detection:
-      combination:              # SE + GRE (hybrid)
-        - has_se
-        - has_gre
+    # NOTE: No combination rule. The old rule (has_se + has_gre) was too broad —
+    # it intercepted MEDIC stacks at priority [6] before GRE techniques could
+    # match them. 0 real GRASE stacks exist in DB; future ones detected by keyword.
     notes: |
       GRASE combines SE refocusing with GRE readouts.
       Faster than pure TSE, less T2* than EPI.

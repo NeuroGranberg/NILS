@@ -42,4 +42,6 @@ COPY src ./src
 
 RUN uv pip install --system .[dev]
 
+ENV PYTHONPATH=/app/src
+
 ENTRYPOINT ["uv", "run", "neuro-backend"]

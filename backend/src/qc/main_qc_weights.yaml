@@ -1,0 +1,128 @@
+# =====================================================================
+# Cohort Main Acquisition QC — scoring weights and parameters
+# =====================================================================
+# Edit this file to tune the auto-pick algorithm. No code change required.
+# All weights are summed inside [0,1] then multiplied by an EPIMix penalty
+# (0.5) when the source provenance is EPIMix. Final score is clamped to [0,1].
+# ---------------------------------------------------------------------
+
+# Component weights (must sum to ~1.0; absolute scale only matters relatively).
+weights:
+  dim:      0.18
+  tech:     0.15
+  mod:      0.12
+  slices:   0.20
+  fov:      0.10
+  share:    0.15
+  orient:   0.05
+  complete: 0.05
+
+# Provenance penalty multiplied AFTER all components. EPIMix is allowed as a
+# fallback but never preferred when RawRecon is available.
+provenance_penalty:
+  RawRecon: 1.0
+  EPIMix:   0.5
+
+# Acquisition-dimension scoring. 3D is preferred when 3D is meaningfully present
+# in the cohort; in an all-2D cohort 2D scores well by default.
+dim_score:
+  3d:      1.0
+  2d_base: 0.85
+  # 2D score = 2d_base - 2d_3d_penalty * cohort_3d_share
+  2d_3d_penalty: 0.30
+  unknown: 0.40
+
+# Hard tier scores per technique. Used as the technique_score component
+# (which also receives the Dixon / WaterExc bonuses defined below).
+technique_tiers:
+  t1w:
+    MPRAGE: 1.00
+    MP2RAGE: 1.00
+    SPACE:  0.85
+    VIBE:   0.85
+    FLASH:  0.70
+    TurboFLASH: 0.65
+    GRE:    0.55
+    SE:     0.50
+    TIRM:   0.45
+    TSE:    0.40
+    FIESTA: 0.40
+    CISS:   0.40
+    FSPGR:  0.70
+    Unknown: 0.30
+  flair:
+    SPACE:   1.00
+    TSE:     0.90
+    TIRM:    0.75
+    GRASE:   0.65
+    RESOLVE: 0.50
+    Unknown: 0.40
+
+# Modifier-csv scoring (matched as substring, case-insensitive).
+# Values are additive on top of a 0.5 base (i.e. neutral modifier_csv = 0.5).
+modifier_score:
+  t1w:
+    Dixon: 0.20         # whole Dixon family bonus on the modifier axis
+    WaterExc: 0.15
+    MT: -0.05           # MT-prep is usually for TOF, not main T1w
+    NS: 0.00
+    PreScanNorm: 0.05
+  flair:
+    Dixon: -0.10        # Dixon-FLAIR is rare; usually not the canonical FLAIR
+    WaterExc: -0.05
+
+# Bonus applied to the technique tier when modifier contains Dixon AND
+# construct_csv is canonical (InPhase / Water). Capped at 1.0.
+dixon_tier_bonus: 0.10
+
+# Bonus applied to the technique tier when modifier contains WaterExc.
+waterexc_tier_bonus: 0.05
+
+# Cohort-share weighting. Normal: 0.7 * share + 0.3 * 0.5
+# For Dixon/WaterExc bundles: 0.4 * share + 0.6 * 0.85 (intrinsic-quality boost).
+share_weight:
+  default:
+    share_coef: 0.70
+    floor_coef: 0.30
+    floor_value: 0.50
+  dixon_or_waterexc:
+    share_coef: 0.40
+    floor_coef: 0.60
+    floor_value: 0.85
+
+# Border / needs-check thresholds.
+border_thresholds:
+  runner_up_within_pct: 0.05    # top-2 within 5% triggers border
+  pre_post_twin_pct:    0.85    # any other bundle ≥ 0.85 of winning AND different post_contrast
+  rare_technique_share: 0.10    # winning technique <10% of cohort eligibles
+  dixon_vs_plain_pct:   0.10    # Dixon family wins, non-Dixon within 10%
+  slice_pctile_lo:      0.05    # winning slice count below 5th pctile (in dim bin)
+  slice_pctile_hi:      0.95    # ... above 95th pctile
+  # Auto-demote short stacks within a non-Dixon / non-MP2RAGE bundle.
+  # When >=2 stacks share an identical bundle key (same TR/TE/TI/FA, same
+  # contrast physics), demote any stack whose slice count is below
+  # partial_volume_pct * max(slices) AND the max itself is >= partial_volume_min_slices.
+  # Conservative defaults: a "170 vs 40" gap is caught; "192 vs 168" is not.
+  partial_volume_pct:        0.50
+  partial_volume_min_slices: 60
+
+# Canonical-construct preference within a Dixon family bundle.
+# First match wins; if none of these are present, family is dropped (red).
+dixon_canonical_priority:
+  - InPhase
+  - Water
+
+# Canonical-construct preference within an MP2RAGE bundle.
+# Single string matching scc.construct_csv exactly (after stripping); falls
+# through if neither is present.
+mp2rage_canonical_priority:
+  - "Denoised,Uniform"
+  - "Uniform"
+
+# Constructs that are NEVER eligible to be tagged main_acquisition,
+# regardless of bundle/family membership. Matched as substring tokens.
+non_canonical_constructs:
+  - MIP
+  - MPR
+  - Reformat
+  - Synthetic

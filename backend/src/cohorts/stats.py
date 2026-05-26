@@ -41,13 +41,20 @@ def get_cohort_stats(cohort_name: str, *, engine: Engine) -> dict[str, int]:
 
         total_subjects = subjects_result[0] if subjects_result else 0
 
-        # Count sessions (studies) for subjects in this cohort
+        # Count sessions for subjects in this cohort. A "session" is one
+        # calendar visit per subject — keyed by ``(subject_id, study_date)``
+        # — because PACS often splits one visit into multiple
+        # StudyInstanceUIDs (e.g. brain study + spine study), and those
+        # should be counted as one session, not two.
         sessions_result = conn.execute(
             text("""
-                SELECT COUNT(DISTINCT s.study_id)
-                FROM study s
-                INNER JOIN subject_cohorts sc ON s.subject_id = sc.subject_id
-                WHERE sc.cohort_id = :cohort_id
+                SELECT COUNT(*) FROM (
+                    SELECT DISTINCT s.subject_id, s.study_date
+                    FROM study s
+                    INNER JOIN subject_cohorts sc ON s.subject_id = sc.subject_id
+                    WHERE sc.cohort_id = :cohort_id
+                      AND s.study_date IS NOT NULL
+                ) t
             """),
             {"cohort_id": cohort_id},
         ).fetchone()
@@ -92,7 +99,9 @@ def get_all_cohort_stats(*, engine: Engine) -> dict[str, dict[str, int]]:
     """
     with engine.connect() as conn:
         # Optimized query using scalar subqueries instead of JOIN + COUNT(DISTINCT)
-        # This avoids Cartesian products when cohorts have many series/stacks
+        # This avoids Cartesian products when cohorts have many series/stacks.
+        # ``session_count`` is the number of distinct (subject_id, study_date)
+        # pairs in the cohort — see :func:`get_cohort_stats` for the rationale.
         results = conn.execute(
             text("""
                 SELECT
@@ -100,10 +109,13 @@ def get_all_cohort_stats(*, engine: Engine) -> dict[str, dict[str, int]]:
                     (SELECT COUNT(*)
                      FROM subject_cohorts sc
                      WHERE sc.cohort_id = c.cohort_id) as subject_count,
-                    (SELECT COUNT(DISTINCT st.study_id)
-                     FROM study st
-                     JOIN subject_cohorts sc2 ON st.subject_id = sc2.subject_id
-                     WHERE sc2.cohort_id = c.cohort_id) as session_count,
+                    (SELECT COUNT(*) FROM (
+                        SELECT DISTINCT st.subject_id, st.study_date
+                        FROM study st
+                        JOIN subject_cohorts sc2 ON st.subject_id = sc2.subject_id
+                        WHERE sc2.cohort_id = c.cohort_id
+                          AND st.study_date IS NOT NULL
+                     ) t) as session_count,
                     (SELECT COUNT(*)
                      FROM series_stack ss
                      JOIN series s ON ss.series_id = s.series_id

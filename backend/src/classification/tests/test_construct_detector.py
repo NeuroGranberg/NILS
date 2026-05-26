@@ -36,7 +36,7 @@ class TestOutputStructure:
     def test_empty_output(self, detector):
         """Original acquisition produces empty construct list."""
         ctx = ClassificationContext(
-            image_type="ORIGINAL\\PRIMARY\\M\\ND",
+            image_type="ORIGINAL\\PRIMARY\\M\\NORM\\DIS2D",
             text_search_blob="t1 mprage brain",
         )
         result = detector.detect(ctx)
@@ -562,7 +562,7 @@ class TestExplainDetection:
     def test_explain_no_constructs(self, detector):
         """Explain with no constructs."""
         ctx = ClassificationContext(
-            image_type="ORIGINAL\\PRIMARY\\M\\ND",
+            image_type="ORIGINAL\\PRIMARY\\M\\NORM\\DIS2D",
             text_search_blob="brain imaging",
         )
         explanation = detector.explain_detection(ctx)
@@ -664,3 +664,142 @@ class TestRealDatabaseExamples:
         )
         result = detector.detect(ctx)
         assert result.has("SyntheticT1w")
+
+
+# =============================================================================
+# RECON-VARIANT CONSTRUCTS
+# =============================================================================
+
+class TestReconVariantConstructs:
+    """Test detection of reconstruction variant constructs (ORIG, Filtered, ND)."""
+
+    # --- GE ORIG ---
+
+    def test_ge_orig_mprage(self, detector):
+        """GE ORIG prefix → ORIG construct."""
+        ctx = ClassificationContext(
+            image_type="ORIGINAL\\PRIMARY\\OTHER",
+            text_search_blob="orig t1mrage 08iso research abcd mprage promo efgre3d",
+        )
+        result = detector.detect(ctx)
+        assert result.has("ORIG")
+
+    def test_ge_orig_with_contrast(self, detector):
+        """GE ORIG K+ → ORIG construct (contrast handled separately)."""
+        ctx = ClassificationContext(
+            image_type="ORIGINAL\\PRIMARY\\OTHER",
+            text_search_blob="orig t1w mprage 08iso k + research mcwconnhub pr2 efgre3d",
+        )
+        result = detector.detect(ctx)
+        assert result.has("ORIG")
+
+    def test_ge_orig_not_in_middle(self, detector):
+        """'orig' in middle of text should NOT trigger ORIG construct."""
+        ctx = ClassificationContext(
+            image_type="ORIGINAL\\PRIMARY\\OTHER",
+            text_search_blob="t1w mprage 08iso original brain scan",
+        )
+        result = detector.detect(ctx)
+        assert not result.has("ORIG")
+
+    # --- GE Filtered ---
+
+    def test_ge_filtered_mprage(self, detector):
+        """GE Filtered prefix → Filtered construct."""
+        ctx = ClassificationContext(
+            image_type="ORIGINAL\\PRIMARY\\OTHER",
+            text_search_blob="filtered t1w mprage 08iso research mcwconnhub pr2 efgre3d",
+        )
+        result = detector.detect(ctx)
+        assert result.has("Filtered")
+
+    def test_ge_filtered_t2_cube(self, detector):
+        """GE Filtered T2 cube → Filtered construct."""
+        ctx = ClassificationContext(
+            image_type="ORIGINAL\\PRIMARY\\OTHER",
+            text_search_blob="filtered t2w cube 08iso research mcwconnhub mcw3dfse 3dfse",
+        )
+        result = detector.detect(ctx)
+        assert result.has("Filtered")
+
+    def test_ge_filtered_not_swi_filtered(self, detector):
+        """'filtered' inside SWI description should NOT trigger Filtered construct."""
+        ctx = ClassificationContext(
+            image_type="ORIGINAL\\PRIMARY\\M\\SWI",
+            text_search_blob="swi filtered phase brain",
+        )
+        result = detector.detect(ctx)
+        assert not result.has("Filtered")
+
+    # --- GE plain (default recon) ---
+
+    def test_ge_plain_no_construct(self, detector):
+        """GE default recon (no ORIG/Filtered prefix) → no recon construct."""
+        ctx = ClassificationContext(
+            image_type="ORIGINAL\\PRIMARY\\OTHER",
+            text_search_blob="t1mrage 08iso research abcd mprage promo efgre3d",
+        )
+        result = detector.detect(ctx)
+        assert not result.has("ORIG")
+        assert not result.has("Filtered")
+        assert not result.has("ND")
+
+    # --- Siemens ND ---
+
+    def test_siemens_nd_norm(self, detector):
+        """Siemens ND+NORM → ND construct."""
+        ctx = ClassificationContext(
+            image_type="ORIGINAL\\PRIMARY\\M\\ND\\NORM",
+            text_search_blob="t1 mpr sag iso neuronav",
+        )
+        result = detector.detect(ctx)
+        assert result.has("ND")
+
+    def test_siemens_nd_only(self, detector):
+        """Siemens ND without NORM → ND construct."""
+        ctx = ClassificationContext(
+            image_type="ORIGINAL\\PRIMARY\\M\\ND",
+            text_search_blob="t1 mprage sag",
+        )
+        result = detector.detect(ctx)
+        assert result.has("ND")
+
+    def test_siemens_dis2d_no_nd(self, detector):
+        """Siemens DIS2D (distortion corrected) → no ND construct."""
+        ctx = ClassificationContext(
+            image_type="ORIGINAL\\PRIMARY\\M\\NORM\\DIS2D",
+            text_search_blob="t1 mprage sag p3 iso",
+        )
+        result = detector.detect(ctx)
+        assert not result.has("ND")
+
+    def test_siemens_nd_with_adc(self, detector):
+        """Siemens ADC+ND → both ADC and ND constructs."""
+        ctx = ClassificationContext(
+            image_type="DERIVED\\PRIMARY\\DIFFUSION\\ADC\\ND\\NORM",
+            text_search_blob="adc map brain",
+        )
+        result = detector.detect(ctx)
+        assert result.has("ADC")
+        assert result.has("ND")
+
+    def test_siemens_nd_diffusion_raw(self, detector):
+        """Siemens raw DWI with ND → ND construct."""
+        ctx = ClassificationContext(
+            image_type="ORIGINAL\\PRIMARY\\DIFFUSION\\NONE\\ND\\NORM",
+            text_search_blob="ep2d diff 2mm hcp 73 b3000 ap",
+        )
+        result = detector.detect(ctx)
+        assert result.has("ND")
+
+    # --- Coexistence with other constructs ---
+
+    def test_ge_orig_with_existing_construct(self, detector):
+        """GE ORIG + ADC → both constructs in CSV."""
+        ctx = ClassificationContext(
+            image_type="DERIVED\\PRIMARY\\ADC",
+            text_search_blob="orig adc map brain",
+        )
+        result = detector.detect(ctx)
+        assert result.has("ADC")
+        assert result.has("ORIG")

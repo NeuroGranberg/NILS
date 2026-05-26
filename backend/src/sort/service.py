@@ -18,7 +18,7 @@ from .models import (
     StepProgress,
     StepStatus,
 )
-from .queries import get_cohort_info
+from .queries import get_cohort_info, get_cohort_info_by_name
 from .steps.base import StepContext, StepResult
 from .steps.step1_checkup import Step1Checkup
 # Use Polars-optimized version for better performance
@@ -262,9 +262,13 @@ class SortingService:
         try:
             engine = self._get_engine()
 
+            # Resolve cohort by name to handle app DB / metadata DB ID mismatch
+            from metadata_db.resolve import get_cohort_name_from_app_db
+            app_cohort_name = get_cohort_name_from_app_db(cohort_id)
+
             with engine.connect() as conn:
-                # Get cohort info
-                cohort_info = get_cohort_info(conn, cohort_id)
+                # Get cohort info from metadata DB using name
+                cohort_info = get_cohort_info_by_name(conn, app_cohort_name) if app_cohort_name else None
                 if not cohort_info:
                     yield ProgressEvent(
                         type="pipeline_error",
@@ -272,6 +276,7 @@ class SortingService:
                     )
                     return
 
+                metadata_cohort_id = cohort_info["cohort_id"]
                 cohort_name = cohort_info["name"]
 
                 # Create event queue for progress updates
@@ -281,9 +286,9 @@ class SortingService:
                     """Callback that puts progress updates on the queue."""
                     await progress_queue.put(update)
 
-                # Build step context
+                # Build step context using the metadata DB cohort_id
                 context = StepContext(
-                    cohort_id=cohort_id,
+                    cohort_id=metadata_cohort_id,
                     cohort_name=cohort_name,
                     config=config,
                     conn=conn,
@@ -949,15 +954,28 @@ class SortingService:
             # EXECUTE STEP
             # ═════════════════════════════════════════════════════════════════
             
+            # Resolve cohort by name to handle app DB / metadata DB ID mismatch
+            from metadata_db.resolve import get_cohort_name_from_app_db
+            app_cohort_name = get_cohort_name_from_app_db(cohort_id)
+
             engine = self._get_engine()
             with engine.begin() as conn:
-                # Get cohort info
-                cohort_info = get_cohort_info(conn, cohort_id)
-                
-                # Build context
+                # Get cohort info from metadata DB using name
+                cohort_info = get_cohort_info_by_name(conn, app_cohort_name) if app_cohort_name else None
+                if not cohort_info:
+                    yield ProgressEvent(
+                        type="step_error",
+                        step_id=step_id,
+                        error=f"Cohort {cohort_id} not found in metadata DB",
+                    )
+                    return
+
+                metadata_cohort_id = cohort_info["cohort_id"]
+
+                # Build context using the metadata DB cohort_id
                 context = StepContext(
                     conn=conn,
-                    cohort_id=cohort_id,
+                    cohort_id=metadata_cohort_id,
                     cohort_name=cohort_info['name'],
                     config=config,
                     previous_handover=previous_handover,

@@ -14,10 +14,22 @@ from ..models import SortingConfig, StepProgress, StepStatus
 
 @dataclass
 class StepContext:
-    """Context passed to each step during execution."""
+    """Context passed to each step during execution.
 
-    cohort_id: int
-    cohort_name: str
+    IMPORTANT: ``cohort_id`` is the **metadata DB** ``cohort.cohort_id`` —
+    this is what Steps 1, 2, and 4 need because they query the metadata DB
+    (``conn`` above points to it). It is NOT the application DB cohort id.
+
+    When a step needs to query application-DB tables keyed on the app cohort
+    (e.g. ``cohort_classification_overrides``), it must bridge to the app DB
+    via the unique, human-readable ``cohort_name`` — see
+    ``metadata_db.resolve`` and ``cohorts.repository.get_cohort_by_name``.
+    The two databases use independent auto-increment sequences, so IDs are
+    NOT interchangeable.
+    """
+
+    cohort_id: int                 # metadata DB cohort.cohort_id
+    cohort_name: str               # canonical bridging key (unique in both DBs)
     config: SortingConfig
     conn: Connection
     job_id: int | None = None

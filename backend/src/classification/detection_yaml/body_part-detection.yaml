@@ -72,6 +72,9 @@ categories:
       - "nacke"           # neck
       - "hals"            # neck (also Dutch/German for neck)
 
+      # Norwegian
+      - "nakke"           # neck
+
       # Dutch
       - "nek"             # neck
 
@@ -93,8 +96,11 @@ categories:
 
       # English - specific regions
       - "cervical"        # n=45
+      - "cerv"            # abbreviation (multi-lang: cerv, cervdors)
       - "thoracic"        # n=30
+      - "thor "           # abbreviation (trailing space avoids false matches)
       - "lumbar"          # n=10
+      - "lumb"            # abbreviation (lumbal, lumb)
       - "c-spine"         # n=18
       - "t-spine"         # n=26
       - "l-spine"
@@ -105,7 +111,7 @@ categories:
       - "cord"
       - "medulla"         # n=12
 
-      # Swedish
+      # Swedish / Norwegian
       - "rygg"            # n=10,104 (back/spine)
       - "ryggm rg"        # n=2,105 (spinal cord - märg normalized)
       - "halsrygg"        # n=1,317 (cervical spine)
@@ -113,6 +119,12 @@ categories:
       - "brostrygg"
       - "l ndrygg"        # lumbar spine (ländrygg normalized)
       - "lumbalrygg"
+      - "totalcolumna"    # Swedish: total spinal column (MR Totalcolumna)
+      - "columna"         # Latin/Swedish: spinal column
+
+      # Norwegian
+      - "sag cc"          # sagittal cervical cord
+      - "th col"          # thoracic column abbreviation
 
       # German
       - "wirbel"          # vertebra

@@ -146,6 +146,11 @@ SWI_OUTPUT_TYPES = {
         "construct": "QSM",
         "description": "Quantitative susceptibility map (ppm)",
     },
+    "r2star": {
+        "base": "SWI",
+        "construct": "R2starmap",
+        "description": "R2* transverse relaxation rate map (s⁻¹)",
+    },
 }
 
 # Output type definitions for SyMRI branch
@@ -365,6 +370,20 @@ EPIMIX_OUTPUT_TYPES = {
         "technique": "EPI",      # From technique-detection.yaml: EPI (generic 3D-EPI)
         "directory_type": "anat",
         "description": "NeuroMix SWI (3D-EPI)",
+    },
+}
+
+# Output type definitions for STAGE branch
+# STAGE raw echoes preserve their real base contrast (PDw or T1w).
+# Only construct (Magnitude/Phase) is set by the branch.
+STAGE_OUTPUT_TYPES = {
+    "magnitude": {
+        "construct": "Magnitude",
+        "description": "STAGE magnitude image (tissue-weighted)",
+    },
+    "phase": {
+        "construct": "Phase",
+        "description": "STAGE phase image (for SWI/QSM processing)",
     },
 }
 

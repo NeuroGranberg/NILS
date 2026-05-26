@@ -192,6 +192,33 @@ class TestSWIDetection:
         
         assert result.provenance == "SWIRecon"
 
+    def test_swi_qsm_keyword(self, detector: ProvenanceDetector):
+        """Test SWI detection from QSM keyword.
+
+        QSM shares the same multi-echo GRE acquisition as SWI.
+        """
+        ctx = make_context(text_search_blob="qsm ax 10te 2mm psd me efgre3d")
+        result = detector.detect(ctx)
+
+        assert result.provenance == "SWIRecon"
+        assert result.branch == "swi"
+
+    def test_swi_qsm_derived_map(self, detector: ProvenanceDetector):
+        """Test SWI detection from bare QSM output description."""
+        ctx = make_context(text_search_blob="qsm psd me efgre3d")
+        result = detector.detect(ctx)
+
+        assert result.provenance == "SWIRecon"
+        assert result.branch == "swi"
+
+    def test_swi_r2star_keyword(self, detector: ProvenanceDetector):
+        """Test SWI detection from R2* keyword (after normalization)."""
+        ctx = make_context(text_search_blob="r2star psd me efgre3d")
+        result = detector.detect(ctx)
+
+        assert result.provenance == "SWIRecon"
+        assert result.branch == "swi"
+
 
 # =============================================================================
 # Unit Tests - DTI Detection (rawrecon branch)

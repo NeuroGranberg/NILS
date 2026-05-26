@@ -30,5 +30,6 @@ export const buildNonAnonymizeStageDefaults = (): NonAnonymizeStageConfigDefault
     flatNiftiRootName: 'flat-nifti',
     subjectIdentifierSource: 'subject_code',
     includeFieldStrengths: [],
+    includeAccelerationInName: true,
   },
 });

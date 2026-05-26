@@ -37,7 +37,7 @@ from typing import Optional
 
 from .core.context import ClassificationContext
 from .core.output import ClassificationResult, create_excluded_result
-from .branches import apply_swi_logic, apply_symri_logic, apply_epimix_logic, BranchResult
+from .branches import apply_swi_logic, apply_symri_logic, apply_epimix_logic, apply_stage_logic, BranchResult
 from .detectors import (
     ProvenanceDetector,
     TechniqueDetector,
@@ -66,28 +66,57 @@ class ClassificationPipeline:
     All branches get full Technique, Modifier, and Acceleration detection.
     """
     
-    def __init__(self, detection_yaml_dir: Optional[str] = None):
+    def __init__(
+        self,
+        detection_yaml_dir: Optional[str] = None,
+        merged_configs: Optional[dict] = None,
+    ):
         """
         Initialize the classification pipeline.
-        
+
         Args:
             detection_yaml_dir: Path to YAML detection config files.
                               If None, uses default location.
+            merged_configs: Optional ``{filename: parsed_doc}`` with
+                per-cohort keyword overrides already applied. When provided,
+                detectors skip disk I/O and use these configs directly.
+                See ``classification.overrides.merge_overrides``.
         """
         if detection_yaml_dir:
             self.yaml_dir = Path(detection_yaml_dir)
         else:
             self.yaml_dir = Path(__file__).parent / "detection_yaml"
-        
-        # Initialize all detectors
-        self.provenance_detector = ProvenanceDetector(self.yaml_dir)
-        self.technique_detector = TechniqueDetector(self.yaml_dir)
-        self.modifier_detector = ModifierDetector(self.yaml_dir)
-        self.base_detector = BaseContrastDetector(self.yaml_dir)
+
+        def _cfg(filename: str) -> Optional[dict]:
+            if not merged_configs:
+                return None
+            return merged_configs.get(filename)
+
+        # Initialize all detectors. When merged_configs is provided, each
+        # detector receives its pre-parsed config and skips file I/O.
+        self.provenance_detector = ProvenanceDetector(
+            self.yaml_dir, config=_cfg("provenance-detection.yaml"),
+        )
+        self.technique_detector = TechniqueDetector(
+            self.yaml_dir, config=_cfg("technique-detection.yaml"),
+        )
+        self.modifier_detector = ModifierDetector(
+            self.yaml_dir, config=_cfg("modifier-detection.yaml"),
+        )
+        self.base_detector = BaseContrastDetector(
+            self.yaml_dir, config=_cfg("base-detection.yaml"),
+        )
+        # AccelerationDetector is not YAML-driven (uses class-level lists).
         self.acceleration_detector = AccelerationDetector(self.yaml_dir)
-        self.construct_detector = ConstructDetector(self.yaml_dir)
-        self.contrast_detector = ContrastDetector(self.yaml_dir)
-        self.body_part_detector = BodyPartDetector(self.yaml_dir)
+        self.construct_detector = ConstructDetector(
+            self.yaml_dir, config=_cfg("construct-detection.yaml"),
+        )
+        self.contrast_detector = ContrastDetector(
+            self.yaml_dir, config=_cfg("contrast-detection.yaml"),
+        )
+        self.body_part_detector = BodyPartDetector(
+            self.yaml_dir, config=_cfg("body_part-detection.yaml"),
+        )
     
     def classify(self, ctx: ClassificationContext) -> ClassificationResult:
         """
@@ -259,6 +288,8 @@ class ClassificationPipeline:
             return apply_swi_logic(ctx)
         elif branch == "epimix":
             return apply_epimix_logic(ctx)
+        elif branch == "stage":
+            return apply_stage_logic(ctx)
         else:
             # RawRecon: no overrides, use standard detectors
             return BranchResult()

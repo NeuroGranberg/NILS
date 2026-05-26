@@ -392,6 +392,33 @@ def _run_dwi_enrichment_migration(connection) -> None:
         raise
 
 
+def _needs_geometry_columns_migration(connection) -> bool:
+    """Check if the through-plane resolution column needs to be added."""
+    from .migrations.add_geometry_columns import _needs_migration
+    return _needs_migration(connection)
+
+
+def _run_geometry_columns_migration(connection) -> None:
+    """Add slice_thickness_mm column to series_classification_cache."""
+    from .migrations.add_geometry_columns import run_migration
+
+    logger.info("Detected missing geometry columns - running automatic migration...")
+    try:
+        results = run_migration(engine, dry_run=False)
+        if results["success"]:
+            if results["already_migrated"]:
+                logger.info("Geometry columns migration already applied")
+            else:
+                logger.info(
+                    "Geometry columns migration completed: %s (%.1fs)",
+                    ", ".join(results["changes_made"]),
+                    results["elapsed_seconds"],
+                )
+    except Exception as exc:
+        logger.error("Geometry columns migration failed: %s", exc)
+        raise
+
+
 def _needs_body_part_migration(connection) -> bool:
     """Check if body_part column needs to be added to series_classification_cache."""
     from .migrations.migrate_spinal_cord_to_body_part import _needs_migration
@@ -726,6 +753,11 @@ def _apply_schema_upgrades() -> None:
     with engine.connect() as connection:
         if _needs_dwi_enrichment_migration(connection):
             _run_dwi_enrichment_migration(connection)
+
+    # Add geometry columns (slice_thickness_mm) — populated by Sort Step 3.
+    with engine.connect() as connection:
+        if _needs_geometry_columns_migration(connection):
+            _run_geometry_columns_migration(connection)
 
 
 def ensure_schema() -> str:

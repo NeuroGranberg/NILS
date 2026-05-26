@@ -200,6 +200,7 @@ export default defineConfig(({ mode }) => {
         '/api': {
           target: 'http://backend:8000',
           changeOrigin: true,
+          timeout: 600_000,  // 10 min — body-part-qc apply can take minutes
         },
       },
     },

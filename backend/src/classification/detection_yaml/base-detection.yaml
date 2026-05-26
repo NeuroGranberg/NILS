@@ -66,6 +66,7 @@ bases:
       - "t1-w"
       - "t1 weighted"
       - "t1-weighted"
+      - "t1"
     detection:
       # No exclusive flag - inferred from technique or physics
       combination: null
@@ -92,6 +93,7 @@ bases:
       - "t2-w"
       - "t2 weighted"
       - "t2-weighted"
+      - "t2"   # GE T2 CUBE: "T2CUBE" → "t2w" (CUBE detected separately as SPACE technique)
     detection:
       combination: null
     physics:
@@ -488,14 +490,18 @@ rules:
     - "DWI"
     - "PWI"
     - "SWI"
-    - "MTw"
     - "T1rho"
     - "T2rho"
-    # Primary tissue contrasts
+    # Primary tissue contrasts (checked before MTw so that
+    # "T1W_TSE_MT" / "T2W_TSE_MT" resolve to T1w/T2w with MT as modifier;
+    # true MTw series like "MTw_fa6_cs6" still match because "mtw" doesn't
+    # hit any T1w/T2w keyword, and flag-based MTw via has_mtc fires at
+    # Tier 2 before keywords regardless of this order)
     - "T2starw"  # Dict key for T2*w (asterisk not allowed in YAML keys)
     - "T2w"
     - "PDw"
     - "T1w"
+    - "MTw"
     # Fallback
     - "Unknown"
   

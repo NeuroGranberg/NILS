@@ -114,21 +114,27 @@ class ModifierDetector(BaseDetector):
         "combination": 0.75, # Multiple flags AND
     }
     
-    def __init__(self, yaml_dir: Optional[Path] = None):
+    def __init__(
+        self,
+        yaml_dir: Optional[Path] = None,
+        config: Optional[Dict[str, Any]] = None,
+    ):
         """
         Initialize modifier detector.
-        
+
         Args:
             yaml_dir: Directory containing detection YAML files.
                      If None, uses default location.
+            config: Pre-parsed YAML dict (bypasses file I/O; used by pipeline
+                for per-cohort merged configs).
         """
         yaml_path = None
         if yaml_dir:
             yaml_path = Path(yaml_dir) / self.YAML_FILENAME
         else:
             yaml_path = Path(__file__).parent.parent / "detection_yaml" / self.YAML_FILENAME
-        
-        super().__init__(yaml_path)
+
+        super().__init__(yaml_path, config=config)
         
         # Parse configuration
         self._modifiers: Dict[str, Dict[str, Any]] = self.config.get("modifiers", {})

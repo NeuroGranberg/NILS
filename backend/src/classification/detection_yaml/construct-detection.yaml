@@ -545,6 +545,22 @@ constructs:
       Quantitative map of magnetic susceptibility in ppm.
       Derived from phase data using dipole inversion.
 
+  R2starmap:
+    name: "R2starmap"
+    category: "quantitative"
+    description: "R2* transverse relaxation rate map (1/T2*, from multi-echo GRE)."
+    keywords:
+      - "r2star"
+      - "r2star map"
+      - "r2starmap"
+    detection:
+      exclusive: has_r2star
+    requires_derived: true
+    notes: |
+      R2* map computed from exponential magnitude decay across
+      echoes of a multi-echo GRE acquisition. Reflects iron content
+      and tissue microstructure. Distinct from spin-echo R2.
+
   # ===========================================================================
   # PROJECTION / REFORMAT CONSTRUCTS
   # ===========================================================================
@@ -651,6 +667,59 @@ constructs:
       exclusive: has_imaginary
     requires_derived: false
 
+  # ===========================================================================
+  # RECON-VARIANT CONSTRUCTS
+  # ===========================================================================
+  # Same acquisition reconstructed differently — like MP2RAGE INV1/INV2/UNI,
+  # these are output variants of one physical scan.
+  # Default scanner recon gets no construct (empty); only non-default variants
+  # are labeled.
+  #
+  # GE: series_description prefix (ORIG / Filtered), ImageType always OTHER
+  # Siemens: ImageType ND token (no gradient distortion correction)
+  # ===========================================================================
+
+  ORIG:
+    name: "ORIG"
+    category: "recon_variant"
+    description: "GE raw/unprocessed reconstruction (no post-processing filter)."
+    keywords: []  # detection via flag only — keyword "orig" is too generic
+    detection:
+      exclusive: is_ge_orig
+    requires_derived: false
+    notes: |
+      GE scanners produce multiple recons of the same acquisition:
+        - plain (default scanner output)
+        - ORIG (unprocessed raw reconstruction)
+        - Filtered (noise-filtered via PURE/SCIC)
+      Detected from text_search_blob starting with "orig ".
+
+  Filtered:
+    name: "Filtered"
+    category: "recon_variant"
+    description: "GE noise-filtered reconstruction (PURE/SCIC denoising)."
+    keywords: []  # detection via flag only — keyword "filtered" is too generic
+    detection:
+      exclusive: is_ge_filtered
+    requires_derived: false
+    notes: |
+      GE noise-filtered recon variant. Same acquisition as plain/ORIG
+      but with image-space denoising applied during reconstruction.
+      Detected from text_search_blob starting with "filtered ".
+
+  ND:
+    name: "ND"
+    category: "recon_variant"
+    description: "Siemens No-Distortion-corrected reconstruction (raw geometry)."
+    keywords: []  # detection via ImageType flag only
+    detection:
+      exclusive: has_nd
+    requires_derived: false
+    notes: |
+      Siemens ImageType "ND" token: gradient distortion correction NOT applied.
+      Distinct from DIS2D/DIS3D (which ARE corrected).
+      Useful for users who need raw geometry for downstream registration.
+
 # =============================================================================
 # DETECTION RULES
 # =============================================================================
@@ -705,6 +774,10 @@ rules:
     - "Magnitude"
     - "Real"
     - "Imaginary"
+    # Recon variants
+    - "ORIG"
+    - "Filtered"
+    - "ND"
   
   # Confidence thresholds
   confidence_thresholds:
@@ -725,6 +798,8 @@ rules:
 #   - "SyntheticFLAIR,SyntheticT1w" (synthetic contrasts)
 #   - "Water" (Dixon water-only)
 #   - "MIP" (maximum intensity projection)
-#   - "" (no constructs - original acquisition)
+#   - "ORIG" (GE raw/unprocessed recon variant)
+#   - "ND" (Siemens no-distortion-correction recon variant)
+#   - "" (no constructs - default scanner reconstruction)
 #
 # =============================================================================

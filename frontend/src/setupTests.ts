@@ -12,3 +12,13 @@ if (!globalThis.window.matchMedia) {
     dispatchEvent: () => false,
   });
 }
+
+// jsdom doesn't ship ResizeObserver; Mantine's ScrollArea / Modal need it.
+if (!globalThis.ResizeObserver) {
+  // @ts-expect-error -- polyfill
+  globalThis.ResizeObserver = class {
+    observe() {}
+    unobserve() {}
+    disconnect() {}
+  };
+}

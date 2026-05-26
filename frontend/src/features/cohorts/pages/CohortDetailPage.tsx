@@ -14,6 +14,7 @@ import {
   SegmentedControl,
   Stack,
   Switch,
+  Tabs,
   Text,
   TextInput,
   Title,
@@ -52,6 +53,7 @@ import { SortingPipelineSimple } from '../../sorting/components/SortingPipelineS
 import { useRunSortingStep, sortingKeys, type SortingConfig } from '../../sorting';
 import { useIdTypes } from '../../database/api';
 import { BidsStageForm, type BidsConfig } from '../../bids/BidsStageForm';
+import { KeywordSettingsTab } from '../keywords/KeywordSettingsTab';
 
 // Debug logging disabled for production - uncomment for local debugging
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
@@ -715,6 +717,19 @@ export const CohortDetailPage = () => {
         </Text>
       </Stack>
 
+      <Tabs defaultValue="pipeline" keepMounted={false}>
+        <Tabs.List>
+          <Tabs.Tab value="pipeline">Pipeline</Tabs.Tab>
+          <Tabs.Tab value="keywords">Keywords</Tabs.Tab>
+        </Tabs.List>
+
+        <Tabs.Panel value="keywords" pt="md">
+          <KeywordSettingsTab cohortId={cohort.id} />
+        </Tabs.Panel>
+
+        <Tabs.Panel value="pipeline" pt="md">
+          <Stack gap="lg">
+
       <PipelineStepper
         stages={orderedStages}
         activeStageIndex={resolvedActiveIndex}
@@ -874,6 +889,9 @@ export const CohortDetailPage = () => {
           )}
         </StageCard>
       )}
+          </Stack>
+        </Tabs.Panel>
+      </Tabs>
     </Stack>
   );
 };

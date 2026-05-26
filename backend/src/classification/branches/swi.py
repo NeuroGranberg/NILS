@@ -1,27 +1,30 @@
 """
 SWI Branch Logic
 
-Classification branch for Susceptibility-Weighted Imaging (SWI) outputs.
+Classification branch for Susceptibility-Weighted Imaging (SWI) and
+Quantitative Susceptibility Mapping (QSM) outputs.
 
-SWI acquisitions produce multiple output types from a single scan:
+SWI/QSM acquisitions produce multiple output types from a single
+multi-echo GRE scan:
 1. Magnitude - Source magnitude image (T2*-weighted)
 2. Phase - Filtered phase map (iron/calcium differentiation)
 3. SWI - Processed image (magnitude × phase_mask^n)
 4. MinIP - Minimum intensity projection (venogram)
 5. MIP - Maximum intensity projection
-6. QSM - Quantitative susceptibility map (optional)
+6. QSM - Quantitative susceptibility map (derived from phase via dipole inversion)
+7. R2* - Transverse relaxation rate map (derived from magnitude decay fitting)
 
 Physics Note:
-SWI requires gradient echo (T2*) readout. The 180° refocusing pulse in
-spin echo nullifies susceptibility-induced phase shifts. SWI can be:
+SWI and QSM both require gradient echo (T2*) readout. The 180° refocusing
+pulse in spin echo nullifies susceptibility-induced phase shifts. Variants:
 - Standard GRE-SWI: High resolution, 4-6 min
 - EPI-SWI: Rapid acquisition, 1-2 min (geometric distortion trade-off)
-- Multi-echo SWI/SWAN: Multiple echoes for better SNR/coverage
+- Multi-echo GRE (QSM/me, SWAN): Multiple echoes for QSM/R2*/SWI
 
-All SWI outputs have base="SWI" to indicate the contrast type.
+All outputs have base="SWI" to indicate the contrast family.
 The technique axis (GRE or EPI) indicates the acquisition method.
 
-Version: 2.0.0 - Updated construct names, added MIP, text_search_blob checks
+Version: 3.0.0 - Added R2*, reordered rules to handle GE psd/QSM/me outputs
 """
 
 from typing import Optional
@@ -31,37 +34,78 @@ from ..core.evidence import Evidence, EvidenceSource
 from .common import BranchResult, SWI_OUTPUT_TYPES
 
 
+# Text tokens that identify a specific output type in GE-style descriptions
+# like "MAG | psd/QSM/me | EFGRE3D" where the leading label before "|"
+# determines the output type. These are checked BEFORE generic "qsm" matching
+# to prevent the PSD name "psd/QSM/me" from making everything construct=QSM.
+_SPECIFIC_OUTPUT_TOKENS = frozenset([
+    "magnitude", "phase", "swi", "mip", "minip", "r2star",
+])
+
+
+def _has_specific_output_token(text_blob: str) -> bool:
+    """Check if text contains a specific output-type indicator."""
+    return any(tok in text_blob for tok in _SPECIFIC_OUTPUT_TOKENS)
+
+
+def _make_result(
+    construct: str,
+    technique: str,
+    confidence: float,
+    evidence_field: str,
+    evidence_value: str,
+    evidence_desc: str,
+) -> BranchResult:
+    """Helper to build a standard SWI BranchResult."""
+    return BranchResult(
+        base="SWI",
+        construct=construct,
+        technique=technique,
+        skip_base_detection=True,
+        skip_construct_detection=True,
+        skip_technique_detection=True,
+        directory_type="anat",
+        confidence=confidence,
+        evidence=[Evidence(
+            source=EvidenceSource.HIGH_VALUE_TOKEN,
+            field=evidence_field,
+            value=evidence_value,
+            target=construct,
+            weight=confidence,
+            description=evidence_desc,
+        )],
+    )
+
+
 def apply_swi_logic(ctx: ClassificationContext) -> BranchResult:
     """
-    Apply SWI-specific classification logic.
+    Apply SWI/QSM-specific classification logic.
 
-    Determines the output type (Magnitude, Phase, SWI, MinIP, MIP, QSM) and
-    returns appropriate base contrast and construct overrides.
-
-    All SWI outputs get base="SWI". The construct indicates the specific output type.
+    Determines the output type and returns base contrast/construct overrides.
+    All outputs get base="SWI". The construct distinguishes the output type.
 
     Args:
         ctx: Classification context with fingerprint data
 
     Returns:
-        BranchResult with base/construct overrides for SWI outputs
+        BranchResult with base/construct overrides for SWI/QSM outputs
 
     Detection Priority (first match wins):
-        1. QSM - Quantitative susceptibility map (highest specificity)
-        2. MinIP - Minimum intensity projection
-        3. MIP - Maximum intensity projection
-        4. Phase - Phase map (has_phase flag, no magnitude)
-        5. SWI Processed - has_swi token in ImageType (key indicator!)
-        6. Magnitude - Fallback (has M but no SWI token)
+        1. MinIP  - Minimum intensity projection (venogram)
+        2. MIP    - Maximum intensity projection
+        3. Phase  - Phase map (has_phase flag, "phase" text from pha/phs normalizer)
+        4. SWI    - Processed SWI (has_swi ImageType token, or "swi" leading label)
+        5. R2*    - R2* map (has_r2star flag, or "r2star" text)
+        6. Magnitude - Source magnitude (has_magnitude flag, "magnitude" text)
+        7. QSM    - Quantitative susceptibility map (narrow: only when no other
+                    specific output token present, or has_qsm ImageType flag)
+        8. Fallback - default to SWI
 
-    Key insight: The SWI token in ImageType indicates processed SWI output,
-    regardless of ORIGINAL/DERIVED flag. Example:
-        - ORIGINAL\PRIMARY\M\SWI\... = Processed SWI (has SWI token)
-        - ORIGINAL\PRIMARY\M\...     = Magnitude source (no SWI token)
-
-    Detection uses:
-        - unified_flags: DICOM-derived flags (is_minip, has_phase, has_swi, etc.)
-        - text_search_blob: Normalized text for keyword matching
+    Key design: QSM moved to rule 7 (narrow) instead of rule 1 (greedy).
+    GE multi-echo QSM sequences put "psd/QSM/me" in ALL output descriptions,
+    so "qsm" appears in the text blob for MAG, PHS, SWI, mIP, R2*, QSM, and
+    source echoes alike. Specific output tokens (magnitude, phase, swi, mip,
+    r2star) must be checked BEFORE the generic "qsm" fallback.
     """
     uf = ctx.unified_flags
     text_blob = (ctx.text_search_blob or "").lower()
@@ -69,229 +113,160 @@ def apply_swi_logic(ctx: ClassificationContext) -> BranchResult:
     # =========================================================================
     # Determine technique family (GRE or EPI) for all SWI outputs
     # =========================================================================
-    # SWI is a provenance/processing method, not a technique.
-    # The actual acquisition is either GRE (standard) or EPI (fast).
-    #
-    # Detection priority:
-    # 1. has_epi flag (from DICOM tags) → EPI
-    # 2. has_gre flag (from DICOM tags) → GRE
-    # 3. Text fallback for ambiguous cases (e.g., GE "RM" research mode)
-    #    - Check text_search_blob for "epi" keyword → EPI
-    # 4. Default → GRE (standard SWI)
     if uf.get("has_epi"):
         swi_technique = "EPI"
     elif uf.get("has_gre"):
         swi_technique = "GRE"
     elif "epi" in text_blob or "3depi" in text_blob:
-        # Fallback: GE scanners use "RM" (Research Mode) in scanning_sequence
-        # but include "EPI" or "3DEPI" in series description (e.g., "3DEPIks")
         swi_technique = "EPI"
     else:
         swi_technique = "GRE"
 
     # =========================================================================
-    # 1. QSM - Quantitative Susceptibility Mapping
+    # 1. MinIP - Minimum Intensity Projection
     # =========================================================================
-    # QSM is derived from phase data using dipole inversion
-    # Highest specificity - check first
-    if uf.get("has_qsm") or "qsm" in text_blob:
-        return BranchResult(
-            base="SWI",
-            construct="QSM",
-            technique=swi_technique,
-            skip_base_detection=True,
-            skip_construct_detection=True,
-            skip_technique_detection=True,
-            directory_type="anat",
-            confidence=0.95,
-            evidence=[Evidence(
-                source=EvidenceSource.HIGH_VALUE_TOKEN,
-                field="unified_flags" if uf.get("has_qsm") else "text_search_blob",
-                value="has_qsm" if uf.get("has_qsm") else "qsm keyword",
-                target="QSM",
-                weight=0.95,
-                description="QSM detected → Quantitative Susceptibility Map",
-            )],
-        )
-
-    # =========================================================================
-    # 2. MinIP - Minimum Intensity Projection
-    # =========================================================================
-    # MinIP is always derived, created by taking minimum across slices
-    # Used for venogram visualization (veins appear dark)
     if uf.get("is_minip") or "minip" in text_blob or "min ip" in text_blob:
-        return BranchResult(
-            base="SWI",
-            construct="MinIP",
-            technique=swi_technique,
-            skip_base_detection=True,
-            skip_construct_detection=True,
-            skip_technique_detection=True,
-            directory_type="anat",
-            confidence=0.95,
-            evidence=[Evidence(
-                source=EvidenceSource.HIGH_VALUE_TOKEN,
-                field="unified_flags" if uf.get("is_minip") else "text_search_blob",
-                value="is_minip" if uf.get("is_minip") else "minip keyword",
-                target="MinIP",
-                weight=0.95,
-                description="MinIP detected → Minimum Intensity Projection",
-            )],
+        return _make_result(
+            "MinIP", swi_technique, 0.95,
+            "unified_flags" if uf.get("is_minip") else "text_search_blob",
+            "is_minip" if uf.get("is_minip") else "minip keyword",
+            "MinIP detected → Minimum Intensity Projection",
         )
 
     # =========================================================================
-    # 3. MIP - Maximum Intensity Projection
+    # 2. MIP - Maximum Intensity Projection
     # =========================================================================
-    # MIP is derived, created by taking maximum across slices
-    # Check for "mip" but NOT "minip" (which was caught above)
     is_mip_flag = uf.get("is_mip")
     is_mip_text = "mip" in text_blob and "minip" not in text_blob
     if is_mip_flag or is_mip_text:
-        return BranchResult(
-            base="SWI",
-            construct="MIP",
-            technique=swi_technique,
-            skip_base_detection=True,
-            skip_construct_detection=True,
-            skip_technique_detection=True,
-            directory_type="anat",
-            confidence=0.90,
-            evidence=[Evidence(
-                source=EvidenceSource.HIGH_VALUE_TOKEN,
-                field="unified_flags" if is_mip_flag else "text_search_blob",
-                value="is_mip" if is_mip_flag else "mip keyword",
-                target="MIP",
-                weight=0.90,
-                description="MIP detected → Maximum Intensity Projection",
-            )],
+        return _make_result(
+            "MIP", swi_technique, 0.90,
+            "unified_flags" if is_mip_flag else "text_search_blob",
+            "is_mip" if is_mip_flag else "mip keyword",
+            "MIP detected → Maximum Intensity Projection",
         )
 
     # =========================================================================
-    # 4. Phase - Phase Map
+    # 3. Phase - Phase Map
     # =========================================================================
-    # Phase images show phase angle, used for iron/calcium differentiation
-    # Check flag OR text keyword (semantic normalizer expands "pha" → "phase")
-    is_phase_flag = uf.get("has_phase") and not uf.get("has_magnitude")
-    is_phase_text = "phase" in text_blob and "magnitude" not in text_blob
+    # Normalizer expands "pha"→"phase" and "phs"→"phase" so GE PHS outputs match.
+    # Skip if has_qsm ImageType flag is set — QSM token takes priority over P token
+    # (e.g. DERIVED\PRIMARY\QSM\P should be QSM, not Phase).
+    is_phase_flag = uf.get("has_phase") and not uf.get("has_magnitude") and not uf.get("has_qsm")
+    is_phase_text = "phase" in text_blob and "magnitude" not in text_blob and not uf.get("has_qsm")
     if is_phase_flag or is_phase_text:
-        return BranchResult(
-            base="SWI",
-            construct="Phase",
-            technique=swi_technique,
-            skip_base_detection=True,
-            skip_construct_detection=True,
-            skip_technique_detection=True,
-            directory_type="anat",
-            confidence=0.90,
-            evidence=[Evidence(
-                source=EvidenceSource.HIGH_VALUE_TOKEN,
-                field="unified_flags" if is_phase_flag else "text_search_blob",
-                value="has_phase" if is_phase_flag else "phase keyword",
-                target="Phase",
-                weight=0.90,
-                description="Phase detected → SWI Phase output",
-            )],
+        # Phase from a QSM acquisition also gets QSM construct
+        construct = "Phase,QSM" if "qsm" in text_blob else "Phase"
+        return _make_result(
+            construct, swi_technique, 0.90,
+            "unified_flags" if is_phase_flag else "text_search_blob",
+            "has_phase" if is_phase_flag else "phase keyword",
+            f"{construct} detected → SWI/QSM Phase output",
         )
 
     # =========================================================================
-    # 5. SWI - Processed/Combined SWI (by ImageType flag)
+    # 4. SWI - Processed/Combined SWI
     # =========================================================================
-    # The SWI token in ImageType indicates processed SWI output
+    # The SWI token in ImageType indicates processed SWI output.
+    # Also match "swi" as a leading output label in text when it appears
+    # alongside other specific tokens (not just as the sequence family name).
     if uf.get("has_swi"):
-        return BranchResult(
-            base="SWI",
-            construct="SWI",
-            technique=swi_technique,
-            skip_base_detection=True,
-            skip_construct_detection=True,
-            skip_technique_detection=True,
-            directory_type="anat",
-            confidence=0.90,
-            evidence=[Evidence(
-                source=EvidenceSource.HIGH_VALUE_TOKEN,
-                field="unified_flags",
-                value="has_swi",
-                target="SWI",
-                weight=0.90,
-                description="SWI token in ImageType → Processed SWI output",
-            )],
+        return _make_result(
+            "SWI", swi_technique, 0.90,
+            "unified_flags", "has_swi",
+            "SWI token in ImageType → Processed SWI output",
         )
 
     # =========================================================================
-    # 5.5. PROJECTION Fallback - Projections default to SWI (not Magnitude)
+    # 4.5. PROJECTION Fallback
     # =========================================================================
-    # PROJECTION images in SWI context are always processed outputs.
-    # If not caught by MinIP/MIP/Phase/SWI checks above, they should be SWI.
-    # They should NEVER fall through to Magnitude (which is for source data).
     if uf.get("is_projection"):
-        return BranchResult(
-            base="SWI",
-            construct="SWI",
-            technique=swi_technique,
-            skip_base_detection=True,
-            skip_construct_detection=True,
-            skip_technique_detection=True,
-            directory_type="anat",
-            confidence=0.80,
-            evidence=[Evidence(
-                source=EvidenceSource.HIGH_VALUE_TOKEN,
-                field="is_projection",
-                value="PROJECTION IMAGE",
-                target="SWI",
-                weight=0.80,
-                description="PROJECTION IMAGE in SWI context → Processed SWI output (fallback)",
-            )],
+        return _make_result(
+            "SWI", swi_technique, 0.80,
+            "is_projection", "PROJECTION IMAGE",
+            "PROJECTION IMAGE in SWI context → Processed SWI output (fallback)",
+        )
+
+    # =========================================================================
+    # 5. R2* - Transverse Relaxation Rate Map
+    # =========================================================================
+    # R2* is derived from multi-echo magnitude signal decay fitting.
+    # Distinct from QSM (which comes from phase). Can co-occur with QSM
+    # if both keywords are present → comma-separated construct.
+    has_r2star = uf.get("has_r2star") or "r2star" in text_blob
+    if has_r2star:
+        # R2* from a QSM acquisition also gets QSM construct (comma-separated).
+        # "qsm" in text from psd/QSM/me or explicit QSM ImageType token.
+        has_qsm = uf.get("has_qsm") or "qsm" in text_blob
+        construct = "QSM,R2starmap" if has_qsm else "R2starmap"
+        return _make_result(
+            construct, swi_technique, 0.90,
+            "unified_flags" if uf.get("has_r2star") else "text_search_blob",
+            "has_r2star" if uf.get("has_r2star") else "r2star keyword",
+            f"{construct} detected → R2* transverse relaxation rate map",
         )
 
     # =========================================================================
     # 6. Magnitude - Source Magnitude Image
     # =========================================================================
-    # Original magnitude is T2*-weighted, the source data before SWI processing
-    # Only match when has_magnitude but NOT has_swi (SWI token = processed output)
-    # The magnitude source has M token but no SWI token in ImageType
+    # T2*-weighted source data before SWI/QSM processing.
+    # has_magnitude flag (M token without SWI token) or "magnitude" text
+    # (normalizer expands "mag" → "magnitude").
+    # When "qsm" is also present in text, use "Magnitude,QSM" to indicate
+    # this is magnitude data from a QSM acquisition (not generic SWI mag).
     has_magnitude_no_swi = uf.get("has_magnitude") and not uf.get("has_swi")
     if has_magnitude_no_swi or "magnitude" in text_blob:
-        return BranchResult(
-            base="SWI",
-            construct="Magnitude",
-            technique=swi_technique,
-            skip_base_detection=True,
-            skip_construct_detection=True,
-            skip_technique_detection=True,
-            directory_type="anat",
-            confidence=0.85,
-            evidence=[Evidence(
-                source=EvidenceSource.HIGH_VALUE_TOKEN,
-                field="unified_flags" if has_magnitude_no_swi else "text_search_blob",
-                value="has_magnitude (no SWI token)" if has_magnitude_no_swi else "magnitude keyword",
-                target="Magnitude",
-                weight=0.85,
-                description="Magnitude detected → SWI Magnitude source",
-            )],
+        construct = "Magnitude,QSM" if "qsm" in text_blob else "Magnitude"
+        return _make_result(
+            construct, swi_technique, 0.85,
+            "unified_flags" if has_magnitude_no_swi else "text_search_blob",
+            "has_magnitude (no SWI token)" if has_magnitude_no_swi else "magnitude keyword",
+            f"{construct} detected → SWI/QSM source magnitude",
         )
 
     # =========================================================================
-    # Fallback: Unknown SWI output → default to SWI
+    # 7. QSM - Quantitative Susceptibility Map (narrow match)
     # =========================================================================
-    # If we reach here, we're in SWI branch but can't determine specific type
-    # Default to SWI (not Magnitude) since we know it's SWI data
-    return BranchResult(
-        base="SWI",
-        construct="SWI",
-        technique=swi_technique,
-        skip_base_detection=True,
-        skip_construct_detection=True,
-        skip_technique_detection=True,
-        directory_type="anat",
-        confidence=0.70,
-        evidence=[Evidence(
-            source=EvidenceSource.HIGH_VALUE_TOKEN,
-            field="provenance",
-            value="SWIRecon",
-            target="SWI",
-            weight=0.70,
-            description="SWI branch, output type unclear → default to SWI",
-        )],
+    # Only fires when no specific output token was matched above.
+    # This handles:
+    # - Stacks with has_qsm ImageType flag (e.g. DERIVED\PRIMARY\QSM)
+    # - Stacks where "qsm" is the ONLY meaningful keyword (e.g. "QSM | psd/QSM/me")
+    # - Multi-echo source echoes (e.g. "QSM_Ax_10TE_2mm...") that have "qsm"
+    #   but no specific output token → these are source magnitudes for QSM
+    has_qsm_flag = uf.get("has_qsm")
+    has_qsm_text = "qsm" in text_blob
+
+    if has_qsm_flag or has_qsm_text:
+        # Distinguish actual QSM maps from multi-echo source data.
+        # Source echoes have acquisition-style names (e.g. "qsm ax 10te 2mm...")
+        # while derived QSM maps have short output labels (e.g. just "qsm").
+        # Heuristic: if text contains multi-echo acquisition indicators
+        # AND no QSM ImageType flag, it's source magnitude data.
+        is_source_echo = (
+            not has_qsm_flag
+            and any(tok in text_blob for tok in ["10te", "8te", "6te", "5te", "4te", "3te"])
+            and "psd" in text_blob
+        )
+        if is_source_echo:
+            return _make_result(
+                "Magnitude,QSM", swi_technique, 0.80,
+                "text_search_blob", "multi-echo QSM source",
+                "Multi-echo QSM source echoes → Magnitude,QSM (raw T2*-weighted data)",
+            )
+        return _make_result(
+            "QSM", swi_technique, 0.95,
+            "unified_flags" if has_qsm_flag else "text_search_blob",
+            "has_qsm" if has_qsm_flag else "qsm keyword (no other output token)",
+            "QSM detected → Quantitative Susceptibility Map",
+        )
+
+    # =========================================================================
+    # 8. Fallback: Unknown SWI output → default to SWI
+    # =========================================================================
+    return _make_result(
+        "SWI", swi_technique, 0.70,
+        "provenance", "SWIRecon",
+        "SWI branch, output type unclear → default to SWI",
     )
 
 
@@ -308,10 +283,8 @@ def detect_swi_output_type(ctx: ClassificationContext) -> Optional[str]:
     uf = ctx.unified_flags
     text_blob = (ctx.text_search_blob or "").lower()
 
-    # Check in priority order (same as apply_swi_logic)
-    if uf.get("has_qsm") or "qsm" in text_blob:
-        return "qsm"
-    if uf.get("is_minip") or "minip" in text_blob:
+    # Priority order matches apply_swi_logic
+    if uf.get("is_minip") or "minip" in text_blob or "min ip" in text_blob:
         return "minip"
     if uf.get("is_mip") or ("mip" in text_blob and "minip" not in text_blob):
         return "mip"
@@ -319,17 +292,18 @@ def detect_swi_output_type(ctx: ClassificationContext) -> Optional[str]:
         return "phase"
     if "phase" in text_blob and "magnitude" not in text_blob:
         return "phase"
-    # SWI: has_swi flag in ImageType
     if uf.get("has_swi"):
         return "swi"
-    # PROJECTION fallback: projections are SWI if not MinIP/MIP/Phase
     if uf.get("is_projection"):
         return "swi"
-    # Magnitude: has M but no SWI token, or explicit "magnitude" keyword
+    if uf.get("has_r2star") or "r2star" in text_blob:
+        return "r2star"
     if (uf.get("has_magnitude") and not uf.get("has_swi")) or "magnitude" in text_blob:
         return "magnitude"
+    if uf.get("has_qsm") or "qsm" in text_blob:
+        return "qsm"
 
-    return "swi"  # Default to SWI (we're in SWI branch, so it's SWI data)
+    return "swi"
 
 
 def get_swi_output_info(output_type: str) -> dict:

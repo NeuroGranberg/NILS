@@ -1,7 +1,7 @@
 {
   "name": "nils-frontend",
   "private": true,
-  "version": "0.3.0",
+  "version": "0.4.0",
   "description": "Frontend for NILS - Neuroimaging Intelligent Linked System",
   "author": {
     "name": "Nima Chamyani",
@@ -18,7 +18,9 @@
     "build": "tsc -b && vite build",
     "lint": "eslint .",
     "preview": "vite preview",
-    "test": "vitest"
+    "test": "vitest",
+    "sync-version": "node scripts/sync-version.mjs",
+    "prebuild": "node scripts/sync-version.mjs"
   },
   "dependencies": {
     "@cornerstonejs/core": "^4.13.5",

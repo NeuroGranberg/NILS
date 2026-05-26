@@ -841,6 +841,12 @@ async def recover_missing_study_dates(
     recovered = []
     failed = []
     
+    # Resolve metadata DB cohort_id by name (app DB and metadata DB IDs can differ)
+    from metadata_db.resolve import resolve_metadata_cohort_id
+    meta_cohort_id = resolve_metadata_cohort_id(cohort_id)
+    if meta_cohort_id is None:
+        raise HTTPException(status_code=404, detail="Cohort not found in metadata database")
+
     # Get studies missing dates for this cohort
     with metadata_engine.connect() as conn:
         from sqlalchemy import text
@@ -851,7 +857,7 @@ async def recover_missing_study_dates(
         JOIN subject_cohorts sc ON s.subject_id = sc.subject_id
         WHERE sc.cohort_id = :cohort_id AND s.study_date IS NULL
         """)
-        result = conn.execute(query, {"cohort_id": cohort_id})
+        result = conn.execute(query, {"cohort_id": meta_cohort_id})
         missing_studies = result.fetchall()
         
         for study_id, study_uid in missing_studies:
@@ -1350,6 +1356,7 @@ def _run_bids_stage(cohort, stage_idx: int, merged_config: dict):
             cohort_name=cohort.name,
             # Field strength filter (e.g., [3.0, 7.0] for only 3T and 7T)
             include_field_strengths=merged_config.get('includeFieldStrengths', []),
+            include_acceleration_in_name=bool(merged_config.get('includeAccelerationInName', True)),
         )
     except Exception as exc:
         raise HTTPException(status_code=400, detail=f"Invalid config: {exc}")

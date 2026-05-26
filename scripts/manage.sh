@@ -56,19 +56,22 @@ generate_override() {
   local data_roots_json="["
   local volume_mounts_backend=""
   local volume_mounts_frontend=""
-  
+  local volume_mounts_worker=""
+
   for i in "${!paths[@]}"; do
     local p="${paths[$i]}"
     volume_mounts_backend="${volume_mounts_backend}      - ${p}:${p}:Z,rw"$'\n'
     volume_mounts_frontend="${volume_mounts_frontend}      - ${p}:${p}:Z,ro"$'\n'
-    
+    # Body Part QC worker only reads DICOM bytes, so mount RO.
+    volume_mounts_worker="${volume_mounts_worker}      - ${p}:${p}:Z,ro"$'\n'
+
     if [[ $i -gt 0 ]]; then
       data_roots_json="${data_roots_json},"
     fi
     data_roots_json="${data_roots_json}\"${p}\""
   done
   data_roots_json="${data_roots_json}]"
-  
+
   cat > "$GENERATED_OVERRIDE" <<YAML
 services:
   backend:
@@ -84,6 +87,12 @@ ${volume_mounts_backend}    environment:
 ${volume_mounts_frontend}    environment:
       VITE_DATA_ROOT: ${paths[0]}
       VITE_USE_REAL_FILES: "true"
+  body-part-qc-worker:
+    volumes:
+      # Live source for fast iteration (parallels the backend mount).
+      - ./backend/src:/app/src:Z
+${volume_mounts_worker}    environment:
+      DATA_ROOTS: '${data_roots_json}'
 YAML
 }
 
@@ -358,10 +367,10 @@ if [[ "$command" == "start" ]]; then
   fi
 
   FRONTEND_PORT="$(find_free_port 5173)"
-  BACKEND_PORT="$(find_free_port 8000)"
+  BACKEND_PORT="$(find_free_port 8010)"
   DB_PORT="$(find_free_port 5432)"
   METADATA_DB_PORT="$(find_free_port 5532)"
-  
+
   # Set bind address based on --forward flag
   if $FORWARD_PORTS; then
     BIND_ADDRESS="0.0.0.0"
@@ -370,12 +379,19 @@ if [[ "$command" == "start" ]]; then
     BIND_ADDRESS="127.0.0.1"
     echo "Mode: LOCALHOST ONLY (server access only)"
   fi
-  
+
   export FRONTEND_PORT BACKEND_PORT DB_PORT METADATA_DB_PORT BIND_ADDRESS
   echo "Frontend: http://localhost:$FRONTEND_PORT"
   echo "Backend API: http://localhost:$BACKEND_PORT"
   echo "Database port: $DB_PORT"
   echo "Metadata database port: $METADATA_DB_PORT"
+
+  # Sync dynamic backend port to nils-agent/.env so the agent can reach the API
+  NILS_ENV="${PROJECT_ROOT}/nils-agent/.env"
+  if [[ -f "$NILS_ENV" ]]; then
+    sed -i "s|^NILS_API_URL=.*|NILS_API_URL=http://host.docker.internal:${BACKEND_PORT}|" "$NILS_ENV"
+    echo "Synced NILS_API_URL → port $BACKEND_PORT in nils-agent/.env"
+  fi
   echo "Database directory: $DB_DIR"
   echo "Metadata database directory: $METADATA_DB_DIR"
 
@@ -389,6 +405,20 @@ if [[ "$command" == "start" ]]; then
     cleanup_override
     unset FRONTEND_DATA_ROOT || true
     export VITE_USE_REAL_FILES="false"
+  fi
+
+  # Auto-attach the GPU override for the body-part-qc-worker when an
+  # NVIDIA driver is reachable AND Docker has the nvidia runtime
+  # registered. Falls back to CPU silently otherwise.
+  GPU_OVERRIDE="$PROJECT_ROOT/docker-compose.override.gpu.yml"
+  if [[ -f "$GPU_OVERRIDE" ]] \
+      && command -v nvidia-smi >/dev/null 2>&1 \
+      && nvidia-smi >/dev/null 2>&1 \
+      && docker info 2>/dev/null | grep -qi 'Runtimes:.*nvidia'; then
+    COMPOSE_ARGS+=(-f "$GPU_OVERRIDE")
+    echo "GPU detected — body-part-qc-worker will run on CUDA."
+  else
+    echo "No usable NVIDIA GPU runtime — body-part-qc-worker will run on CPU."
   fi
 
   ensure_db_directory "$DB_DIR"

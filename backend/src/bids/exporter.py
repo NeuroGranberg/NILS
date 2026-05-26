@@ -86,6 +86,9 @@ class BidsExportConfig(BaseModel):
     # Empty list = include all; [3.0, 7.0] = only 3T and 7T
     include_field_strengths: list[float] = Field(default_factory=list)
 
+    # When False, acceleration_csv is excluded from exported file names
+    include_acceleration_in_name: bool = True
+
     # Stack ID filter: when set, only exports these specific stacks
     # Used by standalone export to export a resolved manifest subset
     include_stack_ids: list[int] = Field(default_factory=list)
@@ -273,6 +276,12 @@ class StackRecord:
     dwi_pe_direction: Optional[str] = None
     dwi_n_directions: Optional[int] = None
 
+    # Acquisition parameters (from stack_fingerprint)
+    echo_time: Optional[float] = None
+    repetition_time: Optional[float] = None
+    inversion_time: Optional[float] = None
+    flip_angle: Optional[float] = None
+
     # Computed fields (filled later)
     dest_rel_dir: Optional[Path] = None
     dest_name: Optional[str] = None
@@ -283,7 +292,11 @@ class StackRecord:
 # --------------------------------------------------------------------------- #
 
 
-def _build_stack_name(stack: StackRecord, is_multi_stack_series: bool = False) -> str:
+def _build_stack_name(
+    stack: StackRecord,
+    is_multi_stack_series: bool = False,
+    include_acceleration: bool = True,
+) -> str:
     """Build the base name for a stack.
 
     Args:
@@ -297,7 +310,7 @@ def _build_stack_name(stack: StackRecord, is_multi_stack_series: bool = False) -
     acq_type = stack.acquisition_type or ""  # 2D or 3D
     mods = (stack.modifier_csv or "").replace(",", "-")
     tech = stack.technique or ""
-    accel = (stack.acceleration_csv or "").replace(",", "-")
+    accel = (stack.acceleration_csv or "").replace(",", "-") if include_acceleration else ""
     construct = (stack.construct_csv or "").replace(",", "-")
 
     # Order: orientation, base, acquisition_type, modifiers, technique, acceleration, construct
@@ -354,6 +367,8 @@ def _destination_subfolder(stack: StackRecord, config: BidsExportConfig) -> str:
         return "anat/SyMRI"
     if stack.provenance == "SWIRecon":
         return "anat"
+    if stack.provenance == "STAGE":
+        return "anat"
     if stack.provenance == "ProjectionDerived":
         return "anat"
 
@@ -379,7 +394,7 @@ def _apply_filters(
     include_intents = set(config.include_intents or [])
     include_provs = set(config.include_provenance or [])
     exclude_provs = set(config.exclude_provenance or [])
-    selectable_provs = {"SyMRI", "SWIRecon", "EPIMix", "ProjectionDerived"}
+    selectable_provs = {"SyMRI", "SWIRecon", "EPIMix", "STAGE", "ProjectionDerived"}
 
     for stack in stacks:
         if include_intents and (stack.directory_type or "misc") not in include_intents:
@@ -426,7 +441,9 @@ def _assign_unique_names(stacks: list[StackRecord], config: BidsExportConfig) ->
                 stack.series_id is not None and series_stack_counts[stack.series_id] > 1
             )
             stack.dest_name = _build_stack_name(
-                stack, is_multi_stack_series=is_multi_stack
+                stack,
+                is_multi_stack_series=is_multi_stack,
+                include_acceleration=config.include_acceleration_in_name,
             )
             stack.dest_rel_dir = Path(dest_sub)
 
@@ -435,9 +452,26 @@ def _assign_unique_names(stacks: list[StackRecord], config: BidsExportConfig) ->
         for stack in group:
             name_counts[stack.dest_name].append(stack)
 
+        # Provenance groups where collision numbering should be
+        # synchronized by acquisition parameters (TE/TR/TI/FA) so that
+        # e.g. magnitude_1 and phase_1 refer to the same echo.
+        _PARAM_SORT_PROVENANCES = {"SyMRI", "SWIRecon", "EPIMix"}
+
+        def _acq_params_key(s: StackRecord) -> tuple:
+            return (
+                s.echo_time or 0,
+                s.repetition_time or 0,
+                s.inversion_time or 0,
+                s.flip_angle or 0,
+            )
+
         for name, colliding_stacks in name_counts.items():
             if len(colliding_stacks) > 1:
-                # Multiple stacks have the same name - add numbered suffix
+                # For SyMRI/SWI/EPIMix: sort by acquisition parameters
+                # so related series get matching collision numbers.
+                if any(s.provenance in _PARAM_SORT_PROVENANCES for s in colliding_stacks):
+                    colliding_stacks.sort(key=_acq_params_key)
+                # Add numbered suffix
                 for idx, stack in enumerate(colliding_stacks, start=1):
                     stack.dest_name = f"{name}_{idx}"
 
@@ -563,6 +597,10 @@ def _build_fetch_stacks_sql(config: BidsExportConfig) -> tuple[str, dict]:
             scc.dwi_b_value,
             scc.dwi_pe_direction,
             scc.dwi_n_directions,
+            ss.stack_echo_time,
+            ss.stack_repetition_time,
+            ss.stack_inversion_time,
+            ss.stack_flip_angle,
             ARRAY_AGG(i.dicom_file_path ORDER BY i.instance_number NULLS LAST) AS dicom_files
         FROM series_classification_cache scc
         JOIN series s ON scc.series_instance_uid = s.series_instance_uid
@@ -597,7 +635,11 @@ def _build_fetch_stacks_sql(config: BidsExportConfig) -> tuple[str, dict]:
             msd.magnetic_field_strength,
             scc.dwi_b_value,
             scc.dwi_pe_direction,
-            scc.dwi_n_directions
+            scc.dwi_n_directions,
+            ss.stack_echo_time,
+            ss.stack_repetition_time,
+            ss.stack_inversion_time,
+            ss.stack_flip_angle
     """
     return sql, params
 
@@ -638,6 +680,10 @@ def fetch_stacks(config: BidsExportConfig) -> list[StackRecord]:
                 dwi_b_value=getattr(row, "dwi_b_value", None),
                 dwi_pe_direction=getattr(row, "dwi_pe_direction", None),
                 dwi_n_directions=getattr(row, "dwi_n_directions", None),
+                echo_time=getattr(row, "stack_echo_time", None),
+                repetition_time=getattr(row, "stack_repetition_time", None),
+                inversion_time=getattr(row, "stack_inversion_time", None),
+                flip_angle=getattr(row, "stack_flip_angle", None),
             )
         )
 

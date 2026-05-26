@@ -47,6 +47,7 @@ export interface ExportConfig {
   copyWorkers: number;
   convertWorkers: number;
   subjectIdentifierSource: string | number;
+  includeAccelerationInName: boolean;
 }
 
 export interface RunExportPayload {
@@ -84,4 +85,5 @@ export const DEFAULT_EXPORT_CONFIG: ExportConfig = {
   copyWorkers: 8,
   convertWorkers: 8,
   subjectIdentifierSource: 'subject_code',
+  includeAccelerationInName: true,
 };

@@ -97,6 +97,10 @@ def create_app() -> FastAPI:
         id_types_router,
         jobs_router,
         cohorts_router,
+        cohort_keywords_router,
+        cohort_main_qc_router,
+        cohort_body_part_qc_router,
+        body_part_models_router,
         metadata_subjects_router,
         metadata_cohorts_router,
         imports_router,
@@ -119,6 +123,10 @@ def create_app() -> FastAPI:
     app.include_router(id_types_router)
     app.include_router(jobs_router)
     app.include_router(cohorts_router)
+    app.include_router(cohort_keywords_router)
+    app.include_router(cohort_main_qc_router)
+    app.include_router(cohort_body_part_qc_router)
+    app.include_router(body_part_models_router)
     app.include_router(metadata_subjects_router)
     app.include_router(metadata_cohorts_router)
     app.include_router(imports_router)

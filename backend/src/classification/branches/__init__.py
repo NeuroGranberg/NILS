@@ -13,10 +13,11 @@ Branches:
 - swi.py: SWI taxonomy classification (Magnitude, Phase, SWI, MinIP, QSM)
 - symri.py: SyMRI/Synthetic MRI classification (maps, synthetics, myelin)
 - epimix.py: EPIMix multicontrast EPI classification (T1/T2-FLAIR, T2w, DWI, ADC, T2*w)
+- stage.py: STAGE multi-echo GRE classification (Magnitude, Phase with real base)
 
 The rawrecon branch uses standard detectors directly (no overrides).
 
-Version: 1.1.0
+Version: 1.2.0
 """
 
 from .common import (
@@ -24,6 +25,7 @@ from .common import (
     SWI_OUTPUT_TYPES,
     SYMRI_OUTPUT_TYPES,
     EPIMIX_OUTPUT_TYPES,
+    STAGE_OUTPUT_TYPES,
     DIXON_OUTPUT_TYPES,
 )
 from .swi import (
@@ -42,6 +44,11 @@ from .epimix import (
     detect_epimix_output_type,
     get_epimix_output_info,
 )
+from .stage import (
+    apply_stage_logic,
+    detect_stage_output_type,
+    get_stage_output_info,
+)
 
 __all__ = [
     # Common
@@ -49,6 +56,7 @@ __all__ = [
     "SWI_OUTPUT_TYPES",
     "SYMRI_OUTPUT_TYPES",
     "EPIMIX_OUTPUT_TYPES",
+    "STAGE_OUTPUT_TYPES",
     "DIXON_OUTPUT_TYPES",
     # SWI branch
     "apply_swi_logic",
@@ -63,4 +71,8 @@ __all__ = [
     "apply_epimix_logic",
     "detect_epimix_output_type",
     "get_epimix_output_info",
+    # STAGE branch
+    "apply_stage_logic",
+    "detect_stage_output_type",
+    "get_stage_output_info",
 ]

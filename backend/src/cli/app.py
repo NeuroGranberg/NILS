@@ -37,6 +37,24 @@ from metadata_db.migrations.migrate_instance_stack_fields import (
 from metadata_db.session import engine as metadata_engine
 from logging_config import configure_logging
 
+from cli.contract import (
+    ExitCode,
+    cohort_target,
+    config_options,
+    fail,
+    get_context,
+    long_running_options,
+    register_universal_callback,
+    resolve_config,
+)
+from cli.output import (
+    info,
+    print_yaml,
+    render_job_submitted,
+    render_plan,
+    render_result,
+)
+
 
 configure_logging()
 
@@ -49,6 +67,11 @@ metadata_app = typer.Typer(help="Manage DICOM metadata database")
 app.add_typer(anonymize_app, name="anonymize")
 app.add_typer(compress_app, name="compress")
 app.add_typer(metadata_app, name="metadata")
+
+# Universal flags (--print-config, --dry-run, --json, --remote, --profile,
+# --yes, --quiet, --verbose) are attached at the root and exposed via
+# ``ctx.obj: CliContext`` to every subcommand. See cli/contract.py.
+register_universal_callback(app)
 
 
 @metadata_app.command("init")
@@ -750,19 +773,120 @@ def metadata_ingest(
 
 
 @anonymize_app.command("run")
-def anonymize_run(config_path: Path, job_name: Optional[str] = None, no_job: bool = False) -> None:
-    """Run anonymization using the unified engine."""
+def anonymize_run(
+    ctx: typer.Context,
+    # Targets
+    config_path: Optional[Path] = typer.Argument(
+        None,
+        metavar="[CONFIG_FILE]",
+        help="(Legacy) Positional path to an anonymization config. Prefer --config.",
+    ),
+    # Runtime overrides
+    workers: Optional[int] = typer.Option(
+        None, "--workers", metavar="N", help="Override concurrent_processes from config."
+    ),
+    output: Optional[Path] = typer.Option(
+        None, "--output", metavar="PATH", help="Override output_root from config."
+    ),
+    # Config-as-data (contract §1.2)
+    config_file: Optional[Path] = config_options.CONFIG_OPT,
+    set_overrides: Optional[list[str]] = config_options.SET_OPT,
+    # Job semantics (contract §9)
+    submit: bool = long_running_options.SUBMIT_OPT,
+    no_job: bool = long_running_options.NO_JOB_OPT,
+    job_name: Optional[str] = long_running_options.JOB_NAME_OPT,
+) -> None:
+    """Run anonymization using the unified engine.
 
-    config = load_config(config_path)
-    if no_job:
-        result = run_anonymization(config, progress=None, job_id=None)
-        typer.echo(f"Processed {result.updated_files}/{result.total_files} files")
+    Reads an `AnonymizeConfig` (from --config FILE or the legacy positional
+    argument), applies any --set overrides and runtime flags, and runs the
+    anonymization pipeline against the configured source/output paths.
+
+    Examples:
+
+      # Common case: a versioned YAML config file
+      nils anonymize run --config configs/anon-ucan.yaml
+
+      # Override a couple of runtime knobs without editing the YAML
+      nils anonymize run --config configs/anon-ucan.yaml \\
+          --workers 16 --set audit_export.filename=ucan-audit.xlsx
+
+      # See the resolved config without running anything
+      nils anonymize run --config configs/anon-ucan.yaml --print-config
+
+      # Validate and show a plan, but write nothing
+      nils anonymize run --config configs/anon-ucan.yaml --dry-run
+    """
+    cli_ctx = get_context(ctx)
+
+    # Accept the legacy positional path so existing scripts keep working.
+    if config_path is not None and config_file is None:
+        config_file = config_path
+    if config_file is None:
+        fail("missing config: pass --config FILE", ExitCode.INVALID_ARGS)
+
+    config: AnonymizeConfig = resolve_config(
+        AnonymizeConfig,
+        config_file=config_file,
+        sets=set_overrides or [],
+        runtime_overrides={
+            "concurrent_processes": workers,
+            "output_root": output,
+        },
+    )
+
+    if cli_ctx.print_config:
+        print_yaml(config)
         return
 
-    job = job_service.create_job(stage="anonymize", config=config.model_dump(mode="json"), name=job_name)
-    typer.echo(f"Created job {job.id}. Starting anonymization...")
+    if cli_ctx.dry_run:
+        # No dedicated plan object exists for anonymize yet; show the resolved
+        # config and a one-line summary. Real plans land when the LocalEngine
+        # adapter (contract §11.1) is built.
+        plan = {
+            "source_root": str(config.source_root),
+            "output_root": str(config.output_root),
+            "concurrent_processes": config.concurrent_processes,
+            "patient_id_strategy": config.patient_id.strategy.value,
+            "audit_export_enabled": config.audit_export.enabled,
+        }
+        render_plan(cli_ctx, plan, command="anonymize run")
+        return
+
+    if no_job:
+        result: AnonymizeResult = run_anonymization(config, progress=None, job_id=None)
+        render_result(
+            cli_ctx,
+            result,
+            command="anonymize run",
+            headline_rows=[
+                ("Total files", str(result.total_files)),
+                ("Updated", str(result.updated_files)),
+                ("Skipped", str(result.skipped_files)),
+                ("Duration (s)", f"{result.duration_seconds:.2f}"),
+                ("Export", str(result.export_path) if result.export_path else "-"),
+            ],
+        )
+        return
+
+    job = job_service.create_job(
+        stage="anonymize",
+        config=config.model_dump(mode="json"),
+        name=job_name,
+    )
+
+    if submit:
+        render_job_submitted(cli_ctx, job.id, command="anonymize run")
+        return
+
+    info(f"Created job {job.id}. Starting anonymization...", cli_ctx)
     run_anonymize_job(job.id, config)
-    typer.echo("Anonymization completed.")
+    render_result(
+        cli_ctx,
+        {"job_id": job.id, "status": "completed"},
+        command="anonymize run",
+        headline_rows=[("Job ID", str(job.id)), ("Status", "completed")],
+    )
 
 
 @anonymize_app.command("dry-run")

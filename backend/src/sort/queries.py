@@ -334,6 +334,12 @@ FROM cohort
 WHERE cohort_id = :cohort_id
 """
 
+QUERY_COHORT_BY_NAME = """
+SELECT cohort_id, name, path, description
+FROM cohort
+WHERE LOWER(name) = LOWER(:cohort_name)
+"""
+
 
 def get_cohort_info(conn: Connection, cohort_id: int) -> dict[str, Any] | None:
     """Get cohort info by ID.
@@ -346,6 +352,31 @@ def get_cohort_info(conn: Connection, cohort_id: int) -> dict[str, Any] | None:
         Dict with cohort info or None if not found
     """
     result = conn.execute(text(QUERY_COHORT_BY_ID), {"cohort_id": cohort_id})
+    row = result.fetchone()
+    if not row:
+        return None
+    return {
+        "cohort_id": row.cohort_id,
+        "name": row.name,
+        "path": row.path,
+        "description": row.description,
+    }
+
+
+def get_cohort_info_by_name(conn: Connection, cohort_name: str) -> dict[str, Any] | None:
+    """Get cohort info by name (case-insensitive).
+
+    Use this when the caller only has an application DB cohort ID and needs
+    to resolve the correct metadata DB cohort.
+
+    Args:
+        conn: Database connection
+        cohort_name: The cohort name to look up
+
+    Returns:
+        Dict with cohort info or None if not found
+    """
+    result = conn.execute(text(QUERY_COHORT_BY_NAME), {"cohort_name": cohort_name})
     row = result.fetchone()
     if not row:
         return None

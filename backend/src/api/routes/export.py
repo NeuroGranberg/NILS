@@ -297,6 +297,7 @@ def run_export(body: dict = Body(...)):
             flat_nifti_root_name=cfg.get("flatNiftiRootName", "flat-nifti"),
             dcm2niix_path=cfg.get("dcm2niixPath", "dcm2niix"),
             include_field_strengths=cfg.get("includeFieldStrengths", []),
+            include_acceleration_in_name=bool(cfg.get("includeAccelerationInName", True)),
             include_stack_ids=[int(sid) for sid in stack_ids],
             subject_identifier_source=_parse_subject_id_source(cfg.get("subjectIdentifierSource", "subject_code")),
         )

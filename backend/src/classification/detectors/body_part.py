@@ -141,14 +141,24 @@ class BodyPartDetector(BaseDetector):
     YAML_FILENAME = "body_part-detection.yaml"
     CONFIDENCE_UNKNOWN = 0.0
 
-    def __init__(self, yaml_dir: Optional[Path] = None):
+    # Aspect ratio threshold for portrait-sagittal spine heuristic.
+    # In validated data (49K stacks): zero brain sagittal scans above 1.4,
+    # all portrait sagittal scans >= 1.4 are spine.
+    PORTRAIT_SPINE_AR_THRESHOLD = 1.4
+    PORTRAIT_SPINE_CONFIDENCE = 0.55
+
+    def __init__(
+        self,
+        yaml_dir: Optional[Path] = None,
+        config: Optional[Dict[str, Any]] = None,
+    ):
         yaml_path = None
         if yaml_dir:
             yaml_path = Path(yaml_dir) / self.YAML_FILENAME
         else:
             yaml_path = Path(__file__).parent.parent / "detection_yaml" / self.YAML_FILENAME
 
-        super().__init__(yaml_path)
+        super().__init__(yaml_path, config=config)
 
         self._categories: Dict[str, _CategoryConfig] = {}
         for name, cfg in (self.config.get("categories") or {}).items():
@@ -204,6 +214,10 @@ class BodyPartDetector(BaseDetector):
                 matches[name] = kw
 
         if not matches:
+            # Fallback: portrait sagittal FOV heuristic for spine
+            ar_result = self._detect_by_aspect_ratio(ctx)
+            if ar_result is not None:
+                return ar_result
             return BodyPartResult(
                 body_part=self._default_body_part,
                 confidence=self.CONFIDENCE_UNKNOWN,
@@ -324,6 +338,49 @@ class BodyPartDetector(BaseDetector):
             evidence=evidence,
             has_conflict=has_conflict,
             conflict_reason=conflict_reason,
+        )
+
+    def _detect_by_aspect_ratio(
+        self, ctx: ClassificationContext
+    ) -> Optional[BodyPartResult]:
+        """Fallback spine detection using portrait sagittal FOV geometry.
+
+        A sagittal image with fov_y >> fov_x (portrait, AR >= 1.4) is
+        almost certainly a spinal acquisition.  Validated against 49K+
+        stacks: zero brain sagittal scans exceed this threshold.
+        """
+        orientation = (ctx.stack_orientation or "").lower()
+        if orientation != "sagittal":
+            return None
+        fov_x = ctx.fov_x
+        fov_y = ctx.fov_y
+        if fov_x is None or fov_y is None or fov_x <= 0:
+            return None
+        if fov_y <= fov_x:
+            return None
+        ar = fov_y / fov_x
+        if ar < self.PORTRAIT_SPINE_AR_THRESHOLD:
+            return None
+
+        evidence = Evidence(
+            source=EvidenceSource.PHYSICS_DISTINCT,
+            field="fov_y/fov_x",
+            value=f"AR={ar:.2f} (fov {fov_x:.0f}×{fov_y:.0f}mm, sagittal portrait)",
+            target="spine",
+            weight=self.PORTRAIT_SPINE_CONFIDENCE,
+            description=(
+                f"Sagittal portrait FOV (AR={ar:.2f} >= {self.PORTRAIT_SPINE_AR_THRESHOLD}) "
+                f"indicates spinal acquisition"
+            ),
+        )
+        return BodyPartResult(
+            body_part="spine",
+            confidence=self.PORTRAIT_SPINE_CONFIDENCE,
+            detection_method="aspect_ratio",
+            matched_keyword=None,
+            matched_category="spine",
+            triggers_review=True,
+            evidence=[evidence],
         )
 
     @staticmethod

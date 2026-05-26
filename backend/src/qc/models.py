@@ -7,9 +7,11 @@ from typing import Optional
 
 from pydantic import BaseModel, ConfigDict, field_validator
 from sqlalchemy import (
+    Boolean,
     DateTime,
     ForeignKey,
     Integer,
+    JSON,
     String,
     Text,
     Index,
@@ -216,6 +218,13 @@ class QCClassificationDTO(BaseModel):
 
     # Orientation (from stack_fingerprint)
     orientation: Optional[str] = None  # Axial/Coronal/Sagittal
+    mr_acquisition_type: Optional[str] = None  # 2D / 3D
+
+    # Acquisition parameters (from stack_fingerprint)
+    echo_time: Optional[float] = None
+    repetition_time: Optional[float] = None
+    inversion_time: Optional[float] = None
+    flip_angle: Optional[float] = None
 
     # DWI enrichment
     dwi_b_value: Optional[float] = None
@@ -320,3 +329,68 @@ class ConfirmQCChangesPayload(BaseModel):
     """Payload for confirming QC changes."""
 
     item_ids: list[int]
+
+
+# =============================================================================
+# Main Acquisition QC - Saved Sessions
+# =============================================================================
+
+
+class MASQCSession(Base):
+    """Saved QC session for Main Acquisition QC - persists filters and position."""
+
+    __tablename__ = "masqc_sessions"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    cohort_id: Mapped[int] = mapped_column(Integer, nullable=False, index=True)
+    name: Mapped[str] = mapped_column(Text, nullable=False)
+    filters: Mapped[dict] = mapped_column(JSON, nullable=False, default=dict)
+    session_index: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    seen_indices: Mapped[list] = mapped_column(JSON, nullable=False, default=list)
+    display_id_type: Mapped[Optional[str]] = mapped_column(String(64), nullable=True)
+    only_multi_stack: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=False
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        default=lambda: datetime.now(timezone.utc),
+        nullable=False,
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        default=lambda: datetime.now(timezone.utc),
+        onupdate=lambda: datetime.now(timezone.utc),
+        nullable=False,
+    )
+
+
+class MASQCSessionDTO(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    cohort_id: int
+    name: str
+    filters: dict = {}
+    session_index: int = 0
+    seen_indices: list[int] = []
+    display_id_type: Optional[str] = None
+    only_multi_stack: bool = False
+    created_at: datetime
+    updated_at: datetime
+
+
+class CreateMASQCSessionPayload(BaseModel):
+    name: str
+    filters: dict = {}
+    session_index: int = 0
+    display_id_type: Optional[str] = None
+    only_multi_stack: bool = False
+
+
+class UpdateMASQCSessionPayload(BaseModel):
+    session_index: Optional[int] = None
+    seen_indices: Optional[list[int]] = None
+    filters: Optional[dict] = None
+    name: Optional[str] = None
+    display_id_type: Optional[str] = None
+    only_multi_stack: Optional[bool] = None

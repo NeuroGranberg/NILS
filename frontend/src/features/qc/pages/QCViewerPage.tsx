@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Box, Group, Stack, Text, SimpleGrid, Card, Badge, Modal, Loader, TextInput, Pagination, Center, Select, Tooltip, Breadcrumbs, Anchor, ThemeIcon, Paper, UnstyledButton, Collapse, Image } from '@mantine/core';
+import { Box, Group, Stack, Text, SimpleGrid, Card, Badge, Modal, Loader, TextInput, Pagination, Center, Select, Checkbox, Tooltip, Breadcrumbs, Anchor, ThemeIcon, Paper, UnstyledButton, Collapse, Image } from '@mantine/core';
 import { useLocalStorage } from '@mantine/hooks';
 import { IconCalendar, IconFolder, IconSearch, IconUsers, IconCalendarStats, IconFolders, IconChevronDown, IconTarget } from '@tabler/icons-react';
 import { useQuery, keepPreviousData } from '@tanstack/react-query';
@@ -59,6 +59,12 @@ interface StackItem {
     dwi_b_value: number | null;
     dwi_pe_direction: string | null;
     dwi_n_directions: number | null;
+    // Acquisition parameters
+    mr_acquisition_type: string | null;  // 2D / 3D
+    echo_time: number | null;
+    repetition_time: number | null;
+    inversion_time: number | null;
+    flip_angle: number | null;
     // QC Review fields
     manual_review_required: number | null;
     manual_review_reasons_csv: string | null;
@@ -74,12 +80,12 @@ const ORIENT_ABBREV: Record<string, string> = {
 };
 
 // Build classification-based name: Ax_T1w_MPRAGE_SWI or Sag_T2w-fat-sat_TSE_GRAPPA_MIP
-const buildStackName = (stack: StackItem): string => {
+const buildStackName = (stack: StackItem, includeAcceleration = true): string => {
     const orient = stack.orientation ? (ORIENT_ABBREV[stack.orientation] || stack.orientation.substring(0, 3)) : '';
     const base = stack.base || '';
     const mods = stack.modifier_csv?.replace(/,/g, '-') || '';
     const tech = stack.technique || '';
-    const accel = stack.acceleration_csv?.replace(/,/g, '-') || '';
+    const accel = includeAcceleration ? (stack.acceleration_csv?.replace(/,/g, '-') || '') : '';
     const construct = stack.construct_csv?.replace(/,/g, '-') || '';
     
     const parts = [orient, base, mods, tech, accel, construct].filter(Boolean);
@@ -125,10 +131,20 @@ const BODY_PART_BADGE: Record<string, { label: string; color: string; title: str
     'brain-neck': { label: 'B+N', color: 'indigo', title: 'Brain + Neck' },
 };
 
-const StackBadges = ({ postContrast, bodyPart, spinalCord }: { postContrast: number | null; bodyPart: string | null; spinalCord: number | null }) => {
+const StackBadges = ({ postContrast, bodyPart, spinalCord, mrAcquisitionType }: {
+    postContrast: number | null;
+    bodyPart: string | null;
+    spinalCord: number | null;
+    mrAcquisitionType?: string | null;
+}) => {
     const bpBadge = bodyPart ? BODY_PART_BADGE[bodyPart] : (!bodyPart && spinalCord === 1 ? BODY_PART_BADGE['spine'] : null);
     return (
         <Group gap={4}>
+            {mrAcquisitionType && (
+                <Badge size="xs" color="gray" variant="light" title="Acquisition type">
+                    {mrAcquisitionType}
+                </Badge>
+            )}
             {postContrast === 1 && (
                 <Badge size="xs" color="violet" variant="light" title="Post-contrast (Gadolinium)">
                     CE
@@ -148,6 +164,7 @@ const PROVENANCE_STYLES: Record<string, { border: string; bg: string; label: str
     'SyMRI':              { border: 'var(--mantine-color-violet-7)', bg: 'rgba(139, 92, 246, 0.1)', label: 'SyMRI' },
     'SWIRecon':           { border: 'var(--mantine-color-cyan-7)',   bg: 'rgba(34, 211, 238, 0.1)', label: 'SWI' },
     'EPIMix':             { border: 'var(--mantine-color-pink-6)',   bg: 'rgba(236, 72, 153, 0.1)', label: 'EPIMix' },
+    'STAGE':              { border: 'var(--mantine-color-yellow-6)', bg: 'rgba(234, 179, 8, 0.1)',  label: 'STAGE' },
     'ProjectionDerived':  { border: 'var(--mantine-color-orange-7)', bg: 'rgba(251, 146, 60, 0.1)', label: 'Projections & MPRs' },
 };
 
@@ -198,9 +215,10 @@ interface StackCardProps {
     stack: StackItem;
     onClick: () => void;
     onQCClick: () => void;
+    includeAcceleration?: boolean;
 }
 
-const StackCard = ({ stack, onClick, onQCClick }: StackCardProps) => {
+const StackCard = ({ stack, onClick, onQCClick, includeAcceleration = true }: StackCardProps) => {
     const thumbnailUrl = `/api/qc/dicom/${stack.series_instance_uid}/thumbnail?stack_index=${stack.stack_index}&size=128`;
     // Get flag type directly from stack's review reasons (only classification axes)
     const qcFlagType = getStackFlagType(stack.manual_review_reasons_csv);
@@ -265,10 +283,19 @@ const StackCard = ({ stack, onClick, onQCClick }: StackCardProps) => {
             {/* Stack Info */}
             <Group justify="space-between" mt="xs" gap={4}>
                 <Text size="xs" fw={500} truncate style={{ flex: 1 }}>
-                    {buildStackName(stack)}
+                    {buildStackName(stack, includeAcceleration)}
                 </Text>
-                <StackBadges postContrast={stack.post_contrast} bodyPart={stack.body_part} spinalCord={stack.spinal_cord} />
+                <StackBadges postContrast={stack.post_contrast} bodyPart={stack.body_part} spinalCord={stack.spinal_cord} mrAcquisitionType={stack.mr_acquisition_type} />
             </Group>
+            {(stack.echo_time != null || stack.repetition_time != null || stack.inversion_time != null || stack.flip_angle != null) && (
+                <Text size="10px" c="dimmed" ff="monospace" mt={2} truncate>
+                    {[stack.echo_time != null && `TE:${Math.round(stack.echo_time * 100) / 100}`,
+                      stack.repetition_time != null && `TR:${Math.round(stack.repetition_time)}`,
+                      stack.inversion_time != null && `TI:${Math.round(stack.inversion_time)}`,
+                      stack.flip_angle != null && `FA:${Math.round(stack.flip_angle)}`
+                    ].filter(Boolean).join(' ')}
+                </Text>
+            )}
         </Card>
     );
 };
@@ -280,6 +307,7 @@ interface IntentFolderProps {
     defaultOpen?: boolean;
     onStackClick: (stack: StackItem) => void;
     onQCClick: (stack: StackItem) => void;
+    includeAcceleration?: boolean;
 }
 
 const IntentFolder = ({ 
@@ -288,41 +316,58 @@ const IntentFolder = ({
     defaultOpen,
     onStackClick,
     onQCClick,
+    includeAcceleration = true,
 }: IntentFolderProps) => {
     const [isOpen, setIsOpen] = useState(defaultOpen ?? false);
     
-    // Sort by series_time (earliest first), then by stack_index
-    const sortByTimeAndStack = (a: StackItem, b: StackItem) => {
-        // First: sort by series_time (nulls go last)
-        const timeA = a.series_time ?? 'zzz';  // null times sort last
+    // Sort by acquisition parameters first (cluster same TE/TR/TI/FA),
+    // then by series_time, then by stack_index.
+    const sortByParamsAndTime = (a: StackItem, b: StackItem) => {
+        // 1. echo_time
+        const teA = a.echo_time ?? 999999;
+        const teB = b.echo_time ?? 999999;
+        if (teA !== teB) return teA - teB;
+        // 2. repetition_time
+        const trA = a.repetition_time ?? 999999;
+        const trB = b.repetition_time ?? 999999;
+        if (trA !== trB) return trA - trB;
+        // 3. inversion_time
+        const tiA = a.inversion_time ?? 999999;
+        const tiB = b.inversion_time ?? 999999;
+        if (tiA !== tiB) return tiA - tiB;
+        // 4. flip_angle
+        const faA = a.flip_angle ?? 999999;
+        const faB = b.flip_angle ?? 999999;
+        if (faA !== faB) return faA - faB;
+        // 5. series_time (nulls last)
+        const timeA = a.series_time ?? 'zzz';
         const timeB = b.series_time ?? 'zzz';
         if (timeA !== timeB) return timeA.localeCompare(timeB);
-        
-        // Second: sort by stack_index
+        // 6. stack_index
         return a.stack_index - b.stack_index;
     };
     
     // Non-brain stacks (spine, neck -- NOT brain-neck which is still a brain scan)
     const NON_BRAIN_CATEGORIES = new Set(['spine', 'neck']);
     const nonBrainStacks = stacks.filter(s => {
-        const bp = s.body_part || (s.spinal_cord === 1 ? 'spine' : null);
+        const bp = (s.body_part?.toLowerCase()) || (s.spinal_cord === 1 ? 'spine' : null);
         return bp != null && NON_BRAIN_CATEGORIES.has(bp) && !PROVENANCE_STYLES[s.provenance || ''];
-    }).sort(sortByTimeAndStack);
+    }).sort(sortByParamsAndTime);
     
     // Dynamic label for non-brain section based on actual categories present
-    const nonBrainCategories = [...new Set(nonBrainStacks.map(s => s.body_part || 'spine'))];
+    const nonBrainCategories = [...new Set(nonBrainStacks.map(s => (s.body_part?.toLowerCase()) || 'spine'))];
     const CATEGORY_LABELS: Record<string, string> = { spine: 'Spine', neck: 'Neck' };
     const nonBrainLabel = nonBrainCategories.map(c => CATEGORY_LABELS[c] || c).join(' & ');
 
     // Regular stacks (brain, brain-neck, or unknown -- not in provenance groups)
     const regularStacks = stacks.filter(s => {
-        const bp = s.body_part || (s.spinal_cord === 1 ? 'spine' : null);
+        const bp = (s.body_part?.toLowerCase()) || (s.spinal_cord === 1 ? 'spine' : null);
         return (!bp || !NON_BRAIN_CATEGORIES.has(bp)) && !PROVENANCE_STYLES[s.provenance || ''];
-    }).sort(sortByTimeAndStack);
+    }).sort(sortByParamsAndTime);
     
     // Provenance groups (SyMRI, SWI, EPIMix)
     const provenanceGroups = Object.keys(PROVENANCE_STYLES)
-        .map(p => ({ provenance: p, stacks: stacks.filter(s => s.provenance === p).sort(sortByTimeAndStack) }))
+        .map(p => ({ provenance: p, stacks: stacks.filter(s => s.provenance === p).sort(sortByParamsAndTime) }))
         .filter(g => g.stacks.length > 0);
     
     return (
@@ -368,6 +413,7 @@ const IntentFolder = ({
                                     stack={stack}
                                     onClick={() => onStackClick(stack)}
                                     onQCClick={() => onQCClick(stack)}
+                                    includeAcceleration={includeAcceleration}
                                 />
                             ))}
                         </SimpleGrid>
@@ -396,6 +442,7 @@ const IntentFolder = ({
                                         stack={stack}
                                         onClick={() => onStackClick(stack)}
                                         onQCClick={() => onQCClick(stack)}
+                                        includeAcceleration={includeAcceleration}
                                     />
                                 ))}
                             </SimpleGrid>
@@ -423,6 +470,7 @@ const IntentFolder = ({
                                         stack={stack}
                                         onClick={() => onStackClick(stack)}
                                         onQCClick={() => onQCClick(stack)}
+                                        includeAcceleration={includeAcceleration}
                                     />
                                 ))}
                             </SimpleGrid>
@@ -449,6 +497,10 @@ export const QCViewerPage = ({ cohort, onBack }: QCViewerPageProps) => {
     const [displayIdType, setDisplayIdType] = useLocalStorage<string>({
         key: 'qc-viewer-display-id-type',
         defaultValue: 'code',
+    });
+    const [includeAccel, setIncludeAccel] = useLocalStorage<boolean>({
+        key: 'qc-include-accel-in-name',
+        defaultValue: true,
     });
     const PAGE_SIZE = 50;
 
@@ -622,6 +674,7 @@ export const QCViewerPage = ({ cohort, onBack }: QCViewerPageProps) => {
                         defaultOpen={idx === 0}
                         onStackClick={(stack) => setViewerStack(stack)}
                         onQCClick={(stack) => setQcStack(stack)}
+                        includeAcceleration={includeAccel}
                     />
                 ))}
             </Stack>
@@ -679,6 +732,16 @@ export const QCViewerPage = ({ cohort, onBack }: QCViewerPageProps) => {
                 </Breadcrumbs>
             </Box>
 
+            {viewMode === 'stacks' && (
+                <Group gap="xs">
+                    <Checkbox
+                        size="xs"
+                        label="Include acceleration in name"
+                        checked={includeAccel}
+                        onChange={(e) => setIncludeAccel(e.currentTarget.checked)}
+                    />
+                </Group>
+            )}
 
             <Box style={{ flex: 1 }}>
                 {viewMode === 'subjects' && (loadingSubjects ? <Loader /> : renderSubjects())}
@@ -691,7 +754,7 @@ export const QCViewerPage = ({ cohort, onBack }: QCViewerPageProps) => {
                 opened={!!viewerStack}
                 onClose={() => setViewerStack(null)}
                 fullScreen
-                title={viewerStack ? buildStackName(viewerStack) : ''}
+                title={viewerStack ? buildStackName(viewerStack, includeAccel) : ''}
                 styles={{ body: { height: 'calc(100vh - 60px)' } }}
             >
                 {viewerStack && (
@@ -712,7 +775,7 @@ export const QCViewerPage = ({ cohort, onBack }: QCViewerPageProps) => {
                     stackId={qcStack.series_stack_id}
                     seriesUid={qcStack.series_instance_uid}
                     stackIndex={qcStack.stack_index}
-                    stackName={buildStackName(qcStack)}
+                    stackName={buildStackName(qcStack, includeAccel)}
                     opened={!!qcStack}
                     onClose={() => setQcStack(null)}
                 />

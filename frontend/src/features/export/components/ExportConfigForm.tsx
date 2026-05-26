@@ -1,5 +1,6 @@
 import {
   Button,
+  Checkbox,
   Group,
   Loader,
   NumberInput,
@@ -276,6 +277,16 @@ export const ExportConfigForm = ({
             />
           )}
         </Stack>
+      </SectionCard>
+
+      {/* Naming */}
+      <SectionCard title="Naming" description="Configure file naming options">
+        <Checkbox
+          label="Include acceleration in file names"
+          description="Include acceleration tokens (e.g. PartialFourier, ParallelImaging) in output file names"
+          checked={config.includeAccelerationInName ?? true}
+          onChange={(e) => onChange('includeAccelerationInName', e.currentTarget.checked)}
+        />
       </SectionCard>
 
       {/* Performance */}

@@ -132,6 +132,76 @@ def _from_file_meta(*keywords: str) -> FallbackGetter:
     return getter
 
 
+def _chain(*getters: FallbackGetter) -> FallbackGetter:
+    """Chain multiple fallback getters; returns the first non-None result."""
+    def getter(dataset: Any) -> Any:
+        for g in getters:
+            v = g(dataset)
+            if v is not None:
+                return v
+        return None
+    return getter
+
+
+def _from_enhanced_fg(*paths: tuple[str, str]) -> FallbackGetter:
+    """Fallback for Enhanced MR: walk SharedFunctionalGroupsSequence and
+    PerFrameFunctionalGroupsSequence[0] looking for a tag.
+
+    ``paths`` is a list of (sequence_keyword, attribute_keyword) pairs.
+    Returns the first non-None value found across both FG roots and all paths.
+    """
+    def getter(dataset: Any) -> Any:
+        for fg_root in ("SharedFunctionalGroupsSequence",
+                        "PerFrameFunctionalGroupsSequence"):
+            fg = getattr(dataset, fg_root, None)
+            if not fg or len(fg) == 0:
+                continue
+            container = fg[0]
+            for seq_kw, attr_kw in paths:
+                seq = getattr(container, seq_kw, None)
+                if seq and len(seq) > 0:
+                    val = getattr(seq[0], attr_kw, None)
+                    if val is not None:
+                        return val
+        return None
+    return getter
+
+
+# Private per-frame sequence tags for Enhanced MR metadata
+# Philips stores full Classic-MR-style metadata in (2005,140F)
+# Siemens stores ScanningSequence/SequenceVariant in (0021,1201)
+_PHILIPS_PRIVATE_PER_FRAME = (0x2005, 0x140F)
+_SIEMENS_PRIVATE_PER_FRAME = (0x0021, 0x1201)
+
+
+def _from_enhanced_private(attr: str) -> FallbackGetter:
+    """Fallback for Enhanced MR: read an attribute from manufacturer-specific
+    private per-frame sequences in PerFrameFunctionalGroupsSequence[0].
+
+    Checks Philips (2005,140F) and Siemens (0021,1201) private sub-sequences.
+    """
+    from pydicom.tag import Tag as _Tag
+
+    tag_addrs = [_PHILIPS_PRIVATE_PER_FRAME, _SIEMENS_PRIVATE_PER_FRAME]
+
+    def getter(dataset: Any) -> Any:
+        fg = getattr(dataset, "PerFrameFunctionalGroupsSequence", None)
+        if not fg or len(fg) == 0:
+            return None
+        frame0 = fg[0]
+        for grp, elem in tag_addrs:
+            t = _Tag(grp, elem)
+            if t in frame0:
+                seq_elem = frame0[t]
+                if seq_elem.VR == "SQ" and seq_elem.value:
+                    sub = seq_elem.value[0]
+                    val = getattr(sub, attr, None)
+                    if val is not None:
+                        return val
+        return None
+    return getter
+
+
 def extract_fields(dataset, mappings: dict[str, FieldMapping]) -> dict[str, Any]:
     result: dict[str, Any] = {}
     for column, mapping in mappings.items():
@@ -173,15 +243,30 @@ SERIES_FIELD_MAP: dict[str, FieldMapping] = {
     "series_time": FieldMapping("SeriesTime", _to_dicom_time),
     "series_description": FieldMapping("SeriesDescription"),
     "body_part_examined": FieldMapping("BodyPartExamined"),
-    "scanning_sequence": FieldMapping("ScanningSequence"),
-    "sequence_variant": FieldMapping("SequenceVariant"),
+    "scanning_sequence": FieldMapping(
+        "ScanningSequence",
+        fallback=_from_enhanced_private("ScanningSequence"),
+    ),
+    "sequence_variant": FieldMapping(
+        "SequenceVariant", _to_backslash_str,
+        fallback=_from_enhanced_private("SequenceVariant"),
+    ),
     "scan_options": FieldMapping("ScanOptions"),
     "series_comments": FieldMapping("SeriesComments"),
     "image_type": FieldMapping("ImageType", _to_backslash_str),
-    "slice_thickness": FieldMapping("SliceThickness", _to_float),
-    "spacing_between_slices": FieldMapping("SpacingBetweenSlices", _to_float),
+    "slice_thickness": FieldMapping(
+        "SliceThickness", _to_float,
+        fallback=_from_enhanced_fg(("PixelMeasuresSequence", "SliceThickness")),
+    ),
+    "spacing_between_slices": FieldMapping(
+        "SpacingBetweenSlices", _to_float,
+        fallback=_from_enhanced_fg(("PixelMeasuresSequence", "SpacingBetweenSlices")),
+    ),
     "images_in_acquisition": FieldMapping("ImagesInAcquisition"),
-    "image_orientation_patient": FieldMapping("ImageOrientationPatient", _to_backslash_str),
+    "image_orientation_patient": FieldMapping(
+        "ImageOrientationPatient", _to_backslash_str,
+        fallback=_from_enhanced_fg(("PlaneOrientationSequence", "ImageOrientationPatient")),
+    ),
     "image_position_patient": FieldMapping("ImagePositionPatient", _to_backslash_str),
     "patient_position": FieldMapping("PatientPosition"),
     "contrast_bolus_agent": FieldMapping("ContrastBolusAgent"),
@@ -226,7 +311,10 @@ INSTANCE_FIELD_MAP: dict[str, FieldMapping] = {
     "content_date": FieldMapping("ContentDate", _to_dicom_date),
     "content_time": FieldMapping("ContentTime", _to_dicom_time),
     "slice_location": FieldMapping("SliceLocation", _to_float),
-    "pixel_spacing": FieldMapping("PixelSpacing", _to_backslash_str),
+    "pixel_spacing": FieldMapping(
+        "PixelSpacing", _to_backslash_str,
+        fallback=_from_enhanced_fg(("PixelMeasuresSequence", "PixelSpacing")),
+    ),
     "rows": FieldMapping("Rows", _to_int),
     "columns": FieldMapping("Columns", _to_int),
     "bits_allocated": FieldMapping("BitsAllocated", _to_int),
@@ -247,15 +335,46 @@ INSTANCE_FIELD_MAP: dict[str, FieldMapping] = {
         fallback=_from_file_meta("TransferSyntaxUID"),
     ),
     # Stack-defining fields - extracted for stack creation (stored in series_stack only)
-    # MR fields
+    # MR fields — Enhanced MR stores these in functional group sequences,
+    # so each has a fallback chain: standard FG first, then private per-frame.
     "inversion_time": FieldMapping("InversionTime", _to_float),
-    "echo_time": FieldMapping("EchoTime", _to_float),
+    "echo_time": FieldMapping(
+        "EchoTime", _to_float,
+        fallback=_chain(
+            _from_enhanced_fg(("MREchoSequence", "EffectiveEchoTime")),
+            _from_enhanced_private("EchoTime"),
+        ),
+    ),
     "echo_numbers": FieldMapping("EchoNumbers", _to_backslash_str),
-    "echo_train_length": FieldMapping("EchoTrainLength", _to_int),
-    "repetition_time": FieldMapping("RepetitionTime", _to_float),
-    "flip_angle": FieldMapping("FlipAngle", _to_float),
-    "receive_coil_name": FieldMapping("ReceiveCoilName"),
-    "image_orientation_patient": FieldMapping("ImageOrientationPatient", _to_backslash_str),
+    "echo_train_length": FieldMapping(
+        "EchoTrainLength", _to_int,
+        fallback=_chain(
+            _from_enhanced_fg(("MRTimingAndRelatedParametersSequence", "EchoTrainLength")),
+            _from_enhanced_private("EchoTrainLength"),
+        ),
+    ),
+    "repetition_time": FieldMapping(
+        "RepetitionTime", _to_float,
+        fallback=_chain(
+            _from_enhanced_fg(("MRTimingAndRelatedParametersSequence", "RepetitionTime")),
+            _from_enhanced_private("RepetitionTime"),
+        ),
+    ),
+    "flip_angle": FieldMapping(
+        "FlipAngle", _to_float,
+        fallback=_chain(
+            _from_enhanced_fg(("MRTimingAndRelatedParametersSequence", "FlipAngle")),
+            _from_enhanced_private("FlipAngle"),
+        ),
+    ),
+    "receive_coil_name": FieldMapping(
+        "ReceiveCoilName",
+        fallback=_from_enhanced_fg(("MRReceiveCoilSequence", "ReceiveCoilName")),
+    ),
+    "image_orientation_patient": FieldMapping(
+        "ImageOrientationPatient", _to_backslash_str,
+        fallback=_from_enhanced_fg(("PlaneOrientationSequence", "ImageOrientationPatient")),
+    ),
     "image_type": FieldMapping("ImageType", _to_backslash_str),
     # CT fields
     "xray_exposure": FieldMapping("Exposure", _to_float),
@@ -270,24 +389,66 @@ INSTANCE_FIELD_MAP: dict[str, FieldMapping] = {
 MRI_SERIES_FIELD_MAP: dict[str, FieldMapping] = {
     "mr_acquisition_type": FieldMapping("MRAcquisitionType"),
     "angio_flag": FieldMapping("AngioFlag"),
-    "repetition_time": FieldMapping("RepetitionTime", _to_float),
-    "echo_time": FieldMapping("EchoTime", _to_float),
+    "repetition_time": FieldMapping(
+        "RepetitionTime", _to_float,
+        fallback=_chain(
+            _from_enhanced_fg(("MRTimingAndRelatedParametersSequence", "RepetitionTime")),
+            _from_enhanced_private("RepetitionTime"),
+        ),
+    ),
+    "echo_time": FieldMapping(
+        "EchoTime", _to_float,
+        fallback=_chain(
+            _from_enhanced_fg(("MREchoSequence", "EffectiveEchoTime")),
+            _from_enhanced_private("EchoTime"),
+        ),
+    ),
     "inversion_time": FieldMapping("InversionTime", _to_float),
     "inversion_times": FieldMapping("InversionTimes", _to_backslash_str),
-    "flip_angle": FieldMapping("FlipAngle", _to_float),
+    "flip_angle": FieldMapping(
+        "FlipAngle", _to_float,
+        fallback=_chain(
+            _from_enhanced_fg(("MRTimingAndRelatedParametersSequence", "FlipAngle")),
+            _from_enhanced_private("FlipAngle"),
+        ),
+    ),
     "phase_contrast": FieldMapping("PhaseContrast"),
-    "number_of_averages": FieldMapping("NumberOfAverages", _to_float),
+    "number_of_averages": FieldMapping(
+        "NumberOfAverages", _to_float,
+        fallback=_from_enhanced_fg(("MRAveragesSequence", "NumberOfAverages")),
+    ),
     "imaging_frequency": FieldMapping("ImagingFrequency", _to_float),
     "imaged_nucleus": FieldMapping("ImagedNucleus"),
     "echo_numbers": FieldMapping("EchoNumbers", _to_backslash_str),
     "magnetic_field_strength": FieldMapping("MagneticFieldStrength", _to_float),
     "number_of_phase_encoding_steps": FieldMapping("NumberOfPhaseEncodingSteps", _to_backslash_str),
-    "echo_train_length": FieldMapping("EchoTrainLength", _to_int),
-    "percent_sampling": FieldMapping("PercentSampling", _to_float),
-    "percent_phase_field_of_view": FieldMapping("PercentPhaseFieldOfView", _to_float),
-    "pixel_bandwidth": FieldMapping("PixelBandwidth", _to_backslash_str),
-    "receive_coil_name": FieldMapping("ReceiveCoilName"),
-    "transmit_coil_name": FieldMapping("TransmitCoilName"),
+    "echo_train_length": FieldMapping(
+        "EchoTrainLength", _to_int,
+        fallback=_chain(
+            _from_enhanced_fg(("MRTimingAndRelatedParametersSequence", "EchoTrainLength")),
+            _from_enhanced_private("EchoTrainLength"),
+        ),
+    ),
+    "percent_sampling": FieldMapping(
+        "PercentSampling", _to_float,
+        fallback=_from_enhanced_fg(("MRFOVGeometrySequence", "PercentSampling")),
+    ),
+    "percent_phase_field_of_view": FieldMapping(
+        "PercentPhaseFieldOfView", _to_float,
+        fallback=_from_enhanced_fg(("MRFOVGeometrySequence", "PercentPhaseFieldOfView")),
+    ),
+    "pixel_bandwidth": FieldMapping(
+        "PixelBandwidth", _to_backslash_str,
+        fallback=_from_enhanced_fg(("MRImagingModifierSequence", "PixelBandwidth")),
+    ),
+    "receive_coil_name": FieldMapping(
+        "ReceiveCoilName",
+        fallback=_from_enhanced_fg(("MRReceiveCoilSequence", "ReceiveCoilName")),
+    ),
+    "transmit_coil_name": FieldMapping(
+        "TransmitCoilName",
+        fallback=_from_enhanced_fg(("MRTransmitCoilSequence", "TransmitCoilName")),
+    ),
     "acquisition_matrix": FieldMapping("AcquisitionMatrix", _to_backslash_str),
     "phase_encoding_direction": FieldMapping("PhaseEncodingDirection"),
     "sar": FieldMapping("SAR", _to_float),
@@ -296,11 +457,23 @@ MRI_SERIES_FIELD_MAP: dict[str, FieldMapping] = {
     "temporal_position_identifier": FieldMapping("TemporalPositionIdentifier", _to_int),
     "number_of_temporal_positions": FieldMapping("NumberOfTemporalPositions", _to_int),
     "temporal_resolution": FieldMapping("TemporalResolution", _to_backslash_str),
-    "diffusion_b_value": FieldMapping("DiffusionBValue", _to_backslash_str),
+    "diffusion_b_value": FieldMapping(
+        "DiffusionBValue", _to_backslash_str,
+        fallback=_from_enhanced_fg(("MRDiffusionSequence", "DiffusionBValue")),
+    ),
     "diffusion_gradient_orientation": FieldMapping("DiffusionGradientOrientation", _to_backslash_str),
-    "diffusion_directionality": FieldMapping("DiffusionDirectionality"),
-    "parallel_acquisition_technique": FieldMapping("ParallelAcquisitionTechnique"),
-    "parallel_reduction_factor_in_plane": FieldMapping("ParallelReductionFactorInPlane", _to_backslash_str),
+    "diffusion_directionality": FieldMapping(
+        "DiffusionDirectionality",
+        fallback=_from_enhanced_fg(("MRDiffusionSequence", "DiffusionDirectionality")),
+    ),
+    "parallel_acquisition_technique": FieldMapping(
+        "ParallelAcquisitionTechnique",
+        fallback=_from_enhanced_fg(("MRModifierSequence", "ParallelAcquisitionTechnique")),
+    ),
+    "parallel_reduction_factor_in_plane": FieldMapping(
+        "ParallelReductionFactorInPlane", _to_backslash_str,
+        fallback=_from_enhanced_fg(("MRModifierSequence", "ParallelReductionFactorInPlane")),
+    ),
 }
 
 

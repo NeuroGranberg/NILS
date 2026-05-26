@@ -38,18 +38,28 @@ class BaseDetector(ABC):
     - axis_name property
     """
     
-    def __init__(self, yaml_path: Optional[Path] = None):
+    def __init__(
+        self,
+        yaml_path: Optional[Path] = None,
+        config: Optional[Dict[str, Any]] = None,
+    ):
         """
         Initialize detector with optional YAML configuration.
-        
+
         Args:
             yaml_path: Path to detection YAML file. If None, config will be empty.
+            config: Pre-parsed configuration dict. When provided, overrides
+                ``yaml_path`` and skips file I/O. Used by the pipeline when
+                per-cohort keyword overrides are merged in memory.
         """
-        self.config: Dict[str, Any] = {}
         self.yaml_path = yaml_path
-        
-        if yaml_path and yaml_path.exists():
+
+        if config is not None:
+            self.config = config
+        elif yaml_path and yaml_path.exists():
             self.config = self._load_yaml(yaml_path)
+        else:
+            self.config = {}
     
     def _load_yaml(self, path: Path) -> Dict[str, Any]:
         """

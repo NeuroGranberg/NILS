@@ -95,6 +95,13 @@ def parse_image_type(image_type: str) -> Dict[str, Any]:
         "has_pd_map": any(t in tokens for t in ["PDMAP", "PD_MAP"]) or "PD MAP" in raw_upper or ("PDMAP" in tokens and "MAP" in tokens),
         "has_r1": "R1" in tokens,
         "has_r2": "R2" in tokens,
+        # R2* (transverse relaxation rate from GRE, distinct from spin-echo R2)
+        "has_r2star": (
+            "R2STAR" in tokens
+            or "R2_STAR" in tokens
+            or "R2*" in raw_upper
+            or "R2 STAR" in raw_upper
+        ),
         "has_t0": "T0" in tokens,
         "has_k2": "K2" in tokens,
         "has_b1_map": any(t in tokens for t in ["B1MAP", "B1_MAP", "B1+"]) or "B1 MAP" in raw_upper,
@@ -140,6 +147,7 @@ def parse_image_type(image_type: str) -> Dict[str, Any]:
         "is_mfsplit": "MFSPLIT" in tokens,
         
         # === 8. Processing ===
+        "has_nd": "ND" in tokens,  # No distortion correction (Siemens)
         "is_normalized": "NORM" in tokens,
         "is_subtraction": any(t in tokens for t in ["SUB", "SUBTRACT", "SUBTRACTION"]),
         "is_dfc": "DFC" in tokens,
@@ -404,6 +412,7 @@ def parse_sequence_name(name: str) -> Dict[str, Any]:
             "is_space_ir": False,
             "is_swi": False,
             "is_me_se": False,
+            "is_medic": False,
             "is_mdme": False,
             "is_qalas": False,
             "is_quant_map": False,
@@ -459,7 +468,10 @@ def parse_sequence_name(name: str) -> Dict[str, Any]:
         "is_swi": any(p in name_lower for p in ["swi", "qswi"]),
         
         # === 7. Multi-Echo ===
-        "is_me_se": any(p in name_lower for p in ["me2d", "me3d", "*me1", "memp"]),
+        # NOTE: me2d/me3d are Siemens multi-echo GRE (MEDIC), NOT multi-echo SE.
+        # They are handled by is_medic below. Only memp (MEMPRAGE) is genuine ME-SE.
+        "is_me_se": "memp" in name_lower,
+        "is_medic": any(p in name_lower for p in ["me2d", "me3d"]),
         
         # === 8. Quantitative/MDME ===
         "is_mdme": "mdme" in name_lower,
@@ -492,8 +504,9 @@ def parse_sequence_name(name: str) -> Dict[str, Any]:
         "is_wip": "wip" in name_lower,
         "is_tune": any(p in name_lower for p in ["tun_", "tun-", "tune", "fi3d1tun"]),
 
-        # === 15. Trufisp ===
-        "is_trufisp": "tfi2d" in name_lower,
+        # === 15. TrueFISP/bSSFP ===
+        # Siemens sequence names: *tfi2d1 (2D), *tfi3d1 (3D)
+        "is_trufisp": any(p in name_lower for p in ["tfi2d", "tfi3d"]),
     }
 
 
@@ -552,6 +565,14 @@ class ClassificationContext:
     # === Acquisition Properties (from fingerprint) ===
     mr_acquisition_type: Optional[str] = None  # "2D" or "3D"
     stack_key: Optional[str] = None  # "multi_echo", "multi_ti", "multi_flip_angle", etc.
+
+    # === Session-Aware Rescue ===
+    # When True, the Stage-0 exclusion of ``SECONDARY && !PRIMARY`` is
+    # bypassed for this stack. The flag is set by the sort step that
+    # detects sessions (subject_id + study_date) where no stack has
+    # ImageType ORIGINAL+PRIMARY. Typical cause: Philips-style exports
+    # that tag every reconstructed image as ORIGINAL\SECONDARY.
+    treat_secondary_as_primary: bool = False
     
     # === Cached Parsed Results (internal) ===
     _parsed_image_type: Optional[Dict[str, Any]] = field(default=None, repr=False)
@@ -674,6 +695,11 @@ class ClassificationContext:
                 psn["is_me_se"],
                 psn["is_mdme"],
                 psn["is_epi_se"],
+                # Philips/GE vendor fix: ScanningSequence=IR with SequenceVariant=SK
+                # implies TSE readout. Philips omits SE from ScanningSequence for
+                # IR-TSE sequences (FLAIR, STIR, DIR). The GR guard prevents false
+                # positives on MPRAGE/QALAS which have GR+IR+SK.
+                pss["has_ir"] and psv["has_segmented_kspace"] and not pss["has_gre"],
             ]),
             
             # Gradient Echo - uses gradient refocusing only
@@ -721,6 +747,13 @@ class ClassificationContext:
                 psn["is_epi_ir"],
                 psn["is_mprage"],  # MPRAGE is IR-prepared GRE
                 psn["is_flair_seq"],
+                # Physics-based: if InversionTime > 0, an IR pulse was used
+                self.mr_ti is not None and self.mr_ti > 0,
+                # Philips vendor fix: GR + MP (magnetization prepared) + 3D + no SE/EPI
+                # implies IR-prepared 3D GRE (TFE = MPRAGE). Philips omits IR from
+                # ScanningSequence and doesn't populate InversionTime for these.
+                # Verified: 4,485 Philips stacks, 100% are MPRAGE physics, zero FP.
+                psv["has_mag_prepared"] and pss["has_gre"] and not pss["has_se"] and not pss["has_epi"] and self.mr_acquisition_type == "3D",
             ]),
             
             # SE-based Inversion Recovery (for modifier detection)
@@ -735,6 +768,8 @@ class ClassificationContext:
                 psn["is_flair_seq"],  # FLAIR sequence name
                 # SE + IR combination (but not EPI which can be SE-EPI)
                 (pss["has_se"] or pss["has_fse"]) and pss["has_ir"] and not pss["has_epi"],
+                # Philips/GE vendor fix: IR + SK without GR = IR-TSE readout
+                pss["has_ir"] and psv["has_segmented_kspace"] and not pss["has_gre"] and not pss["has_epi"],
             ]),
             
             # Saturation pulse
@@ -755,6 +790,8 @@ class ClassificationContext:
                 psn["is_tse_body"],
                 psn["is_fse"],
                 psv["has_segmented_kspace"] and pss["has_se"],
+                # Philips/GE vendor fix: IR + SK without GR = IR-TSE readout
+                psv["has_segmented_kspace"] and pss["has_ir"] and not pss["has_gre"],
             ]),
             
             # SPACE/CUBE/VISTA - 3D TSE
@@ -768,6 +805,9 @@ class ClassificationContext:
             
             # Multi-echo SE
             "is_me_se": psn["is_me_se"],
+            
+            # MEDIC - Siemens combined multi-echo GRE (*me2d1r4, *me3d1r4)
+            "is_medic": psn["is_medic"],
             
             # MDME - Multi-dynamic multi-echo (SyMRI)
             "is_mdme": psn["is_mdme"],
@@ -1194,6 +1234,17 @@ class ClassificationContext:
             # Normalized
             "is_normalized": pit["is_normalized"],
             
+            # No distortion correction (Siemens ND token in ImageType)
+            "has_nd": pit["has_nd"],
+            
+            # GE recon-variant prefixes (detected from text_search_blob)
+            "is_ge_orig": (
+                (self.text_search_blob or "").lstrip().startswith("orig ")
+            ),
+            "is_ge_filtered": (
+                (self.text_search_blob or "").lstrip().startswith("filtered ")
+            ),
+            
             # =================================================================
             # 8. EXCLUSION / QA FLAGS
             # =================================================================
@@ -1232,6 +1283,9 @@ class ClassificationContext:
             
             # QSM - Quantitative Susceptibility Mapping
             "has_qsm": pit.get("has_qsm", False),
+            
+            # R2* - Transverse relaxation rate map (from multi-echo GRE)
+            "has_r2star": pit.get("has_r2star", False),
             
             # EPI-based SWI (fast acquisition variant)
             "is_epi_swi": any([
@@ -1536,6 +1590,13 @@ class ClassificationContext:
         - SECONDARY without PRIMARY (workstation reformats)
         - Screenshots/pasted images
         - Error maps
+
+        Session-aware rescue: when ``treat_secondary_as_primary`` is True
+        the SECONDARY-without-PRIMARY exclusion is bypassed. The flag is
+        set upstream (Sort Step3) only for sessions where no stack has
+        ImageType ORIGINAL+PRIMARY anywhere, so the rest of the cohort
+        is unaffected. The DERIVED / SCREENSHOT / ERROR exclusions below
+        still apply.
         
         Returns:
             True if should be excluded
@@ -1544,7 +1605,12 @@ class ClassificationContext:
         
         # SECONDARY without PRIMARY
         if pit["is_secondary"] and not pit["is_primary"]:
-            return True
+            if not self.treat_secondary_as_primary:
+                return True
+            # Rescued: but if it's also DERIVED, still exclude
+            # (e.g. MobiView SURVEY -> DERIVED\SECONDARY\M\M\DERIVED).
+            if pit["is_derived"]:
+                return True
         
         # Screenshots
         if pit["is_screenshot"]:
@@ -1630,4 +1696,6 @@ class ClassificationContext:
             # New fields for unified flags
             mr_acquisition_type=fp.get("mr_acquisition_type"),
             stack_key=fp.get("stack_key"),
+            # Session-aware rescue flag set by Step3 before classification.
+            treat_secondary_as_primary=bool(fp.get("treat_secondary_as_primary", False)),
         )

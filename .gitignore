@@ -23,6 +23,8 @@ venv/
 ENV/
 env/
 .python-version
+.vite/
+.antigravitycli/**
 
 # uv (Python package manager)
 .uv/
@@ -71,6 +73,8 @@ resource/cache/**/
 resource/cache**
 .factory
 droidz/
+.claude/**
+.cursor/**
 
 # Documentation build (MkDocs)
 site/
@@ -88,3 +92,12 @@ resource/db_metadata/*
 # Private files (local-only, never pushed to public repo)
 .private/
 temp/
+
+# NILS Agent — runtime data (volume mounts, credentials, generated state)
+nils-agent/.env
+nils-agent/config.yaml
+nils-agent/.deer-flow/users/
+nils-agent/.deer-flow/threads/
+nils-agent/.deer-flow/shared/memory.json
+nils-agent/.deer-flow/agents/nils-research/memory.json
+nils-agent/.nils-agent/

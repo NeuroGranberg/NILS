@@ -123,21 +123,27 @@ class ContrastDetector(BaseDetector):
         "unknown": 0.0,          # No detection possible
     }
     
-    def __init__(self, yaml_dir: Optional[Path] = None):
+    def __init__(
+        self,
+        yaml_dir: Optional[Path] = None,
+        config: Optional[Dict[str, Any]] = None,
+    ):
         """
         Initialize contrast detector.
-        
+
         Args:
             yaml_dir: Directory containing detection YAML files.
                      If None, uses default location.
+            config: Pre-parsed YAML dict (bypasses file I/O; used by pipeline
+                for per-cohort merged configs).
         """
         yaml_path = None
         if yaml_dir:
             yaml_path = Path(yaml_dir) / self.YAML_FILENAME
         else:
             yaml_path = Path(__file__).parent.parent / "detection_yaml" / self.YAML_FILENAME
-        
-        super().__init__(yaml_path)
+
+        super().__init__(yaml_path, config=config)
         
         # Load keywords from config
         self._negative_keywords: List[str] = self.config.get("negative_keywords", [])

@@ -106,13 +106,19 @@ class ConstructDetector(BaseDetector):
         "combination": 0.75,
     }
 
-    def __init__(self, yaml_dir: Optional[Path] = None):
+    def __init__(
+        self,
+        yaml_dir: Optional[Path] = None,
+        config: Optional[Dict[str, Any]] = None,
+    ):
         """
         Initialize ConstructDetector.
 
         Args:
             yaml_dir: Directory containing detection YAML files.
                      If None, uses default location.
+            config: Pre-parsed YAML dict (bypasses file I/O; used by pipeline
+                for per-cohort merged configs).
         """
         yaml_path = None
         if yaml_dir:
@@ -120,7 +126,7 @@ class ConstructDetector(BaseDetector):
         else:
             yaml_path = Path(__file__).parent.parent / "detection_yaml" / self.YAML_FILENAME
 
-        super().__init__(yaml_path)
+        super().__init__(yaml_path, config=config)
 
         # Load constructs and rules from config
         self._constructs: Dict[str, Dict[str, Any]] = self.config.get("constructs", {})

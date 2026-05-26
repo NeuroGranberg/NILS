@@ -283,23 +283,24 @@ class AxesQCService:
                     dc.field_name: dc.new_value for dc in item.draft_changes
                 }
 
+        from metadata_db.resolve import get_cohort_name_from_app_db
+
+        cohort_name = get_cohort_name_from_app_db(cohort_id)
+        if not cohort_name:
+            return [], 0
+
         with MetadataSessionLocal() as meta_db:
             # Build filter clauses
             axis_filter = self._build_axis_filter(axis, flag_type)
             localizer_filter = self._build_localizer_filter()
-            query_params = {"cohort_id": cohort_id}
+            query_params = {"cohort_name": cohort_name}
 
             # First get total count
             count_query = f"""
                 SELECT COUNT(DISTINCT scc.series_stack_id)
                 FROM series_classification_cache scc
                 JOIN series s ON scc.series_instance_uid = s.series_instance_uid
-                LEFT JOIN subject_cohorts sc ON s.subject_id = sc.subject_id
-                LEFT JOIN cohort c ON sc.cohort_id = c.cohort_id
-                WHERE (
-                    scc.dicom_origin_cohort = (SELECT name FROM cohort WHERE cohort_id = :cohort_id)
-                    OR c.cohort_id = :cohort_id
-                )
+                WHERE LOWER(scc.dicom_origin_cohort) = LOWER(:cohort_name)
                 AND scc.manual_review_required = 1
                 AND ({axis_filter})
                 AND {localizer_filter}
@@ -368,12 +369,7 @@ class AxesQCService:
                 LEFT JOIN series_stack ss ON scc.series_stack_id = ss.series_stack_id
                 LEFT JOIN stack_fingerprint sf ON ss.series_stack_id = sf.series_stack_id
                 LEFT JOIN mri_series_details msd ON s.series_id = msd.series_id
-                LEFT JOIN subject_cohorts sc ON s.subject_id = sc.subject_id
-                LEFT JOIN cohort c ON sc.cohort_id = c.cohort_id
-                WHERE (
-                    scc.dicom_origin_cohort = (SELECT name FROM cohort WHERE cohort_id = :cohort_id)
-                    OR c.cohort_id = :cohort_id
-                )
+                WHERE LOWER(scc.dicom_origin_cohort) = LOWER(:cohort_name)
                 AND scc.manual_review_required = 1
                 AND ({axis_filter})
                 AND {localizer_filter}
@@ -866,18 +862,18 @@ class AxesQCService:
         """
         self._ensure_initialized()
 
+        from metadata_db.resolve import get_cohort_name_from_app_db
+
+        cohort_name = get_cohort_name_from_app_db(cohort_id)
+        if not cohort_name:
+            return {"available_axes": [], "available_flags": []}
+
         with MetadataSessionLocal() as meta_db:
             # Query to get all review reasons for this cohort
             query = """
                 SELECT DISTINCT scc.manual_review_reasons_csv
                 FROM series_classification_cache scc
-                JOIN series s ON scc.series_instance_uid = s.series_instance_uid
-                LEFT JOIN subject_cohorts sc ON s.subject_id = sc.subject_id
-                LEFT JOIN cohort c ON sc.cohort_id = c.cohort_id
-                WHERE (
-                    scc.dicom_origin_cohort = (SELECT name FROM cohort WHERE cohort_id = :cohort_id)
-                    OR c.cohort_id = :cohort_id
-                )
+                WHERE LOWER(scc.dicom_origin_cohort) = LOWER(:cohort_name)
                 AND scc.manual_review_required = 1
                 AND (
                     scc.manual_review_reasons_csv LIKE '%base:%'
@@ -888,7 +884,7 @@ class AxesQCService:
                 )
             """
 
-            rows = meta_db.execute(text(query), {"cohort_id": cohort_id}).fetchall()
+            rows = meta_db.execute(text(query), {"cohort_name": cohort_name}).fetchall()
 
             # Parse all review reasons to find available axes and flags
             available_axes = set()

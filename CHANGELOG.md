@@ -5,6 +5,87 @@ All notable changes to NILS will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.4.0] - 2026-05-26
+
+### Added
+
+- **Body Part Quality Control** — Cohort-scoped QC subsystem that learns per-cohort body-part labels from DICOM thumbnails and protects them across re-runs
+  - Two-stage seeding pipeline: keyword-prior candidate selection followed by stratified zero-shot label assignment, producing a balanced training set without manual annotation
+  - Stage-and-commit workflow with per-stack pick/destage actions, partial commits, and override conflict detection so reviewers can iterate without blowing away prior work
+  - Orientation-aware inference combining axial composition with center-weighted aggregation across sagittal and coronal slices; sagittal portrait spine heuristic flags portrait-aspect sagittal acquisitions as spinal cord
+  - Multi-slice embedding averaging with automated hyperparameter tuning during training; configurable classifiers with optional PCA dimensionality reduction
+  - Global body-part model registry: train once, reuse across cohorts; per-cohort model selection from the registry
+  - Durable label protection — committed body-part labels persist through a profile registry and survive reclassification runs
+  - Cohort-scoped reset action to clear QC state and start over
+  - Expanded body part keyword set; middle-slice thumbnail URL included in cohort model metadata for quick visual sanity-checks
+
+- **Main Acquisition QC (MASQC)** — Cohort-wide review pipeline for the single representative ("main") acquisition per session
+  - Automated session picking with bundle-based grouping and heatmap visualization across the cohort
+  - Session-based bundle review with automated classification tagging applied on commit
+  - Persistent saved sessions with custom display IDs (configurable per ID type), adjustable grid layouts, and per-session acknowledgement that survives across logins
+  - Multi-stack filter to focus on sessions containing multiple competing stacks
+  - In-process TTL cache for session lists plus frontend prefetching of neighbor sessions for instant navigation
+  - Categorized reason banners in the QC modal explain why each candidate was picked or skipped
+
+- **Cohort-Level Classification Overrides** — Per-cohort keyword override service and management UI lets sites tune detection without touching global YAML configs
+
+- **STAGE Classification Branch** — Dedicated provenance branch for STrategically Acquired Gradient Echo data, routing STAGE outputs through specialized base-contrast and construct logic
+
+- **SWI Branch — QSM and R2\* outputs** — Quantitative susceptibility maps and R2\* maps now classified as first-class SWI outputs with documentation
+
+- **Recon-Variant Constructs** — Three new constructs track scanner reconstruction variants
+  - `ORIG` (GE raw/unprocessed) and `Filtered` (GE noise-filtered) detected via text-search prefixes
+  - `ND` (Siemens no-distortion-correction) detected from the `ND` ImageType token
+
+- **Multi-Frame DICOM Rendering** — Backend frame-specific extraction and frontend rendering for Enhanced MR / multi-frame DICOMs, with optimized scrolling for large frame counts
+
+- **Enhanced MR Metadata Extraction** — Extractor now reads `SharedFunctionalGroupsSequence` and `PerFrameFunctionalGroupsSequence`, recovering physics parameters (TE/TR/TI/FA) for Enhanced MR Image Storage objects that previously came through with empty metadata
+
+- **Intent-Scoped Reference Databases** — Step 4 gap-filling now isolates the physics-similarity reference pool per intent, preventing cross-intent matches (e.g., a FLAIR-like stack will no longer borrow parameters from a perfusion reference) during stuck-stack recovery
+
+- **Session-Aware Rescue** — Sessions that contain only `ORIGINAL\SECONDARY` images (no `ORIGINAL\PRIMARY`) are no longer dropped wholesale; secondary stacks are rescued so the session still gets classified
+
+- **`nils extract` CLI** — New top-level command replacing `metadata ingest` under a stable CLI contract; flag surface shrunk from 22 to ~6 by moving knobs into a config file, with extraction logic relocated into a typed `ExtractionConfig`
+
+- **Detection Vocabulary Expansion**
+  - `t2w-cube` token mapping for GE T2 CUBE volumetric acquisitions
+  - `t1`, `t2`, and `asset cal` labels in detection configs (catches scanner calibration scans)
+  - `bffe` keyword support for balanced-FFE sequences
+  - Additional positive and negative keywords for contrast detection
+
+- **`slice_thickness_mm`** — Added to the metadata schema and surfaced in QC modal display
+
+- **Acquisition Parameters in BIDS Export** — Stack export filenames now include configurable acquisition-parameter naming, with improved collision handling options
+
+### Changed
+
+- **Default Backend Port** — Default backend port changed from `8000` to `8010` to allow coexistence with other NILS services on the same host. Existing `docker-compose.yml` overrides and client URLs hitting `:8000` should be updated.
+
+- **Cohort Scoping** — Standardized on `dicom_origin_cohort` across QC and classification services; removed the subject-cohort mapping dependency so cohort scoping is consistent end-to-end
+
+- **Session Identification** — Migrated session identity from `study_id` to `(subject_id, session_date)` across backend and frontend QC services, eliminating duplicate-session artifacts when a subject has multiple studies on the same date
+
+- **Sequence Taxonomy Cleanup**
+  - Siemens MEDIC sequences decoupled from generic multi-echo SE detection (MEDIC is now its own concept with explicit documentation)
+  - Removed generic steady-state detection rules in favor of more specific keyword-based detection
+
+- **MTw Contrast Priority** — Magnetization-transfer-weighted contrast detection priority adjusted so MTw isn't shadowed by other modifiers
+
+- **Frontend QC Architecture**
+  - Stack image rendering extracted into a reusable `StackImagePane` with caching for cohort QC data
+  - Legacy heatmap components replaced with a modular `AxisHeatmap` + `SubjectStrip` pair
+  - Thumbnail rendering backed by `lru_cache` with longer cache-control duration for faster repeat views
+
+- **Available ID Types** — Session response now includes the list of available identifier types so frontend can offer them as display options without an extra round-trip
+
+### Fixed
+
+- **IR-TSE and MPRAGE Detection** — Vendor-specific logic added for Philips and GE scanners; previously Philips IR-TSE and GE MPRAGE variants were misclassified due to differing keyword conventions
+
+- **Body Part Label Sanitization** — Labels normalized to lowercase during sanitization so case-only variants (e.g., `Brain` vs `brain`) no longer create duplicate buckets
+
+- **SubjectStrip Label Truncation** — Width calculation fixed to prevent subject labels from being clipped; theme-consistent styling applied across the strip
+
 ## [0.3.0] - 2026-03-20
 
 ### Added

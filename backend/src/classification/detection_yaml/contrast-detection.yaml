@@ -87,6 +87,7 @@ negative_keywords:
   # Dutch
   - "zonder gd"
   - "geen gd"
+  - "pre - gd"
 
 # POSITIVE KEYWORDS - post_contrast = 1
 # Database validated: dotarem(10196), magnevist(9741), omniscan(4969),
@@ -122,6 +123,7 @@ positive_keywords:
   - "+ gd"            # with space (n=7588)
   - "+ k"
   - "k+"              # reversed notation (n=42)
+  - "k +"
   - "+contrast"       # English variant (n=9)
   # Swedish positive
   - "med gd"
@@ -148,6 +150,7 @@ positive_keywords:
   # French positive
   - "avec gd"
   - "avec contraste"
+  - "post - gd"
 
 # =============================================================================
 # DETECTION LOGIC

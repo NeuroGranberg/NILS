@@ -9,6 +9,10 @@ from api.routes.application_tables import router as application_tables_router
 from api.routes.id_types import router as id_types_router
 from api.routes.jobs import router as jobs_router
 from api.routes.cohorts import router as cohorts_router
+from api.routes.cohort_keywords import router as cohort_keywords_router
+from api.routes.cohort_main_qc import router as cohort_main_qc_router
+from api.routes.cohort_body_part_qc import router as cohort_body_part_qc_router
+from api.routes.body_part_models import router as body_part_models_router
 from api.routes.metadata_subjects import router as metadata_subjects_router
 from api.routes.metadata_cohorts import router as metadata_cohorts_router
 from api.routes.imports import router as imports_router
@@ -25,6 +29,10 @@ __all__ = [
     "id_types_router",
     "jobs_router",
     "cohorts_router",
+    "cohort_keywords_router",
+    "cohort_main_qc_router",
+    "cohort_body_part_qc_router",
+    "body_part_models_router",
     "metadata_subjects_router",
     "metadata_cohorts_router",
     "imports_router",

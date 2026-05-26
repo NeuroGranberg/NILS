@@ -38,7 +38,7 @@
 metadata:
   version: "2.1.0"
   detector: "ProvenanceDetector"
-  total_provenances: 11
+  total_provenances: 12
   last_updated: "2025-12-10"
   description: |
     Provenance detection for classification branching.
@@ -115,6 +115,8 @@ provenances:
         - "swan"
         - "fsbb"
         - "susceptibility"
+        - "qsm"          # QSM shares same multi-echo GRE acquisition as SWI
+        - "r2star"        # R2* maps derived from same acquisition (normalized from R2*)
       combination:
         - has_swi
         - is_derived
@@ -126,8 +128,9 @@ provenances:
     
     notes: |
       SWI uses phase information to enhance susceptibility contrast.
-      Includes magnitude, phase, processed SWI, and mIP outputs.
-      Branch: swi (special handling for SWI taxonomy)
+      Includes magnitude, phase, processed SWI, mIP, QSM, and R2* outputs.
+      QSM and R2* share the same multi-echo GRE acquisition as SWI.
+      Branch: swi (special handling for SWI/QSM taxonomy)
 
   # ===========================================================================
   # 3. EPIMIX/NEUROMIX - Multicontrast EPI → epimix branch
@@ -165,7 +168,32 @@ provenances:
       Branch: epimix (special handling for output type detection)
 
   # ===========================================================================
-  # 4. DTI / DIFFUSION TENSOR RECONSTRUCTION → rawrecon branch
+  # 4. STAGE - Multi-contrast dual-echo GRE → stage branch
+  # ===========================================================================
+  STAGE:
+    name: "STAGE"
+    description: "STrategically Acquired Gradient Echo multi-contrast (dual-FA, dual-echo GRE)"
+    branch: "stage"
+
+    detection:
+      exclusive: null
+
+      keywords:
+        - "stage"
+
+      combination: null
+
+    confidence:
+      keywords: 0.90
+
+    notes: |
+      STAGE is a rapid multi-parametric protocol using two dual-echo 3D GRE
+      acquisitions at FA=6° and FA=24° (TR=25ms). Produces T1w, PDw, SWI,
+      QSM, R2*, T1 map, PD map from a single ~5min scan.
+      Branch: stage (groups raw magnitude/phase echoes separately)
+
+  # ===========================================================================
+  # 5. DTI / DIFFUSION TENSOR RECONSTRUCTION → rawrecon branch
   # ===========================================================================
   DTIRecon:
     name: "DTIRecon"
@@ -354,6 +382,7 @@ provenances:
         - "3 plan"
         - "autoalign"
         - "calibration"
+        - "asset cal"
         - "locator"
         # Swedish
         - "versikt"
@@ -401,6 +430,7 @@ rules:
   priority_order:
     - SyMRI
     - EPIMix
+    - STAGE
     - SWIRecon
     - DTIRecon
     - PerfusionRecon
@@ -441,6 +471,11 @@ branches:
     provenances:
       - EPIMix
     description: "Multicontrast EPI classification branch"
+
+  stage:
+    provenances:
+      - STAGE
+    description: "STAGE multi-echo GRE classification branch"
 
   rawrecon:
     provenances:

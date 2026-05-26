@@ -49,6 +49,58 @@ class CohortService:
             except Exception as e:
                 logger.warning("Pipeline migration failed (non-fatal): %s", e)
 
+            # Body Part QC: stage/commit columns (Milestone C).
+            try:
+                from cohorts.migrations.add_body_part_stage_columns import (
+                    ensure_migrated as ensure_body_part_stage_columns,
+                )
+
+                ensure_body_part_stage_columns()
+            except Exception as e:
+                logger.warning(
+                    "Body Part QC stage-columns migration failed (non-fatal): %s",
+                    e,
+                )
+
+            # MASQC saved sessions: display_id_type / only_multi_stack columns.
+            try:
+                from cohorts.migrations.add_masqc_session_columns import (
+                    ensure_migrated as ensure_masqc_session_columns,
+                )
+
+                ensure_masqc_session_columns()
+            except Exception as e:
+                logger.warning(
+                    "MASQC saved-sessions columns migration failed (non-fatal): %s",
+                    e,
+                )
+
+            # Cohort Main QC: per-session acknowledgement table.
+            try:
+                from cohorts.migrations.add_cohort_main_qc_ack_table import (
+                    ensure_migrated as ensure_cohort_main_qc_ack_table,
+                )
+
+                ensure_cohort_main_qc_ack_table()
+            except Exception as e:
+                logger.warning(
+                    "Cohort Main QC ack-table migration failed (non-fatal): %s",
+                    e,
+                )
+
+            # Global Body Part QC: sample pool + model registry.
+            try:
+                from cohorts.migrations.add_global_body_part_tables import (
+                    ensure_migrated as ensure_global_body_part_tables,
+                )
+
+                ensure_global_body_part_tables()
+            except Exception as e:
+                logger.warning(
+                    "Global Body Part QC tables migration failed (non-fatal): %s",
+                    e,
+                )
+
         except Exception as exc:  # pragma: no cover
             raise RuntimeError("Failed to initialize cohort tables") from exc
         self._initialized = True

@@ -25,6 +25,7 @@ import {
   IconDroplet,
   IconArrowLeft,
   IconDatabase,
+  IconLayoutGrid,
 } from '@tabler/icons-react';
 import { useLocation } from 'react-router-dom';
 import { useCohortsQuery } from '../../cohorts/api';
@@ -32,9 +33,12 @@ import { useQCStore } from '../store';
 import { QCCohortCard } from '../components/QCCohortCard';
 import { QCViewerPage } from './QCViewerPage';
 import { AxesQCPage } from './AxesQCPage';
+import { MainAcquisitionQCPage } from './MainAcquisitionQCPage';
+import { BodyPartQCPage } from '../../cohorts/body-part-qc/BodyPartQCPage';
+import { CohortMainQCPage } from '../../cohorts/main-qc/CohortMainQCPage';
 
 // QC Module definitions
-type QCModule = 'axes' | 'body_part' | 'contrast';
+type QCModule = 'axes' | 'body_part' | 'contrast' | 'main_t1w_flair';
 
 interface QCModuleMeta {
   id: QCModule;
@@ -57,18 +61,29 @@ const QC_MODULES: QCModuleMeta[] = [
   {
     id: 'body_part',
     title: 'Body Part QC',
-    description: 'Validate body part detection using geometry and aspect ratio',
+    description:
+      'Cohort-wide body-part labels via zero-shot seeding + linear-probe classifier (BiomedCLIP + SigLIP2).',
     icon: <IconBrain size={24} />,
     color: 'orange',
-    implemented: false,
+    implemented: true,
   },
   {
     id: 'contrast',
-    title: 'Contrast QC',
-    description: 'Cross-stack comparison for PRE/POST contrast determination',
+    title: 'Main Acquisition QC',
+    description:
+      'Pick the main acquisition per bundle and tag pre/post-contrast across a session',
     icon: <IconDroplet size={24} />,
     color: 'pink',
-    implemented: false,
+    implemented: true,
+  },
+  {
+    id: 'main_t1w_flair',
+    title: 'Main T1w / T2w-FLAIR',
+    description:
+      'Auto-pick a main T1w and T2w-FLAIR for every session in the cohort. Heatmap view, Dixon/MP2RAGE family-aware.',
+    icon: <IconLayoutGrid size={24} />,
+    color: 'teal',
+    implemented: true,
   },
 ];
 
@@ -258,12 +273,23 @@ export const QCPipelinePage = () => {
   // View: QC Module (Axes, Body Part, or Contrast)
   // --------------------------------------------------------------------------
   if (viewMode === 'qc' && selectedModule) {
-    // Currently only Axes is implemented
     if (selectedModule === 'axes') {
       return <AxesQCPage cohort={selectedCohort} onBack={handleBackToModules} />;
     }
 
-    // Placeholder for unimplemented modules
+    if (selectedModule === 'contrast') {
+      return <MainAcquisitionQCPage cohort={selectedCohort} onBack={handleBackToModules} />;
+    }
+
+    if (selectedModule === 'main_t1w_flair') {
+      return <CohortMainQCPage cohort={selectedCohort} onBack={handleBackToModules} />;
+    }
+
+    if (selectedModule === 'body_part') {
+      return <BodyPartQCPage cohort={selectedCohort} onBack={handleBackToModules} />;
+    }
+
+    // Placeholder for unimplemented modules (contrast)
     return (
       <Stack gap="lg">
         <Group gap="md">
@@ -277,19 +303,14 @@ export const QCPipelinePage = () => {
         <Paper p="xl" withBorder style={{ textAlign: 'center' }}>
           <Stack align="center" gap="md">
             <ThemeIcon size={64} radius="xl" color="gray" variant="light">
-              {selectedModule === 'body_part' ? (
-                <IconBrain size={32} />
-              ) : (
-                <IconDroplet size={32} />
-              )}
+              <IconDroplet size={32} />
             </ThemeIcon>
             <Text size="lg" fw={500}>
               Coming Soon
             </Text>
             <Text c="dimmed">
-              {selectedModule === 'body_part'
-                ? 'Body Part QC will allow you to validate body part detection using geometry and aspect ratio analysis.'
-                : 'Contrast QC will enable cross-stack comparison for PRE/POST contrast determination.'}
+              Contrast QC will enable cross-stack comparison for PRE/POST
+              contrast determination.
             </Text>
             <Button variant="light" onClick={handleBackToModules}>
               Back to Modules

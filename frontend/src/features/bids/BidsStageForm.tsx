@@ -39,6 +39,7 @@ export interface BidsConfig {
   includeIntents?: string[];
   includeProvenance?: string[];
   includeFieldStrengths?: number[];
+  includeAccelerationInName?: boolean;
 }
 
 interface BidsStageFormProps {
@@ -249,18 +250,26 @@ export const BidsStageForm = ({
         </Stack>
       </SectionCard>
 
-      {/* Subject Naming Section */}
-      <SectionCard title="Subject Naming" description="Configure how subjects are named in the export">
-        <Select
-          label="Subject identifier"
-          description="Choose which identifier to use for subject naming (sub-*)"
-          value={subjectIdentifierSourceVal}
-          data={subjectIdentifierOptions}
-          onChange={(value) => {
-            const parsed = value === 'subject_code' ? 'subject_code' : Number(value);
-            onChange('subjectIdentifierSource', parsed);
-          }}
-        />
+      {/* Naming Section */}
+      <SectionCard title="Naming" description="Configure how subjects and files are named in the export">
+        <Stack gap="sm">
+          <Select
+            label="Subject identifier"
+            description="Choose which identifier to use for subject naming (sub-*)"
+            value={subjectIdentifierSourceVal}
+            data={subjectIdentifierOptions}
+            onChange={(value) => {
+              const parsed = value === 'subject_code' ? 'subject_code' : Number(value);
+              onChange('subjectIdentifierSource', parsed);
+            }}
+          />
+          <Checkbox
+            label="Include acceleration in file names"
+            description="Include acceleration tokens (e.g. PartialFourier, ParallelImaging) in output file names"
+            checked={config.includeAccelerationInName ?? true}
+            onChange={(e) => onChange('includeAccelerationInName', e.currentTarget.checked)}
+          />
+        </Stack>
       </SectionCard>
 
       {/* Intent Selection Section */}

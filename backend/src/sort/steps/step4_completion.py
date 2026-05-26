@@ -30,6 +30,7 @@ from ..gap_filling import (
     ORIENTATION_CONFIDENCE_THRESHOLD,
     ReferenceDatabase,
     build_reference_database,
+    build_intent_scoped_databases,
     compute_physics_key,
     find_best_match,
     infer_acquisition_type,
@@ -117,7 +118,8 @@ class Step4Completion(BaseStep):
 
     def __init__(self, progress_callback=None):
         super().__init__(progress_callback)
-        self._reference_db: ReferenceDatabase | None = None
+        self._reference_dbs: dict[str, ReferenceDatabase] = {}
+        self._reference_db_global: ReferenceDatabase | None = None
 
     async def execute(self, context: StepContext) -> StepResult:
         """Execute Step 4: Completion & Gap Filling."""
@@ -264,16 +266,19 @@ class Step4Completion(BaseStep):
                 current_action="Phase 3: Loading references"
             )
 
-            # Build reference database from entire metadata DB
+            # Build per-directory_type reference databases from entire metadata DB
+            # Intent-scoped matching prevents cross-intent contamination (e.g.,
+            # DWI stacks in the dwi pool incorrectly filling technique for anat stacks)
             logger.info("Step 4: Loading reference database...")
             ref_rows = self._load_reference_stacks(conn)
-            logger.info("Step 4: Loaded %d reference rows, building database...", len(ref_rows))
-            self._reference_db = build_reference_database(ref_rows)
-            self.log(f"Reference database: {self._reference_db.total_count:,} stacks in {self._reference_db.bin_count:,} bins")
-            logger.info("Step 4: Reference database built: %d stacks in %d bins", self._reference_db.total_count, self._reference_db.bin_count)
+            logger.info("Step 4: Loaded %d reference rows, building databases...", len(ref_rows))
+            self._reference_dbs, self._reference_db_global = build_intent_scoped_databases(ref_rows)
+            intent_summary = ", ".join(f"{k}={db.total_count}" for k, db in sorted(self._reference_dbs.items()))
+            self.log(f"Reference databases: {self._reference_db_global.total_count:,} total ({intent_summary})")
+            logger.info("Step 4: Reference databases built: %d total stacks, %d intent pools", self._reference_db_global.total_count, len(self._reference_dbs))
 
             await self.emit_progress(
-                35, f"Reference DB: {self._reference_db.total_count:,} stacks",
+                35, f"Reference DB: {self._reference_db_global.total_count:,} stacks",
                 current_action="Phase 3: Similarity matching"
             )
 
@@ -285,7 +290,7 @@ class Step4Completion(BaseStep):
                 s for s in stacks
                 if s["modality"] == "MR"
                 and s["directory_type"] != "excluded"
-                and s.get("provenance") not in ("SyMRI", "SWIRecon", "EPIMix", "BOLDRecon")
+                and s.get("provenance") not in ("SyMRI", "SWIRecon", "EPIMix", "BOLDRecon", "STAGE")
                 and (s["base"] is None or s["base"] == "" or s["base"] == "Unknown"
                      or s["technique"] is None or s["technique"] == "Unknown")
             ]
@@ -380,7 +385,7 @@ class Step4Completion(BaseStep):
             for stack_id, base, technique, method in fill_results:
                 if base == "SWI":
                     s = stacks_by_id.get(stack_id)
-                    if s and s.get("provenance") not in ("SWIRecon", "SyMRI", "EPIMix"):
+                    if s and s.get("provenance") not in ("SWIRecon", "SyMRI", "EPIMix", "STAGE"):
                         ctx = ClassificationContext.from_fingerprint(s)
                         branch_result = apply_swi_logic(ctx)
 
@@ -675,12 +680,14 @@ class Step4Completion(BaseStep):
 
         Includes localizers to enable physics-based gap filling for unclassified localizers.
         Excludes stacks with technique='Unknown' to avoid contaminating similarity matches.
+        Returns directory_type for intent-scoped database building.
         """
         result = conn.execute(text("""
             SELECT
                 scc.series_stack_id,
                 scc.base,
                 scc.technique,
+                scc.directory_type,
                 fp.mr_tr,
                 fp.mr_te,
                 fp.mr_ti,
@@ -829,6 +836,10 @@ class Step4Completion(BaseStep):
     ) -> list[tuple[int, str | None, str | None, str]]:
         """
         Fill base and technique for a batch of stacks.
+
+        Uses intent-scoped reference databases: each stack is matched against
+        references from the same directory_type first. Falls back to the global
+        pool for misc stacks or when the scoped pool has no match.
         
         Returns:
             List of (stack_id, base, technique, method)
@@ -836,8 +847,12 @@ class Step4Completion(BaseStep):
         results = []
         
         for stack in stacks:
+            dt = stack.get("directory_type", "misc")
+            # Use scoped DB for known intents, global for misc
+            ref_db = self._reference_dbs.get(dt, self._reference_db_global)
+
             result = find_best_match(
-                ref_db=self._reference_db,
+                ref_db=ref_db,
                 tr=stack.get("mr_tr"),
                 te=stack.get("mr_te"),
                 ti=stack.get("mr_ti"),
@@ -845,6 +860,18 @@ class Step4Completion(BaseStep):
                 n_instances=stack.get("stack_n_instances"),
                 scanning_sequence=stack.get("scanning_sequence"),
             )
+
+            # If scoped DB had no match, fall back to global pool
+            if result.method in ("no_match", "insufficient_matches", "no_compatible_match") and dt != "misc":
+                result = find_best_match(
+                    ref_db=self._reference_db_global,
+                    tr=stack.get("mr_tr"),
+                    te=stack.get("mr_te"),
+                    ti=stack.get("mr_ti"),
+                    fa=stack.get("mr_flip_angle"),
+                    n_instances=stack.get("stack_n_instances"),
+                    scanning_sequence=stack.get("scanning_sequence"),
+                )
 
             # Only fill if we got a match
             current_base = stack.get("base")

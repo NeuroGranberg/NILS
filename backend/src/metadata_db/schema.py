@@ -795,6 +795,9 @@ class SeriesClassificationCache(Base):
     columns: Mapped[int | None] = mapped_column(Integer, nullable=True)
     pixsp_row_mm: Mapped[float | None] = mapped_column(Float, nullable=True)
     pixsp_col_mm: Mapped[float | None] = mapped_column(Float, nullable=True)
+    # Through-plane resolution. Populated by Sort Step 3 from
+    # COALESCE(series.spacing_between_slices, series.slice_thickness).
+    slice_thickness_mm: Mapped[float | None] = mapped_column(Float, nullable=True)
     orientation_patient: Mapped[str | None] = mapped_column(Text, nullable=True)
     echo_number: Mapped[int | None] = mapped_column(Integer, nullable=True)
     directory_type: Mapped[str | None] = mapped_column(Text, nullable=True)

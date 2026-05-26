@@ -23,5 +23,7 @@ export interface BidsStageConfig {
   subjectIdentifierSource: string | number;
   // Field strength filter: empty = all; [3.0, 7.0] = only 3T and 7T
   includeFieldStrengths: number[];
+  // Whether to include acceleration tokens (e.g. PartialFourier) in file names
+  includeAccelerationInName: boolean;
 }
 

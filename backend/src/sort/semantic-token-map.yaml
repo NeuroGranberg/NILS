@@ -122,6 +122,8 @@ token_replacements:
     - t2
     - +t2
     - -t2
+  t2w-cube:
+    - t2cube
   proton-density-t2w:
     - pdt2
     - pd-t2
@@ -145,6 +147,7 @@ token_replacements:
   # SWI component abbreviations
   phase:
     - pha       # "swi_pha" → "swi phase"
+    - phs       # GE QSM output label: "PHS | psd/QSM/me" → "phase"
   magnitude:
     - mag       # "swi_mag" → "swi magnitude"
   grappa:

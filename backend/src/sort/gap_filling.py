@@ -431,6 +431,48 @@ def build_reference_database(rows: list[dict[str, Any]]) -> ReferenceDatabase:
     return db
 
 
+def build_intent_scoped_databases(
+    rows: list[dict[str, Any]]
+) -> tuple[dict[str, ReferenceDatabase], ReferenceDatabase]:
+    """
+    Build per-directory_type reference databases plus a global fallback.
+
+    Intent-scoped matching prevents cross-intent contamination where, e.g.,
+    DWI stacks in the dwi pool dominate a physics bin and cause anat stacks
+    with missing metadata to be incorrectly assigned DWI-EPI technique.
+
+    Args:
+        rows: List of dicts with series_stack_id, base, technique,
+              directory_type, mr_tr, mr_te, etc.
+
+    Returns:
+        Tuple of (by_intent, global_db) where:
+        - by_intent: dict mapping directory_type -> ReferenceDatabase
+        - global_db: ReferenceDatabase with all stacks (fallback for misc)
+    """
+    by_intent: dict[str, ReferenceDatabase] = {}
+    global_db = ReferenceDatabase()
+
+    for row in rows:
+        stack = ReferenceStack(
+            series_stack_id=row["series_stack_id"],
+            base=row["base"],
+            technique=row["technique"],
+            tr=row.get("mr_tr"),
+            te=row.get("mr_te"),
+            ti=row.get("mr_ti"),
+            fa=row.get("mr_flip_angle"),
+            n_instances=row.get("stack_n_instances"),
+        )
+        dt = row.get("directory_type", "misc")
+        if dt not in by_intent:
+            by_intent[dt] = ReferenceDatabase()
+        by_intent[dt].add(stack)
+        global_db.add(stack)
+
+    return by_intent, global_db
+
+
 # =============================================================================
 # Similarity-Based Gap Filling
 # =============================================================================

@@ -92,7 +92,7 @@ class QCService:
         from db.session import engine
 
         # Import models to register them with Base
-        from .models import QCSession, QCItem, QCDraftChange
+        from .models import QCSession, QCItem, QCDraftChange, MASQCSession  # noqa: F401
 
         Base.metadata.create_all(engine, checkfirst=True)
         self._initialized = True
@@ -217,10 +217,16 @@ class QCService:
         """Get paginated subjects for a cohort with search across multiple fields."""
         self._ensure_initialized()
 
+        from metadata_db.resolve import get_cohort_name_from_app_db
+
+        cohort_name = get_cohort_name_from_app_db(cohort_id)
+        if not cohort_name:
+            return [], 0
+
         with MetadataSessionLocal() as meta_db:
-            # Base filtering conditions
-            where_clause = "WHERE c.cohort_id = :cohort_id"
-            params = {"cohort_id": cohort_id, "sort_by": sort_by or "code"}
+            # Base filtering conditions - match by name to avoid ID mismatch
+            where_clause = "WHERE LOWER(c.name) = LOWER(:cohort_name)"
+            params = {"cohort_name": cohort_name, "sort_by": sort_by or "code"}
 
             if search:
                 where_clause += """
@@ -381,6 +387,11 @@ class QCService:
                     s.modality,
                     s.series_time,
                     sf.stack_orientation,
+                    sf.mr_acquisition_type,
+                    ss.stack_echo_time,
+                    ss.stack_repetition_time,
+                    ss.stack_inversion_time,
+                    ss.stack_flip_angle,
                     scc.dwi_b_value,
                     scc.dwi_pe_direction,
                     scc.dwi_n_directions
@@ -450,6 +461,11 @@ class QCService:
                         fov_y_mm=row.fov_y_mm,
                         slices_count=row.slices_count,
                         orientation=row.stack_orientation,
+                        mr_acquisition_type=getattr(row, "mr_acquisition_type", None),
+                        echo_time=getattr(row, "stack_echo_time", None),
+                        repetition_time=getattr(row, "stack_repetition_time", None),
+                        inversion_time=getattr(row, "stack_inversion_time", None),
+                        flip_angle=getattr(row, "stack_flip_angle", None),
                         series_description=row.series_description,
                         modality=row.modality,
                         dwi_b_value=getattr(row, "dwi_b_value", None),
@@ -681,10 +697,7 @@ class QCService:
                 return 0
 
             # Query classification cache for items needing review
-            # Cohort matching strategy (in order of preference):
-            # 1. Direct match on dicom_origin_cohort (new data with properly populated cohort)
-            # 2. Fallback to subject->cohort relationship via series.subject_id (legacy data)
-            # 3. Include items with empty/NULL cohort for legacy data migration
+            # Scoped to dicom_origin_cohort (set during sorting)
             query = """
                 SELECT DISTINCT
                     scc.series_stack_id,
@@ -698,16 +711,7 @@ class QCService:
                 JOIN series s ON scc.series_instance_uid = s.series_instance_uid
                 JOIN study st ON s.study_id = st.study_id
                 LEFT JOIN series_stack ss ON scc.series_stack_id = ss.series_stack_id
-                LEFT JOIN subject_cohorts sc ON s.subject_id = sc.subject_id
-                LEFT JOIN cohort c ON sc.cohort_id = c.cohort_id
-                WHERE (
-                    -- Direct cohort name match (preferred)
-                    scc.dicom_origin_cohort = :cohort_name
-                    -- OR subject is linked to this cohort (fallback for legacy data)
-                    OR c.name = :cohort_name
-                    -- OR cohort is empty/None/empty string (legacy data without cohort info)
-                    OR (scc.dicom_origin_cohort IS NULL OR scc.dicom_origin_cohort = 'None' OR scc.dicom_origin_cohort = '')
-                )
+                WHERE LOWER(scc.dicom_origin_cohort) = LOWER(:cohort_name)
             """
 
             if include_flagged_only:

@@ -464,6 +464,27 @@ TEST_CASES: List[Tuple[str, Dict[str, bool]]] = [
     ("ORIGINAL\\PRIMARY\\PROTON_DENSITY\\NONE", {}),
     
     # =========================================================================
+    # SECTION 15b: RECON-VARIANT FLAGS (ND = No Distortion correction)
+    # =========================================================================
+    # Siemens ND token: gradient distortion correction NOT applied.
+    # Verify has_nd is True when ND present, False when absent (DIS2D/DIS3D instead).
+    
+    # ND present (no distortion correction)
+    ("ORIGINAL\\PRIMARY\\M\\ND\\NORM", {"has_nd": True, "is_normalized": True}),
+    ("ORIGINAL\\PRIMARY\\M\\ND", {"has_nd": True, "is_normalized": False}),
+    ("ORIGINAL\\PRIMARY\\P\\ND", {"has_nd": True, "has_phase": True}),
+    ("DERIVED\\PRIMARY\\DIFFUSION\\ADC\\ND\\NORM", {"has_nd": True, "has_adc": True}),
+    ("ORIGINAL\\PRIMARY\\DIFFUSION\\NONE\\ND\\NORM\\MFSPLIT", {"has_nd": True, "has_diffusion": True}),
+    
+    # ND absent (DIS2D = distortion corrected)
+    ("ORIGINAL\\PRIMARY\\M\\NORM\\DIS2D", {"has_nd": False}),
+    ("DERIVED\\PRIMARY\\MPR\\NORM\\DIS2D", {"has_nd": False, "is_mpr": True}),
+    ("ORIGINAL\\PRIMARY\\M\\NORM\\DIS3D\\DIS2D\\FM3_2\\FIL", {"has_nd": False}),
+    
+    # ND absent (GE OTHER = no ND token)
+    ("ORIGINAL\\PRIMARY\\OTHER", {"has_nd": False}),
+    
+    # =========================================================================
     # SECTION 16: MINIMAL/EDGE CASES
     # =========================================================================
     

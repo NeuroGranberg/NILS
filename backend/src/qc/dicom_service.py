@@ -186,15 +186,15 @@ class DicomService:
     def get_instance_file_path(self, instance_id: int) -> Optional[str]:
         """Get the file path for a DICOM instance by instance ID."""
         with MetadataSessionLocal() as meta_db:
-            # Get dicom_file_path and also try to get cohort source_path for resolution
+            # Get dicom_file_path and resolve cohort path via dicom_origin_cohort
             query = """
                 SELECT
                     i.dicom_file_path,
                     c.path as cohort_path
                 FROM instance i
                 JOIN series s ON i.series_instance_uid = s.series_instance_uid
-                LEFT JOIN subject_cohorts sc ON s.subject_id = sc.subject_id
-                LEFT JOIN cohort c ON sc.cohort_id = c.cohort_id
+                LEFT JOIN series_classification_cache scc ON s.series_instance_uid = scc.series_instance_uid
+                LEFT JOIN cohort c ON LOWER(c.name) = LOWER(scc.dicom_origin_cohort)
                 WHERE i.instance_id = :instance_id
             """
             result = meta_db.execute(text(query), {"instance_id": instance_id})
@@ -214,8 +214,8 @@ class DicomService:
                     c.path as cohort_path
                 FROM instance i
                 JOIN series s ON i.series_instance_uid = s.series_instance_uid
-                LEFT JOIN subject_cohorts sc ON s.subject_id = sc.subject_id
-                LEFT JOIN cohort c ON sc.cohort_id = c.cohort_id
+                LEFT JOIN series_classification_cache scc ON s.series_instance_uid = scc.series_instance_uid
+                LEFT JOIN cohort c ON LOWER(c.name) = LOWER(scc.dicom_origin_cohort)
                 WHERE i.sop_instance_uid = :sop_uid
             """
             result = meta_db.execute(text(query), {"sop_uid": sop_instance_uid})
@@ -243,6 +243,7 @@ class DicomService:
         window_center: Optional[float] = None,
         window_width: Optional[float] = None,
         size: Optional[int] = None,
+        frame: Optional[int] = None,
     ) -> Optional[bytes]:
         """
         Render a DICOM instance to PNG bytes.
@@ -255,6 +256,7 @@ class DicomService:
             window_center: Override window center (optional)
             window_width: Override window width (optional)
             size: Resize to this max dimension (optional, for thumbnails)
+            frame: Frame index for multi-frame DICOM (optional, default first)
 
         Returns:
             PNG image bytes or None if not found
@@ -273,9 +275,11 @@ class DicomService:
             # Get pixel array
             pixel_array = ds.pixel_array
 
-            # Handle multi-frame (take first frame)
+            # Handle multi-frame: use requested frame or default to first
             if len(pixel_array.shape) == 3:
-                pixel_array = pixel_array[0]
+                frame_idx = frame if frame is not None else 0
+                frame_idx = max(0, min(frame_idx, pixel_array.shape[0] - 1))
+                pixel_array = pixel_array[frame_idx]
 
             # Apply rescale slope/intercept if present
             slope = getattr(ds, "RescaleSlope", 1)
