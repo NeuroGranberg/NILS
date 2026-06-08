@@ -21,7 +21,7 @@
     <img src="https://img.shields.io/badge/License-MIT-yellow.svg" alt="License: MIT">
   </a>
   <a href="CHANGELOG.md">
-    <img src="https://img.shields.io/badge/version-0.5.0-green.svg" alt="Version">
+    <img src="https://img.shields.io/badge/version-0.5.1-green.svg" alt="Version">
   </a>
 </p>
 

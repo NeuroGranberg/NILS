@@ -5,6 +5,16 @@ All notable changes to NILS will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.5.1] - 2026-06-08
+
+### Fixed
+
+- **Backend & worker image builds under Podman** — The backend build context contained a `VERSION` symlink pointing outside the context, which `buildah`/Podman reject during context preparation (`invalid symlink ... -> ../VERSION`), aborting both the backend and body-part-QC worker builds. The file is now excluded from the build context via a new `backend/.dockerignore`; it is never copied into the image, so the resulting image is unchanged (Docker was already unaffected)
+
+### Changed
+
+- **Frontend mocks are now opt-in** — In development the frontend previously started Mock Service Worker by default, intercepting `/api/*` and showing demo cohorts instead of talking to the real backend. Mocks now activate only when `VITE_ENABLE_MOCKS=true` is set explicitly, so a normal start always uses the real backend; the separate `VITE_USE_REAL_FILES` flag continues to control real-filesystem browsing independently
+
 ## [0.5.0] - 2026-06-08
 
 ### Added

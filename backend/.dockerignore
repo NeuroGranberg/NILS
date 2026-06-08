@@ -1,0 +1,18 @@
+# VERSION is a symlink to ../VERSION (the repo-root version file), whose target
+# lives OUTSIDE this build context. buildah/podman refuse out-of-context symlinks
+# at context-prep time ("invalid symlink ... -> ../VERSION"), aborting the build.
+# The file is never COPY'd into the image anyway (the package version is read
+# dynamically from pyproject.toml's `version = {file = "VERSION"}`, which simply
+# falls back when absent) — so excluding it yields an identical image. Docker
+# tolerates the symlink; this keeps podman/buildah builds working too.
+VERSION
+
+# Build-context hygiene — never needed in the image.
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+*.egg-info/
