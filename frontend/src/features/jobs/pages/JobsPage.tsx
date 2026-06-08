@@ -13,7 +13,7 @@ import { CohortJobCard, ExportJobCard, SystemJobCard } from '../components';
 import type { Cohort, Job } from '../../../types';
 
 const SYSTEM_STAGES = ['restore', 'backup'];
-const EXPORT_STAGES = ['subset_export'];
+const EXPORT_STAGES = ['export', 'subset_export']; // 'subset_export' = legacy alias
 
 /**
  * Separate jobs into cohort jobs, system jobs, and export jobs.

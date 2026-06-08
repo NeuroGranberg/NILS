@@ -540,13 +540,11 @@ def _build_fetch_stacks_sql(config: BidsExportConfig) -> tuple[str, dict]:
         LEFT JOIN subject subj ON s.subject_id = subj.subject_id
         LEFT JOIN subject_other_identifiers soi ON subj.subject_id = soi.subject_id
             AND soi.id_type_id = :id_type_id"""
-        group_by_subject = "soi.other_identifier, subj.subject_code"
         params: dict = {"id_type_id": config.subject_identifier_source}
     else:
         # Default: use subject.subject_code
         subject_select = "COALESCE(subj.subject_code, 'unknown') AS subject_code"
         subject_join = "LEFT JOIN subject subj ON s.subject_id = subj.subject_id"
-        group_by_subject = "subj.subject_code"
         params = {}
 
     # Build WHERE clause with multiple optional filters
@@ -601,7 +599,7 @@ def _build_fetch_stacks_sql(config: BidsExportConfig) -> tuple[str, dict]:
             ss.stack_repetition_time,
             ss.stack_inversion_time,
             ss.stack_flip_angle,
-            ARRAY_AGG(i.dicom_file_path ORDER BY i.instance_number NULLS LAST) AS dicom_files
+            paths.dicom_files
         FROM series_classification_cache scc
         JOIN series s ON scc.series_instance_uid = s.series_instance_uid
         JOIN study st ON s.study_id = st.study_id
@@ -609,37 +607,17 @@ def _build_fetch_stacks_sql(config: BidsExportConfig) -> tuple[str, dict]:
         LEFT JOIN series_stack ss ON scc.series_stack_id = ss.series_stack_id
         LEFT JOIN stack_fingerprint sf ON scc.series_stack_id = sf.series_stack_id
         LEFT JOIN mri_series_details msd ON s.series_id = msd.series_id
-        LEFT JOIN instance i ON i.series_stack_id = scc.series_stack_id
+        -- Aggregate instance file paths per stack in a correlated subquery keyed
+        -- on series_stack_id. This avoids exploding the outer query to one row per
+        -- instance (millions) and sorting them under a wide GROUP BY, which caused
+        -- export timeouts on large cohorts. The (series_stack_id, instance_number,
+        -- dicom_file_path) covering index serves this aggregation directly.
+        LEFT JOIN LATERAL (
+            SELECT ARRAY_AGG(i.dicom_file_path ORDER BY i.instance_number NULLS LAST) AS dicom_files
+            FROM instance i
+            WHERE i.series_stack_id = scc.series_stack_id
+        ) paths ON true
         {where_clause}
-        GROUP BY
-            scc.series_stack_id,
-            ss.series_id,
-            scc.series_instance_uid,
-            ss.stack_index,
-            ss.stack_key,
-            {group_by_subject},
-            st.study_date,
-            s.series_time,
-            scc.directory_type,
-            scc.base,
-            scc.technique,
-            scc.modifier_csv,
-            scc.construct_csv,
-            scc.provenance,
-            scc.acceleration_csv,
-            scc.post_contrast,
-            scc.spinal_cord,
-            scc.body_part,
-            sf.stack_orientation,
-            sf.mr_acquisition_type,
-            msd.magnetic_field_strength,
-            scc.dwi_b_value,
-            scc.dwi_pe_direction,
-            scc.dwi_n_directions,
-            ss.stack_echo_time,
-            ss.stack_repetition_time,
-            ss.stack_inversion_time,
-            ss.stack_flip_angle
     """
     return sql, params
 

@@ -747,7 +747,7 @@ def metadata_ingest(
         return
 
     job = job_service.create_job(
-        stage="metadata_ingest",
+        stage="extract",
         config=config.model_dump(mode="json"),
         name=job_name or f"{cohort.name} - metadata ingest",
     )

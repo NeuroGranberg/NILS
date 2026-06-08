@@ -26,8 +26,11 @@ from metadata_db.session import SessionLocal as MetadataSessionLocal
 configure_logging()
 logger = logging.getLogger(__name__)
 
-# Thread pool for background restore jobs
-_restore_executor = ThreadPoolExecutor(max_workers=2)
+# Thread pool for background jobs (restore, backup, bids/subset export)
+_job_executor = ThreadPoolExecutor(max_workers=4)
+
+# Backward-compatible alias; prefer ``_job_executor`` for new code.
+_restore_executor = _job_executor
 
 
 def parse_data_roots() -> List[Path]:
@@ -53,8 +56,9 @@ def create_app() -> FastAPI:
         version="0.1.0",
     )
     
-    # Store executor in app state for restore jobs
-    app.state.restore_executor = _restore_executor
+    # Store executor in app state for background jobs (restore/backup/export)
+    app.state.job_executor = _job_executor
+    app.state.restore_executor = _job_executor
 
     # Ensure application database schema (cohorts/jobs/qc/pipeline steps) exists before routes
     try:
@@ -105,6 +109,7 @@ def create_app() -> FastAPI:
         metadata_cohorts_router,
         imports_router,
         export_router,
+        analysis_pipelines_router,
     )
     from api.routes.qc import router as qc_router
     from api.routes.files import set_data_roots
@@ -131,6 +136,7 @@ def create_app() -> FastAPI:
     app.include_router(metadata_cohorts_router)
     app.include_router(imports_router)
     app.include_router(export_router)
+    app.include_router(analysis_pipelines_router)
     app.include_router(qc_router)
 
     # Reconcile stage-job status at startup

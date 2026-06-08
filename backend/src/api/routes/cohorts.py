@@ -22,7 +22,6 @@ from extract.subject_mapping import load_subject_code_csv
 from metadata_db.schema import IdType
 from metadata_db.session import SessionLocal as MetadataSessionLocal
 from sqlalchemy import select
-from bids import BidsExportConfig, run_bids_export, OutputMode, Layout, OverwriteMode
 
 from api.utils.serializers import serialize_job, serialize_jobs, serialize_jobs_slim
 from api.utils.csv import csv_file_path, sanitize_csv_token
@@ -622,8 +621,8 @@ async def sort_progress_stream(cohort_id: int, job_id: int):
                     job_service.mark_failed(job_id, event.error or "Unknown error")
                     _update_sort_stage_status(cohort_id, "failed")
                 elif event.type == "pipeline_cancelled":
-                    job_service.mark_canceled(job_id)
-                    _update_sort_stage_status(cohort_id, "failed")
+                    job_service.cancel_job(job_id)
+                    _update_sort_stage_status(cohort_id, "canceled")
         except Exception as e:
             job_service.mark_failed(job_id, str(e))
             _update_sort_stage_status(cohort_id, "failed")
@@ -662,6 +661,8 @@ def _update_sort_stage_status(cohort_id: int, status: str) -> None:
         # Otherwise just let it stay in running state
     elif status == 'failed':
         fail_pipeline_step(cohort_id, 'sort', error="Sorting pipeline failed")
+    elif status == 'canceled':
+        fail_pipeline_step(cohort_id, 'sort', error="Sorting canceled by user")
 
 
 @router.get("/{cohort_id}/stages/sort/steps")
@@ -1320,44 +1321,13 @@ def _run_bids_stage(cohort, stage_idx: int, merged_config: dict):
     derivatives_root = derivatives_setup.output_path.parent
 
     try:
-        # Handle subject_identifier_source: can be "subject_code" or an integer id_type_id
-        raw_subject_id_source = merged_config.get('subjectIdentifierSource', 'subject_code')
-        if isinstance(raw_subject_id_source, str) and raw_subject_id_source != 'subject_code':
-            # Try to parse as integer (id_type_id from frontend)
-            try:
-                subject_id_source = int(raw_subject_id_source)
-            except ValueError:
-                subject_id_source = 'subject_code'
-        else:
-            subject_id_source = raw_subject_id_source
+        # Cohort scope: filter the shared export engine by metadata-DB cohort
+        # name (critical for query performance on large DBs). Config
+        # construction is shared with the standalone export path via
+        # build_export_config (single source of truth).
+        from api.services.export_runner import build_export_config
 
-        raw_output_modes = merged_config.get('outputModes')
-        if not raw_output_modes:
-            legacy_mode = merged_config.get('outputMode', 'dcm')
-            raw_output_modes = [legacy_mode] if legacy_mode else ['dcm']
-
-        config_model = BidsExportConfig(
-            output_modes=raw_output_modes,
-            layout=merged_config.get('layout', 'bids'),
-            overwrite_mode=merged_config.get('overwriteMode', 'skip'),
-            include_intents=merged_config.get('includeIntents') or ['anat', 'dwi', 'func', 'fmap', 'perf'],
-            include_provenance=merged_config.get('includeProvenance', []),
-            exclude_provenance=merged_config.get('excludeProvenance', ["ProjectionDerived"]),
-            group_symri=bool(merged_config.get('groupSyMRI', merged_config.get('groupSyMRI', True))),
-            copy_workers=int(merged_config.get('copyWorkers', 8)),
-            convert_workers=int(merged_config.get('convertWorkers', 8)),
-            bids_dcm_root_name=merged_config.get('bidsDcmRootName', 'bids-dcm'),
-            bids_nifti_root_name=merged_config.get('bidsNiftiRootName', 'bids-nifti'),
-            flat_dcm_root_name=merged_config.get('flatDcmRootName', 'dcm-flat'),
-            flat_nifti_root_name=merged_config.get('flatNiftiRootName', 'nii-flat'),
-            dcm2niix_path=merged_config.get('dcm2niixPath', 'dcm2niix'),
-            subject_identifier_source=subject_id_source,
-            # Pass cohort name for SQL-level filtering (critical for performance on large DBs)
-            cohort_name=cohort.name,
-            # Field strength filter (e.g., [3.0, 7.0] for only 3T and 7T)
-            include_field_strengths=merged_config.get('includeFieldStrengths', []),
-            include_acceleration_in_name=bool(merged_config.get('includeAccelerationInName', True)),
-        )
+        config_model = build_export_config(merged_config, cohort_name=cohort.name)
     except Exception as exc:
         raise HTTPException(status_code=400, detail=f"Invalid config: {exc}")
 
@@ -1378,69 +1348,22 @@ def _run_bids_stage(cohort, stage_idx: int, merged_config: dict):
     except Exception:
         pass
 
-    # Progress callback: map processed stacks to 1→99 range
-    def bids_progress_cb(processed: int, total: int) -> None:
-        if total <= 0:
-            return
-        pct = 1 + int((processed / total) * 98)
-        pct = max(1, min(pct, 99))
-        try:
-            job_service.update_progress(job.id, pct)
-        except Exception:
-            pass
+    # Run the export in the shared background executor. The runner updates
+    # progress/metrics/terminal status and syncs the bids pipeline step.
+    from api.server import _job_executor
+    from api.services.export_runner import run_export_job
 
-    try:
-        result = run_bids_export(
-            raw_root=raw_root,
-            derivatives_root=derivatives_root,
-            config=config_model,
-            progress_cb=bids_progress_cb,
-        )
-    except RuntimeError as exc:
-        job_service.mark_failed(job.id, str(exc))
-        fail_pipeline_step(cohort.id, 'bids', error=str(exc))
-        status_code = 409 if "not empty" in str(exc).lower() else 500
-        raise HTTPException(status_code=status_code, detail=str(exc))
-    except Exception as exc:  # pragma: no cover - defensive
-        job_service.mark_failed(job.id, str(exc))
-        fail_pipeline_step(cohort.id, 'bids', error=str(exc))
-        raise HTTPException(status_code=500, detail=str(exc))
+    _job_executor.submit(
+        run_export_job,
+        job.id,
+        raw_root,
+        derivatives_root,
+        config_model,
+        pipeline_cohort_id=cohort.id,
+        pipeline_stage='bids',
+    )
 
-    metrics = {
-        "total_stacks": result.total_stacks,
-        "exported_stacks": result.exported_stacks,
-        "copied_files": result.copied_files,
-        "skipped_files": result.skipped_files,
-        "errors": result.errors,
-        "warnings": result.warnings,
-        "skipped_nifti_provenances": result.skipped_nifti_provenances,
-        "nifti_conversion_errors": result.nifti_conversion_errors,
-        "dicom_copy_errors": result.dicom_copy_errors,
-    }
-    job_service.update_metrics(job.id, metrics)
-    job_service.update_progress(job.id, 100)
-
-    # Determine final job status based on results
-    has_errors = bool(result.errors)
-    has_warnings = bool(result.warnings)
-    exported_something = result.exported_stacks > 0
-
-    if has_errors and not exported_something:
-        # Total failure - nothing was exported
-        err_msg = "All exports failed: " + "; ".join(result.errors[:3])
-        if len(result.errors) > 3:
-            err_msg += f" ... and {len(result.errors) - 3} more"
-        job_service.mark_failed(job.id, err_msg)
-        fail_pipeline_step(cohort.id, 'bids', error=err_msg)
-        raise HTTPException(status_code=500, detail=err_msg)
-    elif has_errors or has_warnings:
-        # Partial success - some exported, some had issues
-        warning_count = len(result.errors) + len(result.warnings)
-        job_service.mark_completed_with_warnings(job.id, warning_count)
-        complete_pipeline_step(cohort.id, 'bids', metrics=metrics)
-    else:
-        # Complete success - everything worked
-        job_service.mark_completed(job.id)
-        complete_pipeline_step(cohort.id, 'bids', metrics=metrics)
-
-    return JSONResponse({"job": serialize_job(job_service.get_job(job.id))})
+    return JSONResponse(
+        status_code=202,
+        content={"job": serialize_job(job_service.get_job(job.id))},
+    )

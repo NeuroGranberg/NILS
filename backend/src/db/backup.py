@@ -146,6 +146,16 @@ def _ensure_application_schema() -> None:
     except ImportError:
         logger.warning("QC models not available - skipping QC table creation")
 
+    # Import analysis-pipeline models to ensure they're registered with
+    # CohortsBase.metadata (analysis_pipeline_repos / analysis_pipelines /
+    # analysis_pipeline_runs). No Alembic — create_all(checkfirst=True) below.
+    try:
+        from analysis_pipeline import models as _ap_models  # noqa: F401
+    except ImportError:
+        logger.warning(
+            "Analysis-pipeline models not available - skipping table creation"
+        )
+
     CohortsBase.metadata.create_all(engine, checkfirst=True)
     logger.info("Ensured cohorts and related tables exist")
 

@@ -10,6 +10,7 @@ from datetime import datetime, timezone
 from typing import Any, Optional, TYPE_CHECKING
 
 from sqlalchemy import (
+    JSON,
     DateTime,
     ForeignKey,
     Index,
@@ -24,6 +25,13 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 # Import Base from cohorts.models since we have a relationship to Cohort
 # Note: The jobs.models.Job FK works because both use the same database
 from cohorts.models import Base
+
+# JSONB on PostgreSQL (production); JSON on SQLite (unit-test engines) so
+# ``create_all`` compiles under both dialects. SQLite has no ``visit_JSONB``,
+# and this model registers on the shared app-DB ``Base.metadata`` — without the
+# variant, importing this module would break any SQLite ``create_all`` test that
+# runs afterwards. Mirrors ``analysis_pipeline.models._JSONB``.
+_JSONB = JSONB().with_variant(JSON(), "sqlite")
 
 if TYPE_CHECKING:
     from cohorts.models import Cohort
@@ -97,7 +105,7 @@ class NilsDatasetPipelineStep(Base):
     progress: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     
     # Configuration (stage-specific settings)
-    config: Mapped[Optional[dict[str, Any]]] = mapped_column(JSONB, nullable=True)
+    config: Mapped[Optional[dict[str, Any]]] = mapped_column(_JSONB, nullable=True)
     
     # Current job (real FK with referential integrity!)
     # Note: use_alter=True defers FK creation to avoid SQLAlchemy Base metadata
@@ -109,10 +117,10 @@ class NilsDatasetPipelineStep(Base):
     )
     
     # Handover data (step-to-step data passing for sorting steps)
-    handover_data: Mapped[Optional[dict[str, Any]]] = mapped_column(JSONB, nullable=True)
+    handover_data: Mapped[Optional[dict[str, Any]]] = mapped_column(_JSONB, nullable=True)
     
     # Metrics (completion metrics for UI display)
-    metrics: Mapped[Optional[dict[str, Any]]] = mapped_column(JSONB, nullable=True)
+    metrics: Mapped[Optional[dict[str, Any]]] = mapped_column(_JSONB, nullable=True)
     
     # Ordering within the pipeline
     sort_order: Mapped[int] = mapped_column(Integer, nullable=False)

@@ -14,7 +14,12 @@ services:
   backend:
     build:
       context: ./backend
-    entrypoint: ["uv", "run", "neuro-api"]
+    # Run the system-installed console script directly (deps are installed via
+    # `uv pip install --system` in the image, PYTHONPATH=/app/src is set). NOT
+    # `uv run`: it rebuilds a fresh *editable* venv at startup, which is fragile
+    # under podman/rootless (can't write src/*.egg-info) and under strict editable
+    # finders — it surfaced as "ModuleNotFoundError: No module named 'api'".
+    entrypoint: ["neuro-api"]
     environment:
       DATABASE_URL: postgresql+psycopg://postgres:postgres@db:5432/neurotoolkit
       METADATA_DATABASE_URL: postgresql+psycopg://postgres:postgres@metadata-db:5432/neurotoolkit_metadata

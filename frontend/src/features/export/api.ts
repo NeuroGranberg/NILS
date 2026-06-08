@@ -43,7 +43,8 @@ export const useExportJobs = () =>
     queryKey: exportKeys.jobs,
     queryFn: async () => {
       const allJobs = await apiClient.get<Job[]>('/jobs');
-      return allJobs.filter((j) => j.stageId === 'subset_export');
+      // 'export' is the unified stage; 'subset_export' is the legacy alias.
+      return allJobs.filter((j) => j.stageId === 'export' || j.stageId === 'subset_export');
     },
     refetchInterval: (query) => {
       const jobs = query.state.data;

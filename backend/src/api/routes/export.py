@@ -6,7 +6,6 @@ Provides endpoints for exporting a subset of data based on a selection manifest
 from __future__ import annotations
 
 import logging
-import threading
 from pathlib import Path
 
 from fastapi import APIRouter, Body, HTTPException, UploadFile, File, Form
@@ -15,10 +14,8 @@ from fastapi.responses import JSONResponse
 from sqlalchemy import text as sa_text
 
 from bids import (
-    BidsExportConfig,
     parse_manifest,
     resolve_manifest,
-    run_bids_export,
 )
 from cohorts.service import cohort_service
 from jobs.service import job_service
@@ -28,16 +25,6 @@ from metadata_db.session import SessionLocal as MetadataSessionLocal
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/export", tags=["export"])
-
-
-def _parse_subject_id_source(raw: str | int | None) -> str | int:
-    """Parse subject_identifier_source from frontend config."""
-    if raw is None or raw == "" or raw == "subject_code":
-        return "subject_code"
-    try:
-        return int(raw)
-    except (TypeError, ValueError):
-        return "subject_code"
 
 
 @router.post("/resolve")
@@ -158,71 +145,6 @@ def get_subject_identifiers(body: dict = Body(...)):
     return JSONResponse({"mapping": mapping})
 
 
-def _run_export_background(
-    job_id: int,
-    raw_root: Path,
-    derivatives_root: Path,
-    config_model: BidsExportConfig,
-) -> None:
-    """Run BIDS export in a background thread, updating job progress/status."""
-
-    def progress_cb(processed: int, total: int) -> None:
-        if total <= 0:
-            return
-        pct = 1 + int((processed / total) * 98)
-        pct = max(1, min(pct, 99))
-        try:
-            job_service.update_progress(job_id, pct)
-        except Exception:
-            pass
-
-    try:
-        result = run_bids_export(
-            raw_root=raw_root,
-            derivatives_root=derivatives_root,
-            config=config_model,
-            progress_cb=progress_cb,
-        )
-    except Exception as exc:
-        logger.exception("Subset export job %s failed", job_id)
-        job_service.mark_failed(job_id, str(exc))
-        return
-
-    metrics = {
-        "total_stacks": result.total_stacks,
-        "exported_stacks": result.exported_stacks,
-        "copied_files": result.copied_files,
-        "skipped_files": result.skipped_files,
-        "errors": result.errors,
-        "warnings": result.warnings,
-        "skipped_nifti_provenances": result.skipped_nifti_provenances,
-        "nifti_conversion_errors": result.nifti_conversion_errors,
-        "dicom_copy_errors": result.dicom_copy_errors,
-    }
-    job_service.update_metrics(job_id, metrics)
-    job_service.update_progress(job_id, 100)
-
-    has_errors = bool(result.errors)
-    has_warnings = bool(result.warnings)
-    exported_something = result.exported_stacks > 0
-
-    if has_errors and not exported_something:
-        err_msg = "All exports failed: " + "; ".join(result.errors[:3])
-        if len(result.errors) > 3:
-            err_msg += f" ... and {len(result.errors) - 3} more"
-        job_service.mark_failed(job_id, err_msg)
-    elif has_errors or has_warnings:
-        warning_count = len(result.errors) + len(result.warnings)
-        job_service.mark_completed_with_warnings(job_id, warning_count)
-    else:
-        job_service.mark_completed(job_id)
-
-    logger.info(
-        "Subset export job %s finished: %s stacks exported, %s files copied",
-        job_id, result.exported_stacks, result.copied_files,
-    )
-
-
 @router.post("/run", status_code=202)
 def run_export(body: dict = Body(...)):
     """Start a BIDS export for a resolved set of stack IDs.
@@ -274,32 +196,14 @@ def run_export(body: dict = Body(...)):
 
     cfg = body.get("config", {})
     try:
-        raw_output_modes = cfg.get("outputModes")
-        if not raw_output_modes:
-            legacy_mode = cfg.get("outputMode", "dcm")
-            raw_output_modes = [legacy_mode] if legacy_mode else ["dcm"]
+        # Subset scope: filter the shared export engine by globally-unique,
+        # cross-cohort stack ids. Config construction is shared with the cohort
+        # export path via build_export_config (single source of truth).
+        from api.services.export_runner import build_export_config
 
-        layout = cfg.get("layout", "bids")
-
-        config_model = BidsExportConfig(
-            output_modes=raw_output_modes,
-            layout=layout,
-            overwrite_mode=cfg.get("overwriteMode", "skip"),
-            include_intents=cfg.get("includeIntents") or ["anat", "dwi", "func", "fmap", "perf"],
-            include_provenance=cfg.get("includeProvenance", []),
-            exclude_provenance=cfg.get("excludeProvenance", ["ProjectionDerived"]),
-            group_symri=bool(cfg.get("groupSyMRI", True)),
-            copy_workers=int(cfg.get("copyWorkers", 8)),
-            convert_workers=int(cfg.get("convertWorkers", 8)),
-            bids_dcm_root_name=cfg.get("bidsDcmRootName", "bids-dcm"),
-            bids_nifti_root_name=cfg.get("bidsNiftiRootName", "bids-nifti"),
-            flat_dcm_root_name=cfg.get("flatDcmRootName", "flat-dcm"),
-            flat_nifti_root_name=cfg.get("flatNiftiRootName", "flat-nifti"),
-            dcm2niix_path=cfg.get("dcm2niixPath", "dcm2niix"),
-            include_field_strengths=cfg.get("includeFieldStrengths", []),
-            include_acceleration_in_name=bool(cfg.get("includeAccelerationInName", True)),
+        config_model = build_export_config(
+            cfg,
             include_stack_ids=[int(sid) for sid in stack_ids],
-            subject_identifier_source=_parse_subject_id_source(cfg.get("subjectIdentifierSource", "subject_code")),
         )
     except Exception as exc:
         raise HTTPException(status_code=400, detail=f"Invalid config: {exc}")
@@ -321,7 +225,7 @@ def run_export(body: dict = Body(...)):
 
     job_name = f"{export_name} - {len(stack_ids)} stacks" if export_name else f"Export - {len(stack_ids)} stacks"
     job = job_service.create_job(
-        stage="subset_export",
+        stage="export",
         config=job_config,
         name=job_name,
     )
@@ -332,16 +236,20 @@ def run_export(body: dict = Body(...)):
     except Exception:
         pass
 
-    # Run export in background thread
-    thread = threading.Thread(
-        target=_run_export_background,
-        args=(job.id, raw_root, derivatives_root, config_model),
-        daemon=True,
-        name=f"subset-export-{job.id}",
-    )
-    thread.start()
+    # Run export in the shared background executor (no pipeline coupling for
+    # standalone subset exports).
+    from api.server import _job_executor
+    from api.services.export_runner import run_export_job
 
-    logger.info("Subset export job %s started in background thread", job.id)
+    _job_executor.submit(
+        run_export_job,
+        job.id,
+        raw_root,
+        derivatives_root,
+        config_model,
+    )
+
+    logger.info("Subset export job %s submitted to background executor", job.id)
     return JSONResponse(
         status_code=202,
         content={"job": serialize_job(job_service.get_job(job.id))},

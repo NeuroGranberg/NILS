@@ -44,4 +44,8 @@ RUN uv pip install --system .[dev]
 
 ENV PYTHONPATH=/app/src
 
-ENTRYPOINT ["uv", "run", "neuro-backend"]
+# Run the system-installed console script (deps installed via `uv pip install
+# --system` above; PYTHONPATH=/app/src set). NOT `uv run`: it rebuilds a fresh
+# editable venv at startup — fragile under podman/rootless (src/*.egg-info write
+# perms) and strict editable finders — which broke `import api`.
+ENTRYPOINT ["neuro-backend"]

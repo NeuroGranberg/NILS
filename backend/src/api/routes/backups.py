@@ -35,6 +35,7 @@ router = APIRouter(prefix="/api", tags=["backups"])
 
 # Constants
 RESTORE_STAGE = "restore"
+BACKUP_STAGE = "backup"
 DATABASE_LABELS = {
     DatabaseKey.METADATA: "Metadata",
     DatabaseKey.APPLICATION: "Application",
@@ -130,7 +131,7 @@ def _start_restore_job(
     submit_restore: Optional[callable] = None,
 ) -> tuple[JobDTO, Path]:
     """Start a background restore job."""
-    from api.server import _restore_executor  # Import executor from server
+    from api.server import _job_executor  # Import executor from server
     
     manager = _get_backup_manager(database)
     target = manager.ensure_backup_path(path)
@@ -144,9 +145,59 @@ def _start_restore_job(
         name=f"Restore {database.value} database",
     )
 
-    submit_fn = submit_restore or _restore_executor.submit
+    submit_fn = submit_restore or _job_executor.submit
     submit_fn(_run_database_restore, job.id, database.value, str(target))
     return job, target
+
+
+def _run_database_backup(
+    job_id: int,
+    database_value: str,
+    directory: str | None,
+    note: str | None,
+) -> None:
+    """Background task to run a database backup."""
+    database = DatabaseKey(database_value)
+    manager = _get_backup_manager(database)
+    kwargs: dict[str, Any] = {}
+    if directory is not None:
+        kwargs["directory"] = directory
+    if note is not None:
+        kwargs["note"] = note
+    try:
+        job_service.mark_running(job_id)
+        manager.create_backup(**kwargs)
+        job_service.mark_completed(job_id)
+    except BackupError as exc:
+        logger.exception("Database backup failed for %s", database_value)
+        job_service.mark_failed(job_id, str(exc))
+    except Exception as exc:  # pragma: no cover - unexpected failure
+        logger.exception("Unexpected error during database backup for %s", database_value)
+        job_service.mark_failed(job_id, str(exc))
+
+
+def _start_backup_job(
+    database: DatabaseKey,
+    directory: str | None,
+    note: str | None,
+    submit_backup: Optional[callable] = None,
+) -> JobDTO:
+    """Start a background backup job."""
+    from api.server import _job_executor  # Import executor from server
+
+    job = job_service.create_job(
+        stage=BACKUP_STAGE,
+        config={
+            "database": database.value,
+            "directory": directory,
+            "note": note,
+        },
+        name=f"Backup {database.value} database",
+    )
+
+    submit_fn = submit_backup or _job_executor.submit
+    submit_fn(_run_database_backup, job.id, database.value, directory, note)
+    return job
 
 
 # Response model for restore endpoint
@@ -154,6 +205,12 @@ class RestoreJobResponse(BaseModel):
     """Response for database restore request."""
     job: dict
     backup: BackupInfo
+
+
+# Response model for asynchronous backup endpoint
+class BackupJobResponse(BaseModel):
+    """Response for database backup request."""
+    job: dict
 
 
 @router.get("/database/backups", response_model=list[BackupInfo])
@@ -172,22 +229,24 @@ def list_database_backups(database: DatabaseKey | None = Query(default=None)):
     return records
 
 
-@router.post("/database/backups", response_model=BackupInfo)
+@router.post(
+    "/database/backups",
+    response_model=BackupJobResponse,
+    status_code=status.HTTP_202_ACCEPTED,
+)
 def create_database_backup(payload: CreateDatabaseBackupPayload):
-    """Create a new database backup."""
-    manager = _get_backup_manager(payload.database)
-    try:
-        kwargs: dict[str, Any] = {}
-        if payload.directory is not None:
-            kwargs["directory"] = payload.directory
-        if payload.note is not None:
-            kwargs["note"] = payload.note
-        path = manager.create_backup(**kwargs)
-    except BackupError as exc:
-        detail = str(exc)
-        status_code = 400 if _is_client_backup_error(detail) else 500
-        raise HTTPException(status_code=status_code, detail=detail)
-    return _build_backup_info(path, payload.database)
+    """Create a new database backup (asynchronous).
+
+    Returns a ``backup`` job immediately (HTTP 202); the backup runs in the
+    shared background executor and surfaces progress/status via the jobs API.
+    """
+    job = _start_backup_job(
+        payload.database,
+        payload.directory,
+        payload.note,
+    )
+    latest_job = job_service.get_job(job.id) or job
+    return BackupJobResponse(job=_serialize_job(latest_job) or {})
 
 
 @router.delete("/database/backups", status_code=status.HTTP_204_NO_CONTENT)

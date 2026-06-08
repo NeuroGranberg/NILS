@@ -1,0 +1,78 @@
+# Tier-3 dcm2niix analysis-pipeline descriptor (Boutiques subset + x-nils).
+#
+# Converts a single DICOM stack to NIfTI. Per-stack work unit, no FreeSurfer
+# license / GPU / TemplateFlow needs. Container image is pinned by digest.
+name: dcm2niix
+schema-version: "0.5"
+tool-version: "1.0.20220720"
+description: >-
+  Convert a DICOM stack to NIfTI (+ JSON sidecar) using dcm2niix.
+command-line: "dcm2niix [COMPRESS] -o [OUTPUT_DIR] -f [FILENAME] [INPUT_DIR]"
+
+container-image:
+  type: docker
+  image: "ghcr.io/rordenlab/dcm2niix@sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
+  container-hash: "sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
+
+inputs:
+  - id: input_dir
+    name: Input DICOM directory
+    type: File
+    description: Directory containing the DICOM stack to convert.
+    value-key: "[INPUT_DIR]"
+    optional: false
+  - id: output_dir
+    name: Output directory
+    type: String
+    description: Directory the NIfTI + sidecar are written to.
+    command-line-flag: "-o"
+    value-key: "[OUTPUT_DIR]"
+    optional: false
+  - id: filename
+    name: Output filename template
+    type: String
+    description: dcm2niix -f filename template.
+    command-line-flag: "-f"
+    value-key: "[FILENAME]"
+    default-value: "%p_%s"
+    optional: true
+  - id: compress
+    name: Compress output (gzip)
+    type: Flag
+    description: Emit .nii.gz instead of .nii.
+    command-line-flag: "-z"
+    value-key: "[COMPRESS]"
+    optional: true
+
+groups: []
+
+output-files:
+  - id: nifti
+    name: NIfTI image
+    path-template: "[FILENAME].nii.gz"
+  - id: sidecar
+    name: JSON sidecar
+    path-template: "[FILENAME].json"
+
+suggested-resources:
+  cpu-cores: 1
+  ram: 2
+  walltime-estimate: 0.05
+
+error-codes:
+  - code: 1
+    description: dcm2niix conversion failed.
+
+x-nils:
+  analysis-level: run
+  input:
+    formats: ["dicom"]
+    layout: dicom
+  needs:
+    fs_license: false
+    templateflow: false
+    gpu: false
+    work_dir: false
+  steps: []
+  ingest:
+    enabled: false

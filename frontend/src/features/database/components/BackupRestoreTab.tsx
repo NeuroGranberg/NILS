@@ -106,7 +106,7 @@ export const BackupRestoreTab = () => {
         await createBackup.mutateAsync(payload);
       }
       const label = payloads.length > 1 ? 'selected databases' : payloads[0].database;
-      notifications.show({ color: 'teal', message: `Backup created for ${label}.` });
+      notifications.show({ color: 'teal', message: `Backup started for ${label}.` });
       resetModal();
       closeModal();
     } catch (error) {

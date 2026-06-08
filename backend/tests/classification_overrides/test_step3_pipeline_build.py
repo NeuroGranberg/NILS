@@ -64,6 +64,7 @@ def step3_env(tmp_path: Path, monkeypatch):
     tables = [
         t for t in Base.metadata.tables.values()
         if t.name != "nils_dataset_pipeline_steps"
+        and not t.name.startswith("analysis_pipeline")
     ]
     Base.metadata.create_all(engine, tables=tables)
 

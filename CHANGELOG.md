@@ -5,6 +5,30 @@ All notable changes to NILS will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.5.0] - 2026-06-08
+
+### Added
+
+- **Analysis Pipelines** — Register external neuroimaging analysis pipelines (e.g. MRIQC, fMRIPrep, dcm2niix, hd-bet) by repository URL and run them on a cohort subset or an existing BIDS dataset, with results flowing back into NILS
+  - Pipeline inventory: add a pipeline by pasting a Git URL; each renders as a card built from its descriptor — work-unit, runtime needs (GPU / FreeSurfer license / TemplateFlow), pinned image digest and repo commit, and version
+  - Activated detail page with a configuration form **generated automatically from the pipeline descriptor** — every parameter with its description, type, choices, and default — so a new tool or option needs no NILS UI code
+  - Input selection reuses the export flow: pick a stack subset (resolved from a selection manifest) or point at an existing BIDS tree
+  - **Local execution via `docker` or `apptainer`** — runs on a single machine with no Prefect server or cluster required; the container runtime is auto-detected
+  - Per-run tracking: live status, streamed logs, and a per-unit results table showing which subjects/stacks succeeded or failed and their derivative files
+  - Immutable-per-run provenance: each run pins the repository commit and image digest so it is exactly reproducible
+  - Descriptors follow the **Boutiques** standard plus a small NILS extension, so existing BIDS-App descriptors are reusable and the configuration form is generated for free
+
+- **Asynchronous Database Backups & Exports** — Database backups and BIDS/subset exports now run as tracked background jobs: the request returns immediately with a job you can monitor and cancel, instead of blocking until completion
+
+### Changed
+
+- **Unified Export** — Whole-cohort export and stack-subset export now share a single export path and `export` job stage; the previous `subset_export` stage is kept as a compatibility alias so existing job history still displays
+
+### Fixed
+
+- **Faster cohort export on large databases** — Reworked the stack-selection query to avoid row explosion, removing export timeouts on large cohorts
+- **Container startup reliability** — Fixed several issues that prevented the backend and body-part-QC worker containers from starting on a clean build (notably under Podman): the API package is now correctly included in the installed distribution and the backend launches via its installed entry point instead of rebuilding an editable environment on every start; the worker pins a compatible `transformers` version and declares its `httpx` dependency
+
 ## [0.4.0] - 2026-05-26
 
 ### Added

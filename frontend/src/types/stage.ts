@@ -57,7 +57,8 @@ export const STAGE_LABELS: Record<string, string> = {
   extract: 'Metadata Extraction',
   sort: 'Sorting',
   bids: 'BIDS Export',
-  subset_export: 'Subset Export',
+  export: 'Export',
+  subset_export: 'Subset Export', // legacy alias for pre-unification export jobs
 };
 
 export const STAGE_ORDER: StageId[] = [

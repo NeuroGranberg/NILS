@@ -12,6 +12,7 @@ import type {
   DatabaseSummary,
   MetadataTableInfo,
   CreateDatabaseBackupPayload,
+  CreateDatabaseBackupResponse,
   RestoreDatabaseBackupPayload,
   RestoreDatabaseBackupResponse,
   DeleteDatabaseBackupPayload,
@@ -102,6 +103,7 @@ export type {
   DatabaseSummary,
   MetadataTableInfo,
   CreateDatabaseBackupPayload,
+  CreateDatabaseBackupResponse,
   RestoreDatabaseBackupPayload,
   RestoreDatabaseBackupResponse,
   DeleteDatabaseBackupPayload,
@@ -202,11 +204,13 @@ export const useDatabaseSummaryQuery = () =>
 
 export const useCreateDatabaseBackup = () => {
   const queryClient = useQueryClient();
-  return useMutation<DatabaseBackup, Error, CreateDatabaseBackupPayload>({
-    mutationFn: (payload) => apiClient.post<DatabaseBackup>('/database/backups', payload),
-    onSuccess: (data) => {
+  return useMutation<CreateDatabaseBackupResponse, Error, CreateDatabaseBackupPayload>({
+    mutationFn: (payload) =>
+      apiClient.post<CreateDatabaseBackupResponse>('/database/backups', payload),
+    onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: QUERY_KEYS.databaseBackups });
-      showSuccessNotification('Backup Created', `Created backup: ${data.filename}`);
+      void queryClient.invalidateQueries({ queryKey: QUERY_KEYS.jobs });
+      showSuccessNotification('Backup Started', 'Database backup job has been queued');
     },
     onError: (error) => {
       showErrorNotification('Backup Failed', error.message);

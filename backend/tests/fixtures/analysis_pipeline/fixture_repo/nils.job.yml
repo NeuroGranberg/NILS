@@ -1,0 +1,40 @@
+# Root-level descriptor for the N=1 single-pipeline repo case.
+#
+# Per-stack dcm2niix conversion. Container image pinned by digest. No FS
+# license / GPU / TemplateFlow needs.
+name: dcm2niix
+schema-version: "0.5"
+tool-version: "1.0.20220720"
+description: Convert a DICOM stack to NIfTI (+ JSON sidecar) using dcm2niix.
+command-line: "dcm2niix [COMPRESS] -o [OUTPUT_DIR] -f [FILENAME] [INPUT_DIR]"
+
+container-image:
+  type: docker
+  image: "ghcr.io/rordenlab/dcm2niix@sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
+  container-hash: "sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
+
+inputs:
+  - id: input_dir
+    name: Input DICOM directory
+    type: File
+    value-key: "[INPUT_DIR]"
+    optional: false
+
+output-files:
+  - id: nifti
+    name: NIfTI image
+    path-template: "[FILENAME].nii.gz"
+
+x-nils:
+  analysis-level: run
+  input:
+    formats: ["dicom"]
+    layout: dicom
+  needs:
+    fs_license: false
+    templateflow: false
+    gpu: false
+    work_dir: false
+  steps: []
+  ingest:
+    enabled: false

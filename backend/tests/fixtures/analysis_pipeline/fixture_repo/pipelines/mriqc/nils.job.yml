@@ -1,0 +1,40 @@
+# Nested descriptor under pipelines/<slug>/ for the multi-pipeline repo case.
+#
+# Subject-level MRIQC. Declares an fs_license need (gated skeleton). Container
+# image pinned by digest only (no explicit container-hash → digest is extracted
+# from the @sha256 image reference by Descriptor.image_digest).
+name: MRIQC
+schema-version: "0.5"
+tool-version: "23.1.0"
+description: BIDS-App MRIQC subject-level image quality metrics.
+command-line: "mriqc [BIDS_DIR] [OUTPUT_DIR] participant"
+
+container-image:
+  type: docker
+  image: "nipreps/mriqc@sha256:abcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabca0"
+
+inputs:
+  - id: bids_dir
+    name: BIDS input directory
+    type: File
+    value-key: "[BIDS_DIR]"
+    optional: false
+
+output-files:
+  - id: report
+    name: MRIQC report
+    path-template: "sub-[SUBJECT]/report.html"
+
+x-nils:
+  analysis-level: subject
+  input:
+    formats: ["bids"]
+    layout: bids
+  needs:
+    fs_license: true
+    templateflow: false
+    gpu: false
+    work_dir: true
+  steps: []
+  ingest:
+    enabled: false

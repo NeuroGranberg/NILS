@@ -63,6 +63,10 @@ export interface RestoreDatabaseBackupResponse {
   backup: DatabaseBackup;
 }
 
+export interface CreateDatabaseBackupResponse {
+  job: JobSummary;
+}
+
 export interface DeleteDatabaseBackupPayload {
   database: DatabaseKey;
   path: string;

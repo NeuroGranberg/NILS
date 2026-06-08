@@ -34,13 +34,16 @@ RUN pip install --upgrade pip && \
     # driver >=565 and would silently fall back to CPU on common hosts.
     pip install --extra-index-url https://download.pytorch.org/whl/cu121 \
         "torch==2.5.1+cu121" "torchvision==0.20.1+cu121" && \
+    # transformers 5.x requires torch>=2.7 (it references torch.float8_e8m0fnu
+    # at import); cap below 5 so it stays compatible with the pinned torch
+    # 2.5.1 above. The 4.x line (>=4.50 for Siglip2) is the last compatible one.
     pip install \
         "open_clip_torch>=2.24" \
-        "transformers>=4.41" \
+        "transformers>=4.50,<5" \
         "pydicom>=2.4" "pylibjpeg>=2.0" "pylibjpeg-libjpeg>=2.1" \
         "numpy>=1.26,<2" "pillow>=10.0" \
         "scikit-learn>=1.4" "joblib>=1.3" \
-        "fastapi>=0.110" "uvicorn[standard]>=0.27" \
+        "fastapi>=0.110" "uvicorn[standard]>=0.27" "httpx>=0.27" \
         "pyyaml>=6.0" \
         "psycopg[binary]>=3.1" "sqlalchemy>=2.0" \
         "python-dateutil>=2.9" \

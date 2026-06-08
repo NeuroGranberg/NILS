@@ -1,0 +1,25 @@
+# Minimal hello-world analysis pipeline — the simplest end-to-end LocalBridge
+# smoke test. Runs `echo` in a tiny container (busybox), one unit per subject,
+# and writes a per-subject greeting file that becomes the declared output.
+# Requires only a local container runtime (docker/apptainer) — no Prefect/VM.
+name: hello-world
+tool-version: "1.0"
+schema-version: "0.5"
+command-line: "sh -c \"echo 'hello from NILS unit [SubjectLabel]' > [OutputLocation]/[SubjectLabel].txt\""
+container-image:
+  type: docker
+  image: busybox
+inputs:
+  - id: SubjectLabel
+    name: "Subject"
+    type: String
+    value-key: "[SubjectLabel]"
+    list: true
+output-files:
+  - id: greeting
+    name: "Greeting"
+    path-template: "[SubjectLabel].txt"
+x-nils:
+  analysis-level: subject
+  input: { formats: [nifti], layout: bids }
+  needs: { gpu: false, fs_license: false, templateflow: false, work_dir: false }

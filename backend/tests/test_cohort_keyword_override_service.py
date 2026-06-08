@@ -33,11 +33,14 @@ def cohort_env(tmp_path: Path, monkeypatch):
         expire_on_commit=False,
         future=True,
     )
-    # Skip the pipeline_steps table (it uses JSONB which SQLite can't compile)
-    # and is orthogonal to what we're testing.
+    # Skip cross-Base / Postgres-only tables SQLite can't build in this fixture:
+    # nils_dataset_pipeline_steps and the analysis_pipeline_* tables both carry a
+    # use_alter FK to jobs.id (a different Base, not created here). They are
+    # orthogonal to what we're testing.
     tables = [
         t for t in Base.metadata.tables.values()
         if t.name != "nils_dataset_pipeline_steps"
+        and not t.name.startswith("analysis_pipeline")
     ]
     Base.metadata.create_all(engine, tables=tables)
 

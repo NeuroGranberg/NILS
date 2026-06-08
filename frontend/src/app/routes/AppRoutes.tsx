@@ -7,6 +7,8 @@ import { SettingsPage } from '../../features/settings/pages/SettingsPage';
 import { QCPipelinePage } from '../../features/qc/pages/QCPipelinePage';
 import { ExportPage } from '../../features/export/pages/ExportPage';
 import { ExportDetailPage } from '../../features/export/pages/ExportDetailPage';
+import { PipelinesPage } from '../../features/pipelines/pages/PipelinesPage';
+import { PipelineDetailPage } from '../../features/pipelines/pages/PipelineDetailPage';
 import { NotFoundPage } from '../../features/shared/pages/NotFoundPage';
 import { AppLayout } from '../layout/AppLayout';
 
@@ -22,6 +24,8 @@ export const AppRoutes = () =>
         { path: 'qc', element: <QCPipelinePage /> },
         { path: 'export', element: <ExportPage /> },
         { path: 'export/:jobId', element: <ExportDetailPage /> },
+        { path: 'pipelines', element: <PipelinesPage /> },
+        { path: 'pipelines/:id', element: <PipelineDetailPage /> },
         { path: 'database', element: <DatabaseManagementPage /> },
         { path: 'settings', element: <SettingsPage /> },
         { path: '*', element: <NotFoundPage /> },

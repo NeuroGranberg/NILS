@@ -1,0 +1,39 @@
+{
+  "schema_version": "1",
+  "units": [
+    {
+      "unit_id": "stack-1001",
+      "work_unit": "stack",
+      "status": "succeeded",
+      "derivatives": [
+        "stack-1001/dcm2niix/sub-001_T1w.nii.gz",
+        "stack-1001/dcm2niix/sub-001_T1w.json"
+      ],
+      "metrics": {
+        "n_volumes": 1,
+        "duration_seconds": 2.4
+      }
+    },
+    {
+      "unit_id": "stack-1002",
+      "work_unit": "stack",
+      "status": "succeeded",
+      "derivatives": [
+        "stack-1002/dcm2niix/sub-001_bold.nii.gz",
+        "stack-1002/dcm2niix/sub-001_bold.json"
+      ],
+      "metrics": {
+        "n_volumes": 180,
+        "duration_seconds": 11.7
+      }
+    },
+    {
+      "unit_id": "stack-1003",
+      "work_unit": "stack",
+      "status": "failed",
+      "derivatives": [],
+      "metrics": {},
+      "error": "dcm2niix exited 1: no valid DICOM files found"
+    }
+  ]
+}

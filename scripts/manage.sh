@@ -484,7 +484,7 @@ elif [[ "$command" == "test-backend" ]]; then
     echo "--clean/--data are not applicable for tests" >&2
     exit 1
   fi
-  docker compose "${COMPOSE_ARGS[@]}" run --rm --entrypoint "" backend uv run pytest tests
+  docker compose "${COMPOSE_ARGS[@]}" run --rm --entrypoint "" backend python -m pytest tests
 else
   echo "Unknown command: $command" >&2
   usage
