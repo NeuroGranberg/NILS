@@ -1,7 +1,7 @@
 {
   "name": "nils-frontend",
   "private": true,
-  "version": "0.5.1",
+  "version": "0.5.2",
   "description": "Frontend for NILS - Neuroimaging Intelligent Linked System",
   "author": {
     "name": "Nima Chamyani",

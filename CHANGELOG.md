@@ -5,6 +5,13 @@ All notable changes to NILS will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.5.2] - 2026-06-09
+
+### Fixed
+
+- **Backend container startup under Podman on SELinux hosts** — On SELinux-enforcing hosts running rootless Podman, the backend could fail at startup with `ModuleNotFoundError` for a module whose source file was clearly present on disk (e.g. `No module named 'api.stage_sync'`). The shared source directory was bind-mounted into multiple services (backend and body-part-QC worker) with a *private* SELinux relabel, so concurrently starting containers relabelled the same host directory to different per-container categories and locked each other out of reading some files. Shared bind mounts now use the shared SELinux label so concurrent services can all read them. Non-SELinux hosts (most Docker setups) were never affected
+- **Self-contained backend image** — The backend image now installs every module it runs, including the top-level `logging_config` module that was previously omitted from the installed distribution. The application no longer depends on the live source bind mount being present or readable to import successfully, so a clean image runs correctly on its own
+
 ## [0.5.1] - 2026-06-08
 
 ### Fixed

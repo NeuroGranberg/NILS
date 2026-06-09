@@ -28,9 +28,14 @@ services:
       - db
       - metadata-db
     volumes:
-      - ./backend/src:/app/src:Z
-      - ./backend/pyproject.toml:/app/pyproject.toml:Z
-      - ./backend/tests:/app/tests:Z
+      # Shared label (:z) — ./backend/src is bind-mounted into BOTH the backend
+      # and the body-part-qc-worker. Private :Z makes each container relabel the
+      # dir to its own SELinux MCS category; with two concurrent containers the
+      # last writer wins and the other is denied reads (rootless Podman on an
+      # SELinux-enforcing host), surfacing as ModuleNotFoundError mid-import.
+      - ./backend/src:/app/src:z
+      - ./backend/pyproject.toml:/app/pyproject.toml:z
+      - ./backend/tests:/app/tests:z
       - ./resource/backups:/app/resource/backups:Z
       - ./resource/cache:/app/resource/cache:Z
     ports:
@@ -100,7 +105,8 @@ services:
       - db
       - metadata-db
     volumes:
-      - ./backend/src:/app/src:Z
+      # Shared label (:z) — same ./backend/src the backend mounts; see note there.
+      - ./backend/src:/app/src:z
       - ./resource/qc_models:/app/resource/qc_models:Z
     ports:
       - "${BIND_ADDRESS:-127.0.0.1}:${BODY_PART_WORKER_PORT:-8030}:8000"
@@ -128,7 +134,10 @@ services:
       NODE_OPTIONS: "--max-old-space-size=1536"
       APP_ACCESS_TOKEN: ${APP_ACCESS_TOKEN:-}
     volumes:
-      - ./frontend:/app:Z
+      # Shared label (:z) — ./frontend is also mounted by other tooling; using
+      # the shared SELinux label avoids per-container relabel conflicts on
+      # SELinux-enforcing hosts under rootless Podman.
+      - ./frontend:/app:z
       - /app/node_modules
     # NOTE: No depends_on backend - frontend can start independently and will
     # gracefully handle backend unavailability. This prevents frontend restarts

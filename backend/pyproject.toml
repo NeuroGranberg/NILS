@@ -63,6 +63,14 @@ testpaths = ["tests"]
 # setuptools blocks paths outside the project, so we read via the symlink.
 version = { file = "VERSION" }
 
+[tool.setuptools]
+# `logging_config` is a loose top-level module (src/logging_config.py), not a
+# package. `packages.find` only installs packages (dirs with __init__.py), so
+# without this it is omitted from the installed distribution and the image only
+# imports it by accident via PYTHONPATH=/app/src + the mounted source. Declaring
+# it here makes the image truly self-contained (importable with no bind mount).
+py-modules = ["logging_config"]
+
 [tool.setuptools.packages.find]
 where = ["src"]
 

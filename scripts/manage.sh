@@ -60,10 +60,14 @@ generate_override() {
 
   for i in "${!paths[@]}"; do
     local p="${paths[$i]}"
-    volume_mounts_backend="${volume_mounts_backend}      - ${p}:${p}:Z,rw"$'\n'
-    volume_mounts_frontend="${volume_mounts_frontend}      - ${p}:${p}:Z,ro"$'\n'
+    # Shared SELinux label (:z) — each data path is mounted into THREE containers
+    # (backend, frontend, worker) at once. Private :Z would relabel the same host
+    # dir to a different per-container MCS category in each, so concurrent
+    # containers lock each other out on SELinux-enforcing hosts (rootless Podman).
+    volume_mounts_backend="${volume_mounts_backend}      - ${p}:${p}:z,rw"$'\n'
+    volume_mounts_frontend="${volume_mounts_frontend}      - ${p}:${p}:z,ro"$'\n'
     # Body Part QC worker only reads DICOM bytes, so mount RO.
-    volume_mounts_worker="${volume_mounts_worker}      - ${p}:${p}:Z,ro"$'\n'
+    volume_mounts_worker="${volume_mounts_worker}      - ${p}:${p}:z,ro"$'\n'
 
     if [[ $i -gt 0 ]]; then
       data_roots_json="${data_roots_json},"
@@ -76,21 +80,21 @@ generate_override() {
 services:
   backend:
     volumes:
-      - ./backend/src:/app/src:Z
-      - ./backend/pyproject.toml:/app/pyproject.toml:Z
-      - ./backend/tests:/app/tests:Z
+      - ./backend/src:/app/src:z
+      - ./backend/pyproject.toml:/app/pyproject.toml:z
+      - ./backend/tests:/app/tests:z
 ${volume_mounts_backend}    environment:
       DATA_ROOTS: '${data_roots_json}'
   frontend:
     volumes:
-      - ./frontend:/app:Z
+      - ./frontend:/app:z
 ${volume_mounts_frontend}    environment:
       VITE_DATA_ROOT: ${paths[0]}
       VITE_USE_REAL_FILES: "true"
   body-part-qc-worker:
     volumes:
       # Live source for fast iteration (parallels the backend mount).
-      - ./backend/src:/app/src:Z
+      - ./backend/src:/app/src:z
 ${volume_mounts_worker}    environment:
       DATA_ROOTS: '${data_roots_json}'
 YAML
