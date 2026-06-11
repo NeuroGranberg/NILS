@@ -3,7 +3,7 @@
 Where NILS is heading: from a classification engine toward an intelligent, local-first platform for multi-modal neuroimaging data.
 
 <div style="position: relative; padding-bottom: 56.25%; height: 0; overflow: hidden; max-width: 100%; border: 1px solid #4F0433; border-radius: 8px;">
-    <iframe src="nils_roadmap.html" frameborder="0" allowfullscreen style="position: absolute; top: 0; left: 0; width: 100%; height: 100%;"></iframe>
+    <iframe src="../nils_roadmap.html" frameborder="0" allowfullscreen style="position: absolute; top: 0; left: 0; width: 100%; height: 100%;"></iframe>
 </div>
 
 ---
