@@ -1,0 +1,874 @@
+<!doctype html>
+<html lang="en">
+
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+
+    <title>NILS - Development Roadmap</title>
+
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/reveal.js/5.1.0/reset.min.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/reveal.js/5.1.0/reveal.min.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/reveal.js/5.1.0/theme/white.min.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+
+    <style>
+        :root {
+            --ki-plum: #4F0433;
+            --ki-plum-light: #8c1c5a;
+            --ki-silver: #e0e0e0;
+            --ki-grey: #f5f5f5;
+            --text-color: #333333;
+            --code-bg: #f4f4f4;
+            --now: #2e7d32;
+            --next: #b8860b;
+            --later: #6a1b9a;
+        }
+
+        body {
+            background-color: white;
+            color: var(--text-color);
+        }
+
+        .reveal {
+            color: var(--text-color);
+            font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif;
+        }
+
+        .reveal .controls { color: var(--ki-plum); }
+        .reveal .progress { color: var(--ki-plum); }
+        .reveal .progress span { background-color: var(--ki-plum); }
+
+        .reveal h1, .reveal h2, .reveal h3, .reveal h4, .reveal h5, .reveal h6 {
+            color: var(--ki-plum);
+            text-transform: none;
+            font-weight: 600;
+            margin-bottom: 12px;
+        }
+
+        .reveal h1 {
+            font-size: 2.6em;
+            border-bottom: 3px solid var(--ki-plum-light);
+            display: inline-block;
+            padding-bottom: 8px;
+        }
+
+        .reveal h2 { font-size: 1.7em; }
+        .reveal h3 { font-size: 1.3em; color: #555; }
+
+        .reveal .muted { margin-top: 0; margin-bottom: 0; }
+
+        .accent { color: var(--ki-plum-light); font-weight: 600; }
+        .muted { color: #666; font-weight: 400; }
+
+        /* Grid layouts */
+        .grid-2 {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 40px;
+            align-items: start;
+            text-align: left;
+        }
+
+        .grid-3 {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 25px;
+        }
+
+        .grid-4 {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 20px;
+        }
+
+        /* Cards */
+        .card {
+            background: white;
+            border: 1px solid var(--ki-silver);
+            border-radius: 8px;
+            padding: 14px 14px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+            text-align: center;
+        }
+
+        .card:hover {
+            border-color: var(--ki-plum-light);
+            box-shadow: 0 4px 12px rgba(79,4,51,0.1);
+        }
+
+        .card .icon {
+            font-size: 1.6em;
+            color: var(--ki-plum);
+            margin-bottom: 6px;
+        }
+
+        .card h4 {
+            margin: 6px 0 4px;
+            font-size: 0.92em;
+        }
+
+        .card p {
+            font-size: 0.72em;
+            color: #666;
+            margin: 0;
+        }
+
+        /* Code blocks */
+        .code-block {
+            background: var(--code-bg);
+            border-left: 4px solid var(--ki-plum);
+            border-radius: 4px;
+            padding: 15px 20px;
+            text-align: left;
+            font-family: 'Consolas', 'Monaco', monospace;
+            font-size: 0.7em;
+            line-height: 1.5;
+        }
+
+        /* Tables */
+        .reveal table {
+            font-size: 0.7em;
+            border-collapse: collapse;
+            width: 100%;
+        }
+
+        .reveal table th {
+            background: var(--ki-plum);
+            color: white;
+            padding: 10px 15px;
+            text-align: left;
+        }
+
+        .reveal table td {
+            padding: 8px 15px;
+            border-bottom: 1px solid var(--ki-silver);
+        }
+
+        .reveal table tr:nth-child(even) { background: var(--ki-grey); }
+
+        /* Flowchart style boxes */
+        .flow-box {
+            background: white;
+            border: 2px solid var(--ki-plum);
+            border-radius: 6px;
+            padding: 12px 20px;
+            display: inline-block;
+            margin: 5px;
+        }
+
+        .flow-box.highlight {
+            background: var(--ki-plum);
+            color: white;
+        }
+
+        .flow-arrow {
+            color: var(--ki-plum);
+            font-size: 1.5em;
+            margin: 0 10px;
+        }
+
+        /* Lists */
+        .reveal ul { margin-left: 0; }
+        .reveal ul li {
+            margin-bottom: 7px;
+            list-style: none;
+            padding-left: 25px;
+            position: relative;
+        }
+
+        .reveal ul li::before {
+            content: "\f061";
+            font-family: "Font Awesome 6 Free";
+            font-weight: 900;
+            position: absolute;
+            left: 0;
+            color: var(--ki-plum);
+            font-size: 0.7em;
+            top: 4px;
+        }
+
+        /* Tags/badges */
+        .tag {
+            display: inline-block;
+            background: var(--ki-grey);
+            border: 1px solid var(--ki-silver);
+            border-radius: 4px;
+            padding: 3px 10px;
+            font-size: 0.7em;
+            margin: 2px;
+        }
+
+        .tag.primary {
+            background: var(--ki-plum);
+            color: white;
+            border-color: var(--ki-plum);
+        }
+
+        /* Horizon badges */
+        .horizon {
+            display: inline-block;
+            border-radius: 20px;
+            padding: 4px 14px;
+            font-size: 0.6em;
+            font-weight: 700;
+            color: white;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            vertical-align: middle;
+        }
+        .horizon.now { background: var(--now); }
+        .horizon.next { background: var(--next); }
+        .horizon.later { background: var(--later); }
+
+        .pill {
+            display: inline-block;
+            border-radius: 4px;
+            padding: 2px 8px;
+            font-size: 0.85em;
+            font-weight: 600;
+        }
+        .pill.now { color: var(--now); background: #e8f5e9; }
+        .pill.next { color: var(--next); background: #fff8e1; }
+        .pill.later { color: var(--later); background: #f3e5f5; }
+
+        .clean-img {
+            border: none;
+            background: none;
+            box-shadow: none;
+            max-height: 400px;
+        }
+
+        .reveal .fragment.fade-up {
+            opacity: 0;
+            transform: translateY(20px);
+        }
+        .reveal .fragment.fade-up.visible {
+            opacity: 1;
+            transform: translateY(0);
+        }
+
+        .stat-number {
+            font-size: 2.5em;
+            font-weight: 700;
+            color: var(--ki-plum);
+            display: block;
+        }
+        .stat-label {
+            font-size: 0.8em;
+            color: #666;
+        }
+
+        /* Pipeline step */
+        .pipeline-step {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            padding: 10px 14px;
+            background: white;
+            border-left: 4px solid var(--ki-plum);
+            margin-bottom: 8px;
+        }
+        .pipeline-step.now { border-left-color: var(--now); }
+        .pipeline-step.next { border-left-color: var(--next); }
+        .pipeline-step.later { border-left-color: var(--later); }
+
+        .pipeline-step .step-icon {
+            color: var(--ki-plum);
+            font-size: 1.2em;
+            min-width: 30px;
+            text-align: center;
+            flex-shrink: 0;
+        }
+
+        .pipeline-step .step-content h4 {
+            margin: 0;
+            font-size: 0.9em;
+        }
+
+        .pipeline-step .step-content p {
+            margin: 3px 0 0;
+            font-size: 0.7em;
+            color: #666;
+        }
+
+        .lead {
+            font-size: 1.05em;
+            line-height: 1.6;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="reveal">
+        <!-- Fixed logos -->
+        <div style="position: absolute; top: 20px; right: 20px; z-index: 100;">
+            <img src="assets/nils-logo.svg" style="height: 50px; border:none; box-shadow:none;">
+        </div>
+        <div style="position: absolute; bottom: 20px; left: 20px; z-index: 100;">
+            <img src="assets/ki_digital_logo_rgb-custom20221016133426.jpg" alt="Karolinska Institutet"
+                style="height: 60px; border:none; box-shadow:none;">
+        </div>
+
+        <div class="slides">
+
+            <!-- ========== SLIDE 1: TITLE ========== -->
+            <section>
+                <div class="grid-2" style="align-items: center;">
+                    <div>
+                        <h1>NILS</h1>
+                        <h3 class="muted">Development Roadmap</h3>
+                        <p style="margin-top: 30px; font-size: 1.1em; line-height: 1.6;">
+                            <span class="accent">From a classification engine</span><br>
+                            <span class="muted">to an intelligent, local-first</span><br>
+                            <span class="muted">neuroimaging data platform</span>
+                        </p>
+                    </div>
+                    <div style="text-align: center;">
+                        <img src="assets/nils_hero_clean.png" alt="NILS" class="clean-img">
+                    </div>
+                </div>
+            </section>
+
+            <!-- ========== SLIDE 2: WHERE WE ARE ========== -->
+            <section>
+                <section>
+                    <h2><i class="fas fa-flag-checkered"></i> Where NILS Is Today</h2>
+                    <p class="muted">A solid foundation, in active use</p>
+                    <div class="grid-3" style="margin-top: 18px; gap: 16px;">
+                        <div class="card">
+                            <div class="icon"><i class="fas fa-cube"></i></div>
+                            <h4>Six-Axis Classification</h4>
+                            <p>Provenance-first, YAML-driven</p>
+                        </div>
+                        <div class="card">
+                            <div class="icon"><i class="fas fa-project-diagram"></i></div>
+                            <h4>Cohort Pipeline</h4>
+                            <p>Anonymize &rarr; Sort &rarr; BIDS</p>
+                        </div>
+                        <div class="card">
+                            <div class="icon"><i class="fas fa-clipboard-check"></i></div>
+                            <h4>Quality Control</h4>
+                            <p>Axes, Body Part &amp; Main Acquisition</p>
+                        </div>
+                        <div class="card">
+                            <div class="icon"><i class="fas fa-diagram-project"></i></div>
+                            <h4>Analysis Pipelines</h4>
+                            <p>Run external BIDS-App tools</p>
+                        </div>
+                        <div class="card">
+                            <div class="icon"><i class="fas fa-sliders-h"></i></div>
+                            <h4>Cohort Overrides</h4>
+                            <p>Per-site keyword tuning</p>
+                        </div>
+                        <div class="card">
+                            <div class="icon"><i class="fas fa-database"></i></div>
+                            <h4>Linked Clinical Data</h4>
+                            <p>Longitudinal events &amp; measures</p>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- Vertical: guiding principles -->
+                <section>
+                    <h2>Guiding Principles</h2>
+                    <p class="muted">Every item on the roadmap follows these</p>
+                    <div class="grid-4" style="margin-top: 25px; text-align: left;">
+                        <div class="pipeline-step">
+                            <div class="step-icon"><i class="fas fa-lock"></i></div>
+                            <div class="step-content">
+                                <h4>Local-first &amp; private</h4>
+                                <p>Built for PHI &mdash; everything runs on-premise, no data leaves the site</p>
+                            </div>
+                        </div>
+                        <div class="pipeline-step">
+                            <div class="step-icon"><i class="fas fa-puzzle-piece"></i></div>
+                            <div class="step-content">
+                                <h4>Extensible by design</h4>
+                                <p>YAML rules, importable pipelines, pluggable models</p>
+                            </div>
+                        </div>
+                        <div class="pipeline-step">
+                            <div class="step-icon"><i class="fas fa-vials"></i></div>
+                            <div class="step-content">
+                                <h4>FAIR &amp; reproducible</h4>
+                                <p>BIDS output, pinned provenance, auditable decisions</p>
+                            </div>
+                        </div>
+                        <div class="pipeline-step">
+                            <div class="step-icon"><i class="fas fa-user-check"></i></div>
+                            <div class="step-content">
+                                <h4>Human-in-the-loop</h4>
+                                <p>Automation proposes; reviewers confirm</p>
+                            </div>
+                        </div>
+                    </div>
+                </section>
+            </section>
+
+            <!-- ========== SLIDE 3: THE ROADMAP AT A GLANCE ========== -->
+            <section>
+                <h2><i class="fas fa-route"></i> The Roadmap at a Glance</h2>
+                <p class="muted">Five connected directions, three horizons</p>
+                <table style="margin-top: 25px; font-size: 0.72em;">
+                    <thead>
+                        <tr>
+                            <th>Direction</th>
+                            <th>Goal</th>
+                            <th>Horizon</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td><i class="fas fa-clipboard-check" style="color: var(--ki-plum);"></i> <strong>Deeper QC</strong></td>
+                            <td>Image-based pre/post-contrast &amp; intensity QC</td>
+                            <td><span class="pill now">Now</span></td>
+                        </tr>
+                        <tr>
+                            <td><i class="fas fa-x-ray" style="color: var(--ki-plum);"></i> <strong>More Modalities</strong></td>
+                            <td>First-class CT &amp; PET; photon-counting CT</td>
+                            <td><span class="pill next">Next</span></td>
+                        </tr>
+                        <tr>
+                            <td><i class="fas fa-robot" style="color: var(--ki-plum);"></i> <strong>NILS Agent</strong></td>
+                            <td>Natural-language query &amp; operation of NILS</td>
+                            <td><span class="pill now">Now</span></td>
+                        </tr>
+                        <tr>
+                            <td><i class="fas fa-brain" style="color: var(--ki-plum);"></i> <strong>Agentic Curation</strong></td>
+                            <td>Intelligent decision points in data curation</td>
+                            <td><span class="pill next">Next</span></td>
+                        </tr>
+                        <tr>
+                            <td><i class="fas fa-diagram-project" style="color: var(--ki-plum);"></i> <strong>Pipeline Ecosystem</strong></td>
+                            <td>Template pipelines + community import</td>
+                            <td><span class="pill next">Next</span></td>
+                        </tr>
+                        <tr>
+                            <td><i class="fas fa-search" style="color: var(--ki-plum);"></i> <strong>Unified Query</strong></td>
+                            <td>Manual + agentic querying over data</td>
+                            <td><span class="pill later">Later</span></td>
+                        </tr>
+                        <tr>
+                            <td><i class="fas fa-microchip" style="color: var(--ki-plum);"></i> <strong>Robust Local AI</strong></td>
+                            <td>Better harness, tools &amp; fine-tuned local model</td>
+                            <td><span class="pill later">Later</span></td>
+                        </tr>
+                    </tbody>
+                </table>
+            </section>
+
+            <!-- ========== SLIDE 4: DEEPER QC ========== -->
+            <section>
+                <section>
+                    <h2><i class="fas fa-clipboard-check"></i> Deeper Quality Control <span class="horizon now">Now</span></h2>
+                    <p class="muted">From metadata-based checks to image-based QC</p>
+                    <div class="grid-2" style="margin-top: 25px;">
+                        <div>
+                            <h4 style="color: var(--ki-plum);"><i class="fas fa-check-circle"></i> Today</h4>
+                            <ul style="font-size: 0.8em;">
+                                <li>Axes QC with rules engine</li>
+                                <li>Body Part QC (image embeddings)</li>
+                                <li>Main Acquisition QC (per-session)</li>
+                            </ul>
+                        </div>
+                        <div>
+                            <h4 style="color: var(--ki-plum);"><i class="fas fa-flask"></i> In development</h4>
+                            <ul style="font-size: 0.8em;">
+                                <li>Pre / post-contrast detection from the image itself</li>
+                                <li>Intensity- &amp; distribution-based QC</li>
+                                <li>Outlier &amp; mislabel surfacing</li>
+                            </ul>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- Vertical: contrast QC algorithm -->
+                <section>
+                    <h2>Image-Based Contrast QC</h2>
+                    <p class="muted">An early-stage algorithm using voxel intensity &amp; distribution</p>
+                    <div style="margin-top: 25px; display: flex; justify-content: center; align-items: center; gap: 10px; flex-wrap: wrap; font-size: 0.82em;">
+                        <div class="flow-box">Voxel intensities</div>
+                        <i class="fas fa-arrow-right flow-arrow"></i>
+                        <div class="flow-box">Distribution features</div>
+                        <i class="fas fa-arrow-right flow-arrow"></i>
+                        <div class="flow-box highlight">Pre vs post-contrast</div>
+                        <i class="fas fa-arrow-right flow-arrow"></i>
+                        <div class="flow-box">Flag mismatches</div>
+                    </div>
+                    <div style="margin-top: 25px; background: var(--ki-grey); padding: 14px; border-radius: 6px; font-size: 0.76em; max-width: 760px; margin-left:auto;margin-right:auto;">
+                        <i class="fas fa-info-circle" style="color: var(--ki-plum);"></i>
+                        Metadata alone often can't tell pre- from post-contrast. By reading the distribution of voxel
+                        intensities in enhancing regions, NILS can <strong>verify the contrast label against the pixels</strong>
+                        &mdash; and feed disagreements straight into the existing draft-based QC review.
+                    </div>
+                    <p class="muted" style="margin-top: 18px; font-size: 0.72em;">
+                        <i class="fas fa-seedling"></i> Early stage &mdash; the framework is in place; accuracy &amp; calibration are the active work
+                    </p>
+                </section>
+            </section>
+
+            <!-- ========== SLIDE 5: MORE MODALITIES ========== -->
+            <section>
+                <section>
+                    <h2><i class="fas fa-x-ray"></i> More Modalities <span class="horizon next">Next</span></h2>
+                    <p class="muted">The data model already spans MR, CT &amp; PET &mdash; classification follows</p>
+                    <div class="grid-3" style="margin-top: 25px;">
+                        <div class="card">
+                            <div class="icon"><i class="fas fa-brain"></i></div>
+                            <h4>MR</h4>
+                            <p>Mature: six-axis classification &amp; branches</p>
+                        </div>
+                        <div class="card">
+                            <div class="icon"><i class="fas fa-lungs"></i></div>
+                            <h4>CT</h4>
+                            <p>Extend classification &amp; QC to CT series</p>
+                        </div>
+                        <div class="card">
+                            <div class="icon"><i class="fas fa-radiation"></i></div>
+                            <h4>PET</h4>
+                            <p>Tracer-aware classification &amp; SUV metadata</p>
+                        </div>
+                    </div>
+                    <div style="margin-top: 22px; background: var(--ki-grey); padding: 12px; border-radius: 6px; font-size: 0.78em;">
+                        <i class="fas fa-database" style="color: var(--ki-plum);"></i>
+                        Extraction already captures CT (kVp, kernel) and PET (tracer, SUV) parameters &mdash;
+                        the remaining work is modality-specific detection &amp; QC logic
+                    </div>
+                </section>
+
+                <!-- Vertical: photon-counting CT -->
+                <section>
+                    <h2>Photon-Counting CT</h2>
+                    <p class="muted">A priority frontier for next-generation CT</p>
+                    <div class="grid-2" style="margin-top: 22px; font-size: 0.8em;">
+                        <div>
+                            <h4 style="color: var(--ki-plum);"><i class="fas fa-bolt"></i> Why it matters</h4>
+                            <ul style="font-size: 0.92em;">
+                                <li>Spectral / multi-energy output</li>
+                                <li>Material-decomposition reconstructions</li>
+                                <li>New series types per acquisition</li>
+                            </ul>
+                        </div>
+                        <div>
+                            <h4 style="color: var(--ki-plum);"><i class="fas fa-tasks"></i> What NILS adds</h4>
+                            <ul style="font-size: 0.92em;">
+                                <li>Recognize PCCT reconstructions &amp; energy bins</li>
+                                <li>Multi-output handling (like MR branches)</li>
+                                <li>Consistent BIDS-style organization</li>
+                            </ul>
+                        </div>
+                    </div>
+                    <div style="margin-top: 20px; background: var(--ki-grey); padding: 12px; border-radius: 6px; font-size: 0.74em;">
+                        <i class="fas fa-link" style="color: var(--ki-plum);"></i>
+                        PCCT reuses the same provenance-branching pattern proven on multi-output MR &mdash;
+                        one acquisition, many reconstructions, each classified correctly
+                    </div>
+                </section>
+            </section>
+
+            <!-- ========== SLIDE 6: NILS AGENT ========== -->
+            <section>
+                <section>
+                    <h2><i class="fas fa-robot"></i> NILS Agent <span class="horizon now">Now</span></h2>
+                    <p class="muted">A smart assistant that talks to your data &mdash; entirely local</p>
+                    <div style="margin-top: 28px; display: flex; justify-content: center; align-items: center; gap: 14px; flex-wrap: wrap;">
+                        <div class="flow-box"><i class="fas fa-comment"></i> Natural language</div>
+                        <i class="fas fa-arrow-right flow-arrow"></i>
+                        <div class="flow-box highlight"><i class="fas fa-robot"></i> NILS Agent</div>
+                        <i class="fas fa-arrow-right flow-arrow"></i>
+                        <div style="display:flex; flex-direction:column; gap:8px;">
+                            <div class="flow-box"><i class="fas fa-search"></i> Query data</div>
+                            <div class="flow-box"><i class="fas fa-play"></i> Run NILS operations</div>
+                        </div>
+                    </div>
+                    <div style="margin-top: 25px; background: var(--ki-grey); padding: 14px; border-radius: 6px; font-size: 0.78em; max-width: 780px; margin-left:auto;margin-right:auto;">
+                        <i class="fas fa-lock" style="color: var(--ki-plum);"></i>
+                        Because the data is sensitive (PHI), <strong>the agent and its model run on-premise</strong>.
+                        No prompts, no records, no images leave the institution.
+                    </div>
+                </section>
+
+                <!-- Vertical: what the agent can do -->
+                <section>
+                    <h2>What the Agent Does</h2>
+                    <div class="grid-2" style="margin-top: 20px; text-align: left;">
+                        <div class="pipeline-step">
+                            <div class="step-icon"><i class="fas fa-comments"></i></div>
+                            <div class="step-content">
+                                <h4>Conversational data exploration</h4>
+                                <p>"How many post-contrast T1w sessions in cohort X have a matching FLAIR?"</p>
+                            </div>
+                        </div>
+                        <div class="pipeline-step">
+                            <div class="step-icon"><i class="fas fa-cogs"></i></div>
+                            <div class="step-content">
+                                <h4>Operate NILS</h4>
+                                <p>Trigger sorting, QC, export, or analysis pipelines on request</p>
+                            </div>
+                        </div>
+                        <div class="pipeline-step">
+                            <div class="step-icon"><i class="fas fa-table"></i></div>
+                            <div class="step-content">
+                                <h4>Explain &amp; summarize</h4>
+                                <p>Turn classification &amp; QC state into plain-language answers</p>
+                            </div>
+                        </div>
+                        <div class="pipeline-step">
+                            <div class="step-icon"><i class="fas fa-shield-alt"></i></div>
+                            <div class="step-content">
+                                <h4>Safe by construction</h4>
+                                <p>Scoped tools, auditable actions, human confirmation for writes</p>
+                            </div>
+                        </div>
+                    </div>
+                    <p class="muted" style="margin-top: 12px; font-size: 0.72em;">
+                        <i class="fas fa-info-circle"></i> Developed as a separate application that speaks NILS's data model &amp; API
+                    </p>
+                </section>
+            </section>
+
+            <!-- ========== SLIDE 7: AGENTIC CURATION ========== -->
+            <section>
+                <section>
+                    <h2><i class="fas fa-brain"></i> Agentic Curation <span class="horizon next">Next</span></h2>
+                    <p class="muted">Intelligence at the decision points of data curation</p>
+                    <div style="margin-top: 25px; display: flex; justify-content: center; align-items: center; gap: 12px; flex-wrap: wrap; font-size: 0.8em;">
+                        <div class="flow-box">Curation reaches a<br>decision point</div>
+                        <i class="fas fa-arrow-right flow-arrow"></i>
+                        <div class="flow-box highlight">Agent proposes<br>a refinement</div>
+                        <i class="fas fa-arrow-right flow-arrow"></i>
+                        <div class="flow-box">Reviewer<br>approves</div>
+                        <i class="fas fa-arrow-right flow-arrow"></i>
+                        <div class="flow-box">NILS applies it</div>
+                    </div>
+                    <div style="margin-top: 25px; background: var(--ki-grey); padding: 14px; border-radius: 6px; font-size: 0.78em; max-width: 800px; margin-left:auto;margin-right:auto;">
+                        <i class="fas fa-language" style="color: var(--ki-plum);"></i>
+                        Classification depends on keywords. At <strong>multilingual sites</strong> and with
+                        <strong>site-specific acronyms</strong>, the agent can read the local nuance and intelligently
+                        adjust how NILS classifies &mdash; building on today's per-cohort keyword overrides.
+                    </div>
+                </section>
+
+                <!-- Vertical: example -->
+                <section>
+                    <h2>Example: Smarter Keyword Tuning</h2>
+                    <div class="grid-2" style="margin-top: 22px; font-size: 0.8em;">
+                        <div>
+                            <h4 style="color: var(--ki-plum);"><i class="fas fa-eye"></i> Agent observes</h4>
+                            <ul style="font-size: 0.92em;">
+                                <li>Many "VOLUM" series stuck in review</li>
+                                <li>Local term for an MPRAGE protocol</li>
+                                <li>A Swedish abbreviation for contrast</li>
+                            </ul>
+                        </div>
+                        <div>
+                            <h4 style="color: var(--ki-plum);"><i class="fas fa-magic"></i> Agent proposes</h4>
+                            <div class="code-block" style="font-size: 0.82em;">
+<pre style="margin:0;">override:
+  axis: technique
+  bucket: techniques.MPRAGE.keywords
+  added: ["volum"]
+# scoped to this cohort only</pre>
+                            </div>
+                        </div>
+                    </div>
+                    <div style="margin-top: 18px; background: var(--ki-grey); padding: 12px; border-radius: 6px; font-size: 0.74em;">
+                        <i class="fas fa-check-double" style="color: var(--ki-plum);"></i>
+                        The override mechanism already exists &mdash; the agent makes <strong>proposing the right change</strong>
+                        automatic, while the human stays in control of applying it
+                    </div>
+                </section>
+            </section>
+
+            <!-- ========== SLIDE 8: PIPELINE ECOSYSTEM ========== -->
+            <section>
+                <section>
+                    <h2><i class="fas fa-diagram-project"></i> Pipeline Ecosystem <span class="horizon next">Next</span></h2>
+                    <p class="muted">From a few templates to a community of importable analyses</p>
+                    <div class="grid-2" style="margin-top: 25px;">
+                        <div>
+                            <h4 style="color: var(--ki-plum);"><i class="fas fa-th-large"></i> Curated templates</h4>
+                            <ul style="font-size: 0.8em;">
+                                <li>Common tools we use most (QC, conversion, preprocessing)</li>
+                                <li>Reference descriptors that show best practice</li>
+                                <li>Demonstrate how results flow back into NILS</li>
+                            </ul>
+                        </div>
+                        <div>
+                            <h4 style="color: var(--ki-plum);"><i class="fas fa-cloud-download-alt"></i> Bring your own</h4>
+                            <ul style="font-size: 0.8em;">
+                                <li>Anyone writes a pipeline &amp; imports it by Git URL</li>
+                                <li>Boutiques + x-nils descriptor &mdash; no NILS UI code</li>
+                                <li>Pinned commit &amp; image digest for reproducibility</li>
+                            </ul>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- Vertical: integration design -->
+                <section>
+                    <h2>How Pipelines Integrate</h2>
+                    <p class="muted">The descriptor is the only contract</p>
+                    <div style="margin-top: 25px; display: flex; justify-content: center; align-items: center; gap: 10px; flex-wrap: wrap; font-size: 0.8em;">
+                        <div class="flow-box">Stack subset<br><span class="muted" style="font-size:0.85em;">or BIDS tree</span></div>
+                        <i class="fas fa-arrow-right flow-arrow"></i>
+                        <div class="flow-box">NILS materializes<br>BIDS input</div>
+                        <i class="fas fa-arrow-right flow-arrow"></i>
+                        <div class="flow-box highlight">Run container<br><span style="font-size:0.85em;">local docker/apptainer</span></div>
+                        <i class="fas fa-arrow-right flow-arrow"></i>
+                        <div class="flow-box">Derivatives back<br>into NILS</div>
+                    </div>
+                    <div style="margin-top: 25px; background: var(--ki-grey); padding: 13px; border-radius: 6px; font-size: 0.76em; max-width: 780px; margin-left:auto;margin-right:auto;">
+                        <i class="fas fa-recycle" style="color: var(--ki-plum);"></i>
+                        The auto-generated configuration form, local execution, and derivative ingest are the same for
+                        <strong>every</strong> pipeline &mdash; so the ecosystem grows without changing NILS itself
+                    </div>
+                </section>
+            </section>
+
+            <!-- ========== SLIDE 9: UNIFIED QUERY + ROBUST LOCAL AI ========== -->
+            <section>
+                <section>
+                    <h2><i class="fas fa-search"></i> Unified Query <span class="horizon later">Later</span></h2>
+                    <p class="muted">Manual precision and agentic ease, over one data layer</p>
+                    <div class="grid-2" style="margin-top: 25px;">
+                        <div>
+                            <h4 style="color: var(--ki-plum);"><i class="fas fa-sliders-h"></i> Manual query</h4>
+                            <ul style="font-size: 0.8em;">
+                                <li>Structured filters across axes, modalities, clinical metadata</li>
+                                <li>Exact, reproducible, shareable selections</li>
+                            </ul>
+                        </div>
+                        <div>
+                            <h4 style="color: var(--ki-plum);"><i class="fas fa-comment-dots"></i> Agentic query</h4>
+                            <ul style="font-size: 0.8em;">
+                                <li>Ask in natural language; agent builds the query</li>
+                                <li>Refine conversationally, then hand off to manual mode</li>
+                            </ul>
+                        </div>
+                    </div>
+                    <div style="margin-top: 22px; background: var(--ki-grey); padding: 12px; border-radius: 6px; font-size: 0.78em;">
+                        <i class="fas fa-exchange-alt" style="color: var(--ki-plum);"></i>
+                        Both modes resolve to the same selection manifests that drive export &amp; analysis pipelines
+                    </div>
+                </section>
+
+                <!-- Vertical: robust local AI -->
+                <section>
+                    <h2>Robust Local AI <span class="horizon later">Later</span></h2>
+                    <p class="muted">Making a local model dependable for real clinical-research work</p>
+                    <div class="grid-3" style="margin-top: 25px;">
+                        <div class="card">
+                            <div class="icon"><i class="fas fa-cogs"></i></div>
+                            <h4>Better harness</h4>
+                            <p>Robust agentic loop: planning, guardrails, recovery</p>
+                        </div>
+                        <div class="card">
+                            <div class="icon"><i class="fas fa-tools"></i></div>
+                            <h4>Better tools</h4>
+                            <p>Precise, typed tools over the NILS API &amp; data model</p>
+                        </div>
+                        <div class="card">
+                            <div class="icon"><i class="fas fa-graduation-cap"></i></div>
+                            <h4>Fine-tuned model</h4>
+                            <p>A local model adapted to NILS workflows &amp; vocabulary</p>
+                        </div>
+                    </div>
+                    <div style="margin-top: 22px; background: var(--ki-grey); padding: 12px; border-radius: 6px; font-size: 0.78em;">
+                        <i class="fas fa-lock" style="color: var(--ki-plum);"></i>
+                        The whole stack stays on-premise &mdash; robustness comes from the harness, tools, and tuning,
+                        not from a larger cloud model
+                    </div>
+                </section>
+            </section>
+
+            <!-- ========== SLIDE 10: HOW IT CONNECTS ========== -->
+            <section>
+                <h2><i class="fas fa-network-wired"></i> One Connected System</h2>
+                <p class="muted">Each direction reinforces the others</p>
+                <div style="margin-top: 18px; display:flex; justify-content:center;">
+                    <div style="max-width: 900px; text-align:left; font-size: 0.78em; line-height: 1.4;">
+                        <p><span class="flow-box highlight" style="padding:5px 10px;">Agent</span>
+                        drives <strong>curation</strong>, <strong>QC</strong>, <strong>pipelines</strong> and <strong>query</strong>.</p>
+                        <p><span class="flow-box" style="padding:5px 10px;">Curation</span>
+                        feeds cleaner labels into <strong>QC</strong> and <strong>classification</strong>.</p>
+                        <p><span class="flow-box" style="padding:5px 10px;">QC</span>
+                        (now image-based) raises trust in every downstream run.</p>
+                        <p><span class="flow-box" style="padding:5px 10px;">Modalities</span>
+                        (CT, PET, PCCT) reuse the same branching &amp; pipeline machinery.</p>
+                        <p><span class="flow-box" style="padding:5px 10px;">Pipelines &amp; Query</span>
+                        turn it into reproducible research outputs.</p>
+                    </div>
+                </div>
+                <p class="accent" style="margin-top: 18px; font-size: 0.85em;">
+                    A local-first platform where automation and human judgement compound.
+                </p>
+            </section>
+
+            <!-- ========== SLIDE 11: STATUS & OPENNESS ========== -->
+            <section>
+                <h2><i class="fas fa-tasks"></i> Honest Status</h2>
+                <p class="muted">Some parts ship today; some are in progress; some are research</p>
+                <table style="margin-top: 22px; font-size: 0.72em;">
+                    <thead>
+                        <tr><th>Capability</th><th>State</th></tr>
+                    </thead>
+                    <tbody>
+                        <tr><td>Classification, pipeline, QC subsystems, analysis pipelines</td><td><span class="pill now">Shipping</span></td></tr>
+                        <tr><td>NILS Agent (query &amp; operate, local)</td><td><span class="pill now">In active development</span></td></tr>
+                        <tr><td>Image-based contrast / intensity QC</td><td><span class="pill next">Early prototype</span></td></tr>
+                        <tr><td>CT / PET / photon-counting CT classification</td><td><span class="pill next">Planned / starting</span></td></tr>
+                        <tr><td>Agentic curation &amp; unified query</td><td><span class="pill later">Designing</span></td></tr>
+                        <tr><td>Fine-tuned local model + hardened harness</td><td><span class="pill later">Research</span></td></tr>
+                    </tbody>
+                </table>
+                <p class="muted" style="margin-top: 18px; font-size: 0.74em;">
+                    <i class="fas fa-eye-slash"></i> A few components are intentionally not yet public while they mature
+                </p>
+            </section>
+
+            <!-- ========== SLIDE 12: CLOSING ========== -->
+            <section>
+                <div style="background: var(--ki-plum); color: white; padding: 28px 28px; border-radius: 12px;">
+                    <h2 style="color: white; border: none; margin-bottom: 12px;">
+                        <i class="fas fa-rocket"></i> The Direction
+                    </h2>
+                    <p style="color: white; opacity: 0.95; max-width: 90%; margin: 0 auto 25px; font-size: 0.85em; line-height: 1.4;">
+                        From a classification engine to an intelligent, local-first platform for multi-modal neuroimaging.
+                    </p>
+                    <div class="grid-2" style="color: white; font-size: 0.8em; max-width: 90%; margin: 0 auto; gap: 25px;">
+                        <div style="text-align: left;">
+                            <p style="margin: 0;"><i class="fab fa-github"></i> <strong>Repository</strong> <span style="opacity: 0.9;">github.com/NeuroGranberg/NILS</span></p>
+                            <p style="margin: 10px 0 0;"><i class="fas fa-book"></i> <strong>Docs</strong> <span style="opacity: 0.9;">neurogranberg.github.io/NILS</span></p>
+                        </div>
+                        <div style="text-align: left;">
+                            <p style="margin: 0;"><i class="fas fa-balance-scale"></i> <span style="opacity: 0.9;">GNU GPL-3</span></p>
+                            <p style="margin: 10px 0 0;"><i class="fas fa-handshake"></i> <strong>Built for collaboration</strong></p>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+        </div>
+    </div>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/reveal.js/5.1.0/reveal.min.js"></script>
+    <script>
+        Reveal.initialize({
+            controls: true,
+            progress: true,
+            history: true,
+            center: true,
+            backgroundTransition: 'none',
+            transition: 'fade',
+            width: 1280,
+            height: 720,
+            margin: 0.04,
+            minScale: 0.2,
+            maxScale: 1.5
+        });
+    </script>
+</body>
+
+</html>
