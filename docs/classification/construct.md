@@ -16,10 +16,11 @@ Constructs are **computed outputs** - not directly acquired, but calculated from
 | **Quantitative** | T1map, T2map, R1map, R2map, PDmap | Relaxometry |
 | **MP2RAGE** | INV1, INV2, Uniform, Denoised | MP2RAGE sequence |
 | **Synthetic** | SyntheticT1w, SyntheticT2w, SyntheticFLAIR | SyMRI/MAGiC |
-| **SWI** | SWI, Phase, QSM | SWI processing |
+| **SWI** | SWI, Phase, QSM, R2starmap | SWI processing |
 | **Projection** | MIP, MinIP, MPR | Post-processing |
 | **Field Maps** | B0map, B1map | Calibration |
 | **Components** | Magnitude, Real, Imaginary | Complex data |
+| **Recon Variant** | ORIG, Filtered, ND | Reconstruction variant |
 
 ---
 
@@ -481,6 +482,20 @@ Susceptibility-weighted imaging outputs.
 
 ---
 
+### R2starmap (R2\* Map)
+
+**Units:** s⁻¹
+
+**Detection:**
+- Exclusive flag: `has_r2star` (ImageType tokens `R2STAR`, `R2_STAR`, `R2*`, `R2 STAR`)
+- Keywords: `r2star`
+
+**Computation:** Fitted from multi-echo **magnitude** signal decay (distinct from QSM, which uses phase).
+
+**Note:** R2\* and QSM share the same multi-echo GRE acquisition; outputs from such a scan may carry a composite construct like `QSM,R2starmap`. See the [SWI branch](branches/swi.md) for how these are resolved.
+
+---
+
 ## Projection Constructs
 
 Post-processing reformats.
@@ -569,6 +584,37 @@ Complex data components.
 
 ---
 
+## Recon Variant Constructs
+
+These constructs track **how the same physical acquisition was reconstructed** — analogous to MP2RAGE INV1/INV2/UNI. The default scanner reconstruction gets **no construct**; only non-default variants are labeled. All three are `requires_derived: false` (they are variants of original acquisitions).
+
+### ORIG (GE Raw/Unprocessed)
+
+**Description:** GE unprocessed raw reconstruction (no PURE/SCIC filter).
+
+**Detection:**
+- Exclusive flag: `is_ge_orig`
+- Computed from a **text prefix** — the description begins with `orig ` (the bare keyword "orig" is too generic to match anywhere in the text).
+
+### Filtered (GE Noise-Filtered)
+
+**Description:** GE image-space denoised reconstruction (PURE/SCIC) of the same acquisition.
+
+**Detection:**
+- Exclusive flag: `is_ge_filtered`
+- Computed from a **text prefix** — the description begins with `filtered `.
+
+### ND (Siemens No-Distortion-Correction)
+
+**Description:** Siemens `ND` ImageType token = gradient distortion correction **not** applied (raw geometry). Distinct from `DIS2D`/`DIS3D`, which **are** corrected.
+
+**Detection:**
+- Exclusive flag: `has_nd` (the `ND` token in ImageType)
+
+**Example:** `ORIGINAL\PRIMARY\M\ND\NORM` → `ND`; `ORIGINAL\PRIMARY\M\NORM\DIS2D` → no `ND` construct.
+
+---
+
 ## Original vs Derived
 
 Most constructs require `is_derived=True` in DICOM ImageType:
@@ -650,7 +696,7 @@ The detector provides helper methods:
 detector.get_constructs_by_category("diffusion")  # ["ADC", "FA", "MD", "Trace", "eADC"]
 
 # Get all categories
-detector.get_categories()  # ["component", "diffusion", "dixon", "mp2rage", ...]
+detector.get_categories()  # ["component", "diffusion", "dixon", "mp2rage", "recon_variant", ...]
 
 # Check if specific construct detected
 output.has("ADC")  # True/False

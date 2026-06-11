@@ -34,7 +34,7 @@ NILS classifies MRI series using six orthogonal axes, each backed by a YAML-driv
 | **Provenance** | Processing pipeline | SyMRI, SWIRecon, DTIRecon, EPIMix |
 | **Acceleration** | Parallel imaging | GRAPPA, SMS, CAIPIRINHA, CompressedSensing |
 
-Specialized branch pipelines handle multi-output acquisitions — provenance detection runs first and routes SWI (6 output types), SyMRI (16+ outputs), EPIMix/NeuroMix (11 outputs), and MP2RAGE into dedicated sub-pipelines.
+Specialized branch pipelines handle multi-output acquisitions — provenance detection runs first and routes SWI (7 output types incl. QSM and R2\*), SyMRI (16+ outputs), EPIMix/NeuroMix (11 outputs), STAGE, and MP2RAGE into dedicated sub-pipelines. Sites can tune detection per cohort with [keyword overrides](classification/overrides.md) without editing the global config.
 
 ### 4-Step Sorting Pipeline
 
@@ -49,10 +49,13 @@ Each step runs independently with typed handovers, enabling re-runs with differe
 
 ### Quality Control
 
-- Draft-based QC workflow — changes saved as drafts until confirmed
-- Cornerstone.js DICOM viewer with classification HUD overlays
-- Rules engine with 9 configurable rules and 5 flag severities
-- Keyboard-navigable axes review with dynamic filtering
+- **Axes QC** — draft-based workflow, Cornerstone.js DICOM viewer with classification HUD overlays, a rules engine with 9 configurable rules and 5 flag severities, and keyboard-navigable review with dynamic filtering
+- **[Body Part QC](qc/body-part.md)** — learns per-cohort body-part labels from DICOM thumbnails and protects them across re-runs
+- **[Main Acquisition QC](qc/main-acquisition.md)** — picks the representative acquisition per session with a cohort-wide heatmap and session review
+
+### Analysis Pipelines
+
+Register external neuroimaging tools (MRIQC, fMRIPrep, BIDS-Apps) by Git URL and run them locally on a cohort subset or an existing BIDS tree, with auto-generated configuration forms and immutable-per-run provenance. See [Analysis Pipelines](cohort/analysis-pipelines.md).
 
 ### Data Hierarchy
 
@@ -68,9 +71,9 @@ Subject (Patient)
 ## Documentation
 
 - [**Concepts**](concepts/index.md) - Core data models, entities, and terminology
-- [**Cohort Operations**](cohort/index.md) - Extraction, Sorting, Anonymization, Export
-- [**Classification**](classification/index.md) - The six-axis detection system
-- [**QC & Viewer**](qc/index.md) - Quality control and image review
+- [**Cohort Operations**](cohort/index.md) - Extraction, Sorting, Anonymization, Export, Analysis Pipelines
+- [**Classification**](classification/index.md) - The six-axis detection system and cohort overrides
+- [**QC & Viewer**](qc/index.md) - Axes QC, Body Part QC, and Main Acquisition QC
 
 ## Quick Start
 
@@ -94,7 +97,7 @@ Podman users: add `--podman` flag. For network access: add `--forward`.
 
 ## License
 
-MIT License - See [LICENSE](https://github.com/NeuroGranberg/NILS/blob/main/LICENSE)
+GNU General Public License v3.0 - See [LICENSE](https://github.com/NeuroGranberg/NILS/blob/main/LICENSE)
 
 ## Citation
 

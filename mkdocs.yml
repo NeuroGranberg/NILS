@@ -76,7 +76,9 @@ extra:
 
 nav:
   - Home: index.md
-  - Presentation: presentation/index.md
+  - Presentation:
+    - Overview: presentation/index.md
+    - Roadmap: presentation/roadmap.md
 
   - Getting Started:
     - Installation: getting-started/installation.md
@@ -99,12 +101,17 @@ nav:
       - SyMRI: classification/branches/symri.md
       - SWI: classification/branches/swi.md
       - EPIMix: classification/branches/epimix.md
+      - STAGE: classification/branches/stage.md
+    - Cohort Overrides: classification/overrides.md
   - Cohort Operations:
     - Overview: cohort/index.md
     - Extraction: cohort/extraction.md
     - Sorting: cohort/sorting.md
     - Anonymization: cohort/anonymization.md
     - Export: cohort/export.md
+    - Analysis Pipelines: cohort/analysis-pipelines.md
   - QC & Viewer:
     - Quality Control: qc/index.md
+    - Body Part QC: qc/body-part.md
+    - Main Acquisition QC: qc/main-acquisition.md
   - Changelog: changelog.md

@@ -128,6 +128,7 @@ flowchart TB
         s3a["SWI Branch → swi.py"]
         s3b["SyMRI Branch → symri.py"]
         s3c["EPIMix Branch → epimix.py"]
+        s3e["STAGE Branch → stage.py"]
         s3d["RawRecon → standard detection"]
     end
 
@@ -178,7 +179,8 @@ Advanced MRI technologies produce **multiple outputs from a single acquisition**
 | Branch | Provenance | Output Types | Key Feature |
 |--------|------------|--------------|-------------|
 | **[SyMRI](branches/symri.md)** | `SyMRI` | 17+ types (maps, synthetic contrasts) | Quantitative maps have `base=NULL` |
-| **[SWI](branches/swi.md)** | `SWIRecon` | 6 types (magnitude, phase, QSM) | All outputs have `base=SWI` |
+| **[SWI](branches/swi.md)** | `SWIRecon` | 7 types (magnitude, phase, QSM, R2\*) | All outputs have `base=SWI` |
+| **[STAGE](branches/stage.md)** | `STAGE` | 2 raw types (magnitude, phase) | Does **not** override base contrast |
 | **[EPIMix](branches/epimix.md)** | `EPIMix` | 6+ types (T1-FLAIR to T2*w) | 6 contrasts from 1-min scan |
 | **RawRecon** | Default | Standard classification | Uses axis detectors directly |
 
@@ -282,10 +284,14 @@ Review reasons are stored in `manual_review_reasons_csv`:
 
 ## Extending Classification
 
-To add new classification rules:
+To add new classification rules globally:
 
 1. Edit the appropriate YAML file in `detection_yaml/`
 2. Define matching conditions using unified flags and/or keywords
 3. Restart the backend
 
 See the [Detection Infrastructure](foundations.md) documentation for YAML syntax details.
+
+### Per-Cohort Tuning
+
+To tune detection for a single cohort **without** touching the global YAML, use [Cohort-Level Classification Overrides](overrides.md). These let a site add or remove keywords per axis, layered on top of the global defaults.

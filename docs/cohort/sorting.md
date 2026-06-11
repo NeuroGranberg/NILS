@@ -8,8 +8,11 @@
 flowchart LR
     A["Step 1: Checkup"] --> B["Step 2: Stack Fingerprint"]
     B --> C["Step 3: Classification"]
-    C --> D["Step 4: Output Generation"]
+    C --> D["Step 4: Completion"]
 ```
+
+!!! note "Sorting vs Export"
+    Sorting **classifies** stacks; it does not write output files. Generating BIDS or flat output is a separate stage — see [BIDS Export](export.md).
 
 ---
 
@@ -113,9 +116,10 @@ For each StackFingerprint:
 
 4. **Stage 3: Branch Logic**
    - Executes provenance-specific logic:
-     - `SWI Branch` → SWI/QSM classification
+     - `SWI Branch` → SWI/QSM/R2* classification
      - `SyMRI Branch` → Synthetic MRI classification
      - `EPIMix Branch` → Multi-contrast EPI
+     - `STAGE Branch` → STrategically Acquired Gradient Echo
      - `RawRecon Branch` → Standard detection
 
 5. **Stage 4: Modifier Detection**
@@ -146,33 +150,44 @@ For each StackFingerprint:
 - BIDS intent (directory_type)
 - Review requirements
 
+### Session-Aware Rescue
+
+Some exports tag **every** image in a session as `ORIGINAL\SECONDARY` with nothing marked `PRIMARY`. The Stage-0 exclusion would normally drop these, discarding the whole session. The rescue rule groups fingerprints by `(subject_id, study_date)`; if a session has **zero** `ORIGINAL\PRIMARY` stacks, its secondary stacks are rescued so the session still gets classified.
+
+### Per-Cohort Keyword Overrides
+
+Step 3 builds the classification pipeline **per cohort**, merging that cohort's [keyword overrides](../classification/overrides.md) into the global YAML configs before classifying. A site can therefore tune detection for one cohort without affecting others or the global defaults.
+
 ---
 
-## Step 4: Output Generation
+## Step 4: Completion
 
-**Purpose:** Export classified data to target structure.
+**Purpose:** Post-process classification results — fill gaps, normalize values, and flag for review.
 
 ### What It Does
 
-1. **Filter by Classification**
-   - Include/exclude by provenance
-   - Include/exclude by intent
+1. **Field-Strength Normalization**
+   - Handles Gauss-scale values and ± tolerance
 
-2. **Organize Output**
-   - BIDS structure or flat layout
-   - Provenance-specific routing
+2. **Orientation-Confidence Flagging**
+   - Flags stacks with low orientation confidence (<0.85)
 
-3. **Copy/Convert Files**
-   - DICOM copy or NIfTI conversion
-   - Parallel processing
+3. **Acquisition-Type Gap Filling**
+   - Fills missing 2D/3D type from scan options, text, or technique inference
 
-### Output Modes
+4. **Physics-Similarity Gap Filling**
+   - Fills missing base/technique by matching against previously classified stacks
+   - Uses **intent-scoped reference databases** (see below)
 
-| Mode | Description |
-|------|-------------|
-| `dcm` | Copy DICOM files |
-| `nii` | Convert to NIfTI |
-| `nii.gz` | Convert to compressed NIfTI |
+5. **SWI Re-Routing & Intent Re-Synthesis**
+   - Re-routes newly detected SWI through the SWI branch
+   - Re-synthesizes intent for stacks stuck in `misc`
+
+### Intent-Scoped Reference Databases
+
+When a stack is missing base or technique, Step 4 recovers it by matching physics parameters (TR/TE/TI/FA/slice count) against stacks already classified in the database. Previously this used a single global pool, which could let a FLAIR-like stack borrow parameters from an unrelated perfusion reference.
+
+Now the reference pool is **partitioned per `directory_type`** (anat, dwi, perf, func, …) plus a global fallback. Each stuck stack matches against **its own intent pool first**, falling back to global only for `misc` or when the scoped pool has no match. This prevents cross-intent contamination during gap-filling.
 
 ---
 

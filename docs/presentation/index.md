@@ -14,3 +14,4 @@ Explore the Neuroimaging Intelligent Linked System through our interactive prese
 - **BIDS Compliance**: Ensuring FAIR data principles.
 
 [Open Full Screen Presentation](nils_presentation.html){ .md-button .md-button--primary }
+[View the Roadmap](roadmap.md){ .md-button }

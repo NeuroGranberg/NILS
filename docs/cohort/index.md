@@ -174,6 +174,19 @@ All cohort operations run as **Jobs**. Jobs provide:
 
 View jobs in the **Jobs** tab of the web interface.
 
+### Asynchronous Backups & Exports
+
+Database backups, database restores, and BIDS/subset exports all run as background jobs: the request returns immediately with a job to monitor (and, for exports, cancel), instead of blocking until completion.
+
+---
+
+## Beyond the Core Pipeline
+
+In addition to the four core stages, cohorts feed into:
+
+- **[Analysis Pipelines](analysis-pipelines.md)** - Run external neuroimaging tools (MRIQC, fMRIPrep, BIDS-Apps) on a cohort subset or an existing BIDS tree
+- **[Body Part QC](../qc/body-part.md)** and **[Main Acquisition QC](../qc/main-acquisition.md)** - Cohort-wide QC subsystems that refine classification before export
+
 ---
 
 ## Next Steps
@@ -182,3 +195,4 @@ View jobs in the **Jobs** tab of the web interface.
 - [Extraction](extraction.md) - Import DICOM metadata
 - [Sorting](sorting.md) - Classify series
 - [BIDS Export](export.md) - Generate output
+- [Analysis Pipelines](analysis-pipelines.md) - Run external analysis tools

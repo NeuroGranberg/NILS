@@ -12,6 +12,33 @@
 
 ---
 
+## Unified Export Path
+
+Whole-cohort export and stack-subset export share a **single export path** and the same `export` job stage. They differ only in scope:
+
+| Mode | Scope | How it's invoked |
+|------|-------|------------------|
+| **Cohort export** | Every classified stack in a cohort | Run from the cohort's BIDS stage |
+| **Subset export** | A specific set of stacks resolved from a selection manifest | Run from the standalone export endpoint |
+
+Both feed the same configuration builder and run logic, so naming, conversion, and provenance routing behave identically regardless of scope. The analysis-pipeline `db_subset` input materializes its BIDS tree through this exact path too.
+
+!!! note "Legacy `subset_export` stage"
+    The standalone export stage was previously named `subset_export`. It is now unified under `export`, and `subset_export` is kept as a **compatibility alias** so older job history still displays correctly.
+
+---
+
+## Asynchronous Execution
+
+Exports run as **tracked background jobs**. Starting an export returns immediately with a job you can monitor and cancel, rather than blocking until the export finishes.
+
+- **Monitor** — poll the returned job for progress (1→100%) and metrics.
+- **Cancel** — request cancellation; the job flips to `canceled`.
+
+Database backups and restores behave the same way — see [Database Management](index.md#job-management).
+
+---
+
 ## Output Formats
 
 ### DICOM (`dcm`)

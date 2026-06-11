@@ -4,9 +4,23 @@ NILS includes a comprehensive QC system for reviewing and correcting classificat
 
 ---
 
+## The Three QC Subsystems
+
+NILS provides three complementary QC tools, each addressing a different question:
+
+| Subsystem | Question it answers | Documentation |
+|-----------|---------------------|---------------|
+| **Axes QC** (this page) | Is each classification axis correct? | below |
+| **[Body Part QC](body-part.md)** | What body region is this scan? | image-based body-part labeling |
+| **[Main Acquisition QC](main-acquisition.md)** | Which stack is the representative acquisition? | per-session main-acquisition picking |
+
+This page documents **Axes QC** — the per-stack, per-axis review workflow with the rules engine and DICOM viewer. Body Part QC and Main Acquisition QC are cohort-wide tools documented on their own pages.
+
+---
+
 ## QC System Overview
 
-The Quality Control system provides:
+The Axes QC system provides:
 
 1. **Automatic Flagging** - Series requiring review are flagged during classification
 2. **Priority Scoring** - Issues ranked by severity for efficient workflow

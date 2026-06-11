@@ -5,6 +5,21 @@ All notable changes to NILS will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.5.3] - 2026-06-11
+
+### Changed
+
+- **License is now GNU GPL v3.0** — NILS is relicensed from MIT to the GNU General Public License v3.0. The full license text, the README badge and license section, and the package metadata (`backend`, `frontend`) all reflect GPL-3.0
+
+### Added
+
+- **Documentation brought up to date** with the current feature set:
+  - **STAGE branch** classification page, and a page on **per-cohort classification overrides** for tuning keyword detection per site
+  - **Body Part QC** and **Main Acquisition QC** guides
+  - **Analysis Pipelines** guide for registering and running external tools
+  - Expanded SWI branch coverage (now seven output types, including QSM and R2*) and refreshed classification, provenance, construct, cohort and export pages
+- **Development Roadmap presentation** outlining upcoming directions — deeper image-based QC, more modalities (CT, PET, photon-counting CT), the NILS Agent, agentic curation, the pipeline ecosystem, and unified query — linked from the documentation site
+
 ## [0.5.2] - 2026-06-09
 
 ### Fixed

@@ -13,7 +13,8 @@ Modern MRI sequences can generate many DICOM series from a single acquisition:
 | Technology | Acquisition Time | Output Series | Challenge |
 |------------|------------------|---------------|-----------|
 | **SyMRI/MAGiC** | ~5 minutes | 1-20+ series | Raw data, quantitative maps, synthetic contrasts |
-| **SWI** | ~4 minutes | 2-6 series | Magnitude, phase, processed SWI, MinIP, QSM |
+| **SWI/QSM** | ~4 minutes | 2-7 series | Magnitude, phase, processed SWI, MinIP, MIP, QSM, R2\* |
+| **STAGE** | ~5 minutes | 2-4 series | Dual-FA magnitude/phase echoes; many derived maps |
 | **EPIMix/NeuroMix** | ~1 minute | 6 series | T1-FLAIR, T2-FLAIR, T2w, DWI, ADC, T2*w |
 
 Standard axis detectors cannot handle this because:
@@ -36,10 +37,12 @@ flowchart TB
     stage1 --> symri["SyMRI Branch"]
     stage1 --> swi["SWI Branch"]
     stage1 --> epimix["EPIMix Branch"]
+    stage1 --> stagebr["STAGE Branch"]
 
     symri --> s1["Specialized output type detection"]
     swi --> s2["Specialized output type detection"]
     epimix --> s3["Specialized output type detection"]
+    stagebr --> s4["Specialized output type detection"]
 ```
 
 ---
@@ -75,8 +78,23 @@ Handles **Susceptibility-Weighted Imaging** outputs.
 - MinIP (minimum intensity projection)
 - MIP (maximum intensity projection)
 - QSM (quantitative susceptibility mapping)
+- R2\* (transverse relaxation rate map)
 
-**Key insight:** All SWI outputs have `base=SWI`. The technique (GRE or EPI) indicates the acquisition method.
+**Key insight:** All SWI outputs have `base=SWI`. The technique (GRE or EPI) indicates the acquisition method. QSM and R2\* share the same multi-echo GRE scan, so co-occurring outputs use composite constructs like `QSM,R2starmap`.
+
+---
+
+### [STAGE Branch](stage.md)
+
+Handles **STrategically Acquired Gradient Echo** (STAGE) outputs — a rapid multi-parametric 3D GRE protocol.
+
+**Provenance triggers:** `STAGE`
+
+**Output types:**
+- Magnitude (tissue-weighted source)
+- Phase (for SWI/QSM processing)
+
+**Key insight:** Unlike SWI/SyMRI, STAGE does **not** override base contrast — the standard detector resolves PDw (low flip angle) vs T1w (high flip angle). Only technique (→ STAGE) and construct (→ Magnitude/Phase) are overridden.
 
 ---
 

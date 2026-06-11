@@ -18,10 +18,10 @@
     <img src="https://img.shields.io/badge/docs-neurogranberg.github.io-blue" alt="Documentation">
   </a>
   <a href="LICENSE">
-    <img src="https://img.shields.io/badge/License-MIT-yellow.svg" alt="License: MIT">
+    <img src="https://img.shields.io/badge/License-GPLv3-blue.svg" alt="License: GPL v3">
   </a>
   <a href="CHANGELOG.md">
-    <img src="https://img.shields.io/badge/version-0.5.2-green.svg" alt="Version">
+    <img src="https://img.shields.io/badge/version-0.5.3-green.svg" alt="Version">
   </a>
 </p>
 
@@ -192,7 +192,7 @@ Environment variables in `.env`:
 
 ## License
 
-MIT License - see [LICENSE](LICENSE) file.
+GNU General Public License v3.0 - see [LICENSE](LICENSE) file.
 
 ---
 

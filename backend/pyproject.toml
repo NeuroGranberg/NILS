@@ -8,7 +8,7 @@ dynamic = ["version"]
 description = "Backend services for NILS - Neuroimaging Intelligent Linked System"
 authors = [{ name = "Nima Chamyani", email = "nima.chamyani@ki.se" }]
 maintainers = [{ name = "Nima Chamyani", email = "nima.chamyani@ki.se" }]
-license = { text = "MIT" }
+license = { text = "GPL-3.0-or-later" }
 requires-python = ">=3.11"
 dependencies = [
   "pydantic>=2.10",

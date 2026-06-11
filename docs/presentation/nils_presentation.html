@@ -40,18 +40,18 @@
             color: var(--ki-plum);
             text-transform: none;
             font-weight: 600;
-            margin-bottom: 20px;
+            margin-bottom: 12px;
         }
 
         .reveal h1 {
-            font-size: 2.8em;
+            font-size: 2.6em;
             border-bottom: 3px solid var(--ki-plum-light);
             display: inline-block;
-            padding-bottom: 10px;
+            padding-bottom: 8px;
         }
 
-        .reveal h2 { font-size: 2em; }
-        .reveal h3 { font-size: 1.4em; color: #555; }
+        .reveal h2 { font-size: 1.8em; }
+        .reveal h3 { font-size: 1.3em; color: #555; }
 
         .accent { color: var(--ki-plum-light); font-weight: 600; }
         .muted { color: #666; font-weight: 400; }
@@ -83,7 +83,7 @@
             background: white;
             border: 1px solid var(--ki-silver);
             border-radius: 8px;
-            padding: 20px;
+            padding: 14px 14px;
             box-shadow: 0 2px 8px rgba(0,0,0,0.05);
             text-align: center;
         }
@@ -94,18 +94,18 @@
         }
 
         .card .icon {
-            font-size: 2em;
+            font-size: 1.6em;
             color: var(--ki-plum);
-            margin-bottom: 10px;
+            margin-bottom: 6px;
         }
 
         .card h4 {
-            margin: 10px 0 5px;
-            font-size: 1em;
+            margin: 6px 0 4px;
+            font-size: 0.92em;
         }
 
         .card p {
-            font-size: 0.75em;
+            font-size: 0.72em;
             color: #666;
             margin: 0;
         }
@@ -167,7 +167,7 @@
         /* Lists */
         .reveal ul { margin-left: 0; }
         .reveal ul li {
-            margin-bottom: 12px;
+            margin-bottom: 7px;
             list-style: none;
             padding-left: 25px;
             position: relative;
@@ -561,7 +561,8 @@
                         <i class="fas fa-arrow-right flow-arrow"></i>
                         <div style="display: flex; flex-direction: column; gap: 10px;">
                             <div class="flow-box">SyMRI Branch <span class="tag">17+ types</span></div>
-                            <div class="flow-box">SWI Branch <span class="tag">6 types</span></div>
+                            <div class="flow-box">SWI Branch <span class="tag">7 types</span></div>
+                            <div class="flow-box">STAGE Branch <span class="tag">2 raw types</span></div>
                             <div class="flow-box">EPIMix Branch <span class="tag">12 types</span></div>
                             <div class="flow-box">RawRecon Branch</div>
                         </div>
@@ -589,10 +590,16 @@
                                 <td>Maps vs synthetic contrasts</td>
                             </tr>
                             <tr>
-                                <td><strong>SWI</strong></td>
+                                <td><strong>SWI/QSM</strong></td>
                                 <td>~4 min</td>
-                                <td>2-6 series</td>
-                                <td>Mag vs phase vs processed</td>
+                                <td>2-7 series</td>
+                                <td>Mag, phase, SWI, MinIP, QSM, R2*</td>
+                            </tr>
+                            <tr>
+                                <td><strong>STAGE</strong></td>
+                                <td>~5 min</td>
+                                <td>2-4 series</td>
+                                <td>Dual-FA echoes; many derived maps</td>
                             </tr>
                             <tr>
                                 <td><strong>EPIMix</strong></td>
@@ -657,10 +664,37 @@
                             <small>QSM</small><br>
                             <span style="color: #666; font-size: 0.8em;">Quantitative (ppm)</span>
                         </div>
+                        <div class="flow-box" style="text-align: center;">
+                            <small>R2*</small><br>
+                            <span style="color: #666; font-size: 0.8em;">Relaxation rate</span>
+                        </div>
                     </div>
                     <div style="margin-top: 25px; font-size: 0.75em; color: #666;">
                         <i class="fas fa-info-circle" style="color: var(--ki-plum);"></i>
-                        All outputs have <strong>base=SWI</strong>; construct differentiates output type
+                        All outputs have <strong>base=SWI</strong>; construct differentiates output type.
+                        QSM &amp; R2* share the same multi-echo GRE scan &rarr; composite constructs like <code>QSM,R2starmap</code>
+                    </div>
+                </section>
+
+                <!-- Vertical: STAGE Branch -->
+                <section>
+                    <h2>STAGE Branch</h2>
+                    <p class="muted">STrategically Acquired Gradient Echo &mdash; dual-FA 3D GRE</p>
+                    <div class="grid-2" style="font-size: 0.78em; margin-top: 20px;">
+                        <div>
+                            <h4 style="color: var(--ki-plum);"><i class="fas fa-images"></i> Raw outputs classified</h4>
+                            <p>Magnitude (tissue-weighted)</p>
+                            <p>Phase (for SWI/QSM processing)</p>
+                        </div>
+                        <div>
+                            <h4 style="color: var(--ki-plum);"><i class="fas fa-cubes"></i> Derived downstream</h4>
+                            <p style="color: #666;">T1WE, SWI/tSWI, QSM, T1/PD/R2* maps</p>
+                        </div>
+                    </div>
+                    <div style="margin-top: 25px; background: var(--ki-grey); padding: 12px; border-radius: 6px; font-size: 0.75em;">
+                        <i class="fas fa-key" style="color: var(--ki-plum);"></i>
+                        <strong>Unlike SWI/SyMRI, STAGE does not override base</strong> &mdash; the standard detector
+                        resolves PDw (low flip angle) vs T1w (high flip angle); only technique &amp; construct are set
                     </div>
                 </section>
 
@@ -811,6 +845,156 @@
                 </section>
             </section>
 
+            <!-- ========== SLIDE 6.5: QUALITY CONTROL (with verticals) ========== -->
+            <section>
+                <section>
+                    <h2><i class="fas fa-clipboard-check"></i> Quality Control</h2>
+                    <p class="muted">Three complementary review subsystems</p>
+                    <div class="grid-3" style="margin-top: 35px;">
+                        <div class="card">
+                            <div class="icon"><i class="fas fa-sliders-h"></i></div>
+                            <h4>Axes QC</h4>
+                            <p>Per-axis review with rules engine &amp; DICOM viewer</p>
+                        </div>
+                        <div class="card">
+                            <div class="icon"><i class="fas fa-child"></i></div>
+                            <h4>Body Part QC</h4>
+                            <p>Image-based body-region labeling</p>
+                        </div>
+                        <div class="card">
+                            <div class="icon"><i class="fas fa-star"></i></div>
+                            <h4>Main Acquisition QC</h4>
+                            <p>Pick the representative scan per session</p>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- Vertical: Draft workflow -->
+                <section>
+                    <h2>Axes QC: Draft Workflow</h2>
+                    <p class="muted">Non-destructive edits until explicitly confirmed</p>
+                    <div style="margin-top: 30px; display: flex; justify-content: center; align-items: center; gap: 12px; flex-wrap: wrap;">
+                        <div class="flow-box">Auto-flagged items</div>
+                        <i class="fas fa-arrow-right flow-arrow"></i>
+                        <div class="flow-box">Review + edit <span class="tag">draft</span></div>
+                        <i class="fas fa-arrow-right flow-arrow"></i>
+                        <div class="flow-box highlight">Confirm &rarr; metadata DB</div>
+                    </div>
+                    <div class="grid-2" style="margin-top: 30px; font-size: 0.75em;">
+                        <div>
+                            <h4 style="color: var(--ki-plum);"><i class="fas fa-gavel"></i> Rules engine</h4>
+                            <p>9 configurable rules &mdash; technique/family mismatch, aspect-ratio, provenance consistency, contrast status</p>
+                        </div>
+                        <div>
+                            <h4 style="color: var(--ki-plum);"><i class="fas fa-flag"></i> 5 flag severities</h4>
+                            <p>missing, conflict, low_confidence, ambiguous, review &mdash; priority-scored for efficient triage</p>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- Vertical: Body Part QC -->
+                <section>
+                    <h2>Body Part QC</h2>
+                    <p class="muted">Learns per-cohort body-part labels from DICOM thumbnails</p>
+                    <div style="margin-top: 25px; display: flex; justify-content: center; align-items: center; gap: 10px; flex-wrap: wrap; font-size: 0.85em;">
+                        <div class="flow-box">Seed</div>
+                        <i class="fas fa-arrow-right flow-arrow"></i>
+                        <div class="flow-box">Label</div>
+                        <i class="fas fa-arrow-right flow-arrow"></i>
+                        <div class="flow-box">Train / select</div>
+                        <i class="fas fa-arrow-right flow-arrow"></i>
+                        <div class="flow-box highlight">Apply</div>
+                        <i class="fas fa-arrow-right flow-arrow"></i>
+                        <div class="flow-box">Stage &amp; commit</div>
+                    </div>
+                    <div class="grid-2" style="margin-top: 25px; font-size: 0.72em;">
+                        <div>
+                            <h4 style="color: var(--ki-plum);"><i class="fas fa-seedling"></i> Two-stage seeding</h4>
+                            <p>Keyword-prior + stratified zero-shot (BiomedCLIP) build a balanced training set with minimal manual labeling</p>
+                        </div>
+                        <div>
+                            <h4 style="color: var(--ki-plum);"><i class="fas fa-shield-alt"></i> Durable protection</h4>
+                            <p>Committed labels survive re-sorting; global model registry: train once, reuse across cohorts</p>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- Vertical: Main Acquisition QC -->
+                <section>
+                    <h2>Main Acquisition QC</h2>
+                    <p class="muted">One representative acquisition per session &amp; axis</p>
+                    <div class="grid-2" style="margin-top: 20px; font-size: 0.75em;">
+                        <div>
+                            <h4 style="color: var(--ki-plum);"><i class="fas fa-th"></i> Auto-pick + heatmap</h4>
+                            <p>Bundles competing stacks (retakes, partial volumes, Dixon families), scores them, and shows a green/amber/red cohort heatmap</p>
+                        </div>
+                        <div>
+                            <h4 style="color: var(--ki-plum);"><i class="fas fa-user-check"></i> Session review</h4>
+                            <p>Cascading filters, suggested main, one-main-per-bundle, durable acknowledgement across re-runs</p>
+                        </div>
+                    </div>
+                    <div style="margin-top: 22px; background: var(--ki-grey); padding: 12px; border-radius: 6px; font-size: 0.72em;">
+                        <i class="fas fa-comment-dots" style="color: var(--ki-plum);"></i>
+                        Reason banners explain every pick: retake, close runner-up, pre/post twin, slice-count outlier, rare technique&hellip;
+                    </div>
+                </section>
+            </section>
+
+            <!-- ========== SLIDE 6.7: ANALYSIS PIPELINES & OVERRIDES ========== -->
+            <section>
+                <section>
+                    <h2><i class="fas fa-diagram-project"></i> Analysis Pipelines</h2>
+                    <p class="muted">Register external tools by Git URL &mdash; run them locally on NILS data</p>
+                    <div style="margin-top: 30px; display: flex; justify-content: center; align-items: center; gap: 10px; flex-wrap: wrap; font-size: 0.85em;">
+                        <div class="flow-box">Paste Git URL</div>
+                        <i class="fas fa-arrow-right flow-arrow"></i>
+                        <div class="flow-box">Pin commit + descriptor</div>
+                        <i class="fas fa-arrow-right flow-arrow"></i>
+                        <div class="flow-box highlight">Auto-generated form</div>
+                        <i class="fas fa-arrow-right flow-arrow"></i>
+                        <div class="flow-box">Run (docker / apptainer)</div>
+                    </div>
+                    <div class="grid-3" style="margin-top: 30px; font-size: 0.72em;">
+                        <div class="card">
+                            <div class="icon"><i class="fas fa-file-code"></i></div>
+                            <h4>Boutiques + x-nils</h4>
+                            <p>BIDS-App descriptors reusable; no NILS UI code per tool</p>
+                        </div>
+                        <div class="card">
+                            <div class="icon"><i class="fas fa-laptop-code"></i></div>
+                            <h4>Local execution</h4>
+                            <p>Single machine, runtime auto-detected, no cluster</p>
+                        </div>
+                        <div class="card">
+                            <div class="icon"><i class="fas fa-fingerprint"></i></div>
+                            <h4>Reproducible</h4>
+                            <p>Each run pins repo commit + image digest</p>
+                        </div>
+                    </div>
+                    <p class="muted" style="margin-top: 20px; font-size: 0.72em;">
+                        <i class="fas fa-users"></i> Anyone can write an analysis pipeline for NILS and import it &mdash; e.g. MRIQC, fMRIPrep, dcm2niix, hd-bet
+                    </p>
+                </section>
+
+                <!-- Vertical: Cohort overrides -->
+                <section>
+                    <h2>Per-Cohort Classification Overrides</h2>
+                    <p class="muted">Tune detection per site without touching the global config</p>
+                    <div style="margin-top: 30px; display: flex; justify-content: center; align-items: center; gap: 15px; flex-wrap: wrap;">
+                        <div class="flow-box">Global YAML defaults</div>
+                        <span class="flow-arrow">+</span>
+                        <div class="flow-box">Cohort deltas <span class="tag">added / removed</span></div>
+                        <i class="fas fa-arrow-right flow-arrow"></i>
+                        <div class="flow-box highlight">Effective keywords</div>
+                    </div>
+                    <div style="margin-top: 30px; background: var(--ki-grey); padding: 15px; border-radius: 6px; font-size: 0.8em; max-width: 720px; margin-left:auto; margin-right:auto;">
+                        <i class="fas fa-language" style="color: var(--ki-plum);"></i>
+                        Handles multilingual sites and site-specific acronyms &mdash; e.g. add <code>VOLUM</code> to MPRAGE for one cohort only.
+                        Global improvements still propagate; deltas layer on top.
+                    </div>
+                </section>
+            </section>
+
             <!-- ========== SLIDE 7: ARCHITECTURE ========== -->
             <section>
                 <h2><i class="fas fa-server"></i> Architecture</h2>
@@ -888,6 +1072,10 @@ MPRAGE:
                             <li>provenance-detection.yaml</li>
                             <li>acceleration-detection.yaml</li>
                         </ul>
+                        <div style="margin-top: 15px; background: var(--ki-grey); padding: 12px; border-radius: 6px; font-size: 0.8em;">
+                            <i class="fas fa-layer-group" style="color: var(--ki-plum);"></i>
+                            Per-cohort <strong>keyword overrides</strong> layer on top of these defaults
+                        </div>
                     </div>
                 </div>
             </section>
@@ -912,6 +1100,8 @@ MPRAGE:
                                 git clone ...NILS.git<br>
                                 docker compose up
                             </div>
+                            <p style="margin-top: 20px;"><i class="fas fa-balance-scale"></i> <strong>License</strong></p>
+                            <p style="opacity: 0.9;">GNU GPL v3.0 &mdash; free &amp; open source</p>
                         </div>
                     </div>
                 </div>
@@ -931,7 +1121,7 @@ MPRAGE:
             transition: 'fade',
             width: 1280,
             height: 720,
-            margin: 0.1,
+            margin: 0.04,
             minScale: 0.2,
             maxScale: 1.5
         });

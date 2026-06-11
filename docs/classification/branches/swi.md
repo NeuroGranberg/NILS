@@ -13,8 +13,8 @@ Unlike conventional T1 or T2-weighted imaging that produces a single output, SWI
 | **Provenance** | `SWIRecon` |
 | **Classification Branch** | `swi` |
 | **Source Module** | `backend/src/classification/branches/swi.py` |
-| **Output Types** | 6 distinct types |
-| **Series per Acquisition** | 2-6 typically |
+| **Output Types** | 7 distinct types |
+| **Series per Acquisition** | 2-7 typically |
 
 ---
 
@@ -105,6 +105,17 @@ All SWI outputs share `base=SWI` to indicate the contrast type. The construct sp
 | **MinIP** | SWI | `MinIP` | Minimum intensity projection |
 | **MIP** | SWI | `MIP` | Maximum intensity projection |
 | **QSM** | SWI | `QSM` | Quantitative susceptibility map (ppm) |
+| **R2\*** | SWI | `R2starmap` | R2\* transverse relaxation rate map (s⁻¹) |
+
+### Composite Constructs
+
+QSM and R2\* share the same multi-echo GRE acquisition as SWI. When an output comes from a QSM acquisition, the construct is **comma-joined** to record both facts:
+
+| Series | Construct | Meaning |
+|--------|-----------|---------|
+| Phase from a QSM acquisition | `Phase,QSM` | Phase output of a QSM scan |
+| Magnitude from a QSM acquisition | `Magnitude,QSM` | T2\*-weighted source of a QSM scan |
+| R2\* with QSM present | `QSM,R2starmap` | Both maps derived from the same scan |
 
 ---
 
@@ -112,32 +123,39 @@ All SWI outputs share `base=SWI` to indicate the contrast type. The construct sp
 
 ### Priority Order
 
-The SWI branch uses strict priority (first match wins):
+The SWI branch uses strict priority (first match wins). Specific output tokens are checked **before** the generic QSM fallback:
 
 ```mermaid
 flowchart TB
-    start["SWI Branch Input"] --> q1{has_qsm OR<br/>'qsm' in text?}
-    q1 -->|Yes| qsm["1. QSM<br/>(Quantitative)"]
-    q1 -->|No| q2{is_minip OR<br/>'minip' in text?}
+    start["SWI Branch Input"] --> q2{is_minip OR<br/>'minip' in text?}
 
-    q2 -->|Yes| minip["2. MinIP<br/>(Venogram)"]
+    q2 -->|Yes| minip["1. MinIP<br/>(Venogram)"]
     q2 -->|No| q3{is_mip OR<br/>'mip' in text?}
 
-    q3 -->|Yes| mip["3. MIP"]
+    q3 -->|Yes| mip["2. MIP"]
     q3 -->|No| q4{has_phase<br/>without magnitude?}
 
-    q4 -->|Yes| phase["4. Phase"]
+    q4 -->|Yes| phase["3. Phase"]
     q4 -->|No| q5{has_swi token<br/>in ImageType?}
 
-    q5 -->|Yes| swi["5. SWI Processed"]
+    q5 -->|Yes| swi["4. SWI Processed"]
     q5 -->|No| q6{is_projection?}
 
-    q6 -->|Yes| swi2["5.5. SWI (projection)"]
-    q6 -->|No| q7{has_magnitude?}
+    q6 -->|Yes| swi2["4.5. SWI (projection)"]
+    q6 -->|No| qr{has_r2star OR<br/>'r2star' in text?}
+
+    qr -->|Yes| r2["5. R2*"]
+    qr -->|No| q7{has_magnitude?}
 
     q7 -->|Yes| mag["6. Magnitude"]
-    q7 -->|No| fallback["7. Fallback → SWI"]
+    q7 -->|No| q8{has_qsm OR<br/>'qsm' in text?}
+
+    q8 -->|Yes| qsm["7. QSM<br/>(narrow match)"]
+    q8 -->|No| fallback["8. Fallback → SWI"]
 ```
+
+!!! warning "Why QSM is checked last, not first"
+    GE multi-echo QSM sequences embed `psd/QSM/me` in the description of **every** output (magnitude, phase, SWI, mIP, R2\*, QSM). A greedy `qsm` match would mislabel everything as QSM. So specific output tokens (`magnitude`, `phase`, `swi`, `mip`, `minip`, `r2star`) are matched first; the narrow QSM rule only fires when no other output token is present, or the `has_qsm` ImageType flag is explicitly set.
 
 ### Key Detection Insight
 
@@ -202,9 +220,10 @@ QSM uses the **same raw data** as SWI but with additional processing:
 
 ### Detection
 
-QSM is detected with highest priority because it represents the most specific output type:
+QSM is detected with a **narrow** rule near the end of the priority chain, so that the specific output tokens of a multi-echo QSM acquisition are resolved first:
 
 ```python
+# Only fires when no specific output token matched above
 if uf.get("has_qsm") or "qsm" in text_blob:
     return BranchResult(
         base="SWI",
@@ -212,6 +231,10 @@ if uf.get("has_qsm") or "qsm" in text_blob:
         confidence=0.95,
     )
 ```
+
+### R2\* Maps
+
+R2\* is the transverse relaxation rate (s⁻¹), derived from **multi-echo magnitude** signal decay fitting — distinct from QSM, which comes from phase. It is detected via the `has_r2star` flag (ImageType tokens `R2STAR`, `R2_STAR`, `R2*`, `R2 STAR`) or `r2star` text. When QSM is also present, the construct becomes `QSM,R2starmap`.
 
 ---
 
@@ -276,6 +299,7 @@ if uf.get("has_qsm") or "qsm" in text_blob:
 | `has_phase` | Phase (P, PHASE, PHASE MAP) |
 | `has_swi` | SWI token in ImageType |
 | `has_magnitude` | Magnitude (M, M_FFE, etc.) |
+| `has_r2star` | R2\* tokens (R2STAR, R2_STAR, R2\*, R2 STAR) |
 | `is_projection` | PROJECTION IMAGE token |
 | `has_epi` | EPI readout |
 | `has_gre` | GRE readout |
@@ -315,6 +339,11 @@ SWI_OUTPUT_TYPES = {
         "base": "SWI",
         "construct": "QSM",
         "description": "Quantitative susceptibility map (ppm)",
+    },
+    "r2star": {
+        "base": "SWI",
+        "construct": "R2starmap",
+        "description": "R2* transverse relaxation rate map (s⁻¹)",
     },
 }
 ```
@@ -421,6 +450,38 @@ ScanningSequence: EP
 base = "SWI"
 construct = "SWI"
 technique = "EPI"      # Detected from has_epi flag
+directory_type = "anat"
+```
+
+### Example 7: R2\* Map from a GE Multi-Echo QSM Scan
+
+**DICOM Fields:**
+```
+SeriesDescription: R2* map | psd/QSM/me
+ScanningSequence: GR
+```
+
+**Classification:**
+```python
+base = "SWI"
+construct = "QSM,R2starmap"   # both maps from the same multi-echo acquisition
+technique = "GRE"
+directory_type = "anat"
+```
+
+### Example 8: GE Magnitude Source from a QSM Scan
+
+**DICOM Fields:**
+```
+SeriesDescription: MAG | psd/QSM/me | EFGRE3D
+ScanningSequence: GR
+```
+
+**Classification:**
+```python
+base = "SWI"
+construct = "Magnitude,QSM"   # source magnitude of a QSM acquisition
+technique = "GRE"
 directory_type = "anat"
 ```
 

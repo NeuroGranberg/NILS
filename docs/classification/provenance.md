@@ -11,6 +11,7 @@ Provenance is **detected FIRST** in the classification pipeline because it deter
 | Provenance | Description | Branch |
 |------------|-------------|--------|
 | **SyMRI** | Synthetic MRI (MAGiC, MDME, QALAS) | `symri` |
+| **STAGE** | STrategically Acquired Gradient Echo | `stage` |
 | **SWIRecon** | Susceptibility-weighted imaging | `swi` |
 | **EPIMix** | Multicontrast EPI (NeuroMix) | `epimix` |
 | **DTIRecon** | Diffusion tensor maps | `rawrecon` |
@@ -167,18 +168,33 @@ SyMRI:
 
 ---
 
+### STAGE (STrategically Acquired Gradient Echo)
+
+**Description:** Rapid multi-parametric 3D GRE protocol acquiring dual-echo scans at two flip angles.
+
+**Detection:**
+- Keywords: `stage`
+
+**Branch:** `stage`
+
+**Outputs:** Magnitude, Phase (raw). Unlike other branches, STAGE does **not** override base contrast — the standard detector resolves PDw (low flip angle) vs T1w (high flip angle).
+
+**Note:** Checked **before** SWIRecon so STAGE's own SWI/QSM-named derived echoes are not claimed by the SWI branch. See the [STAGE branch](branches/stage.md).
+
+---
+
 ### SWIRecon (SWI Reconstruction)
 
-**Description:** Susceptibility-weighted imaging outputs.
+**Description:** Susceptibility-weighted imaging outputs, including QSM and R2\* which share the same multi-echo GRE acquisition.
 
 **Detection:**
 - Exclusive flag: `is_swi`
-- Keywords: `swi`, `swan`, `fsbb`, `susceptibility`
+- Keywords: `swi`, `swan`, `fsbb`, `susceptibility`, `qsm`, `r2star`
 - Combination: `has_swi` + `is_derived`
 
 **Branch:** `swi`
 
-**Outputs:** Magnitude, phase, processed SWI, mIP, QSM.
+**Outputs:** Magnitude, phase, processed SWI, mIP, MIP, QSM, R2\*.
 
 ---
 
@@ -283,11 +299,11 @@ SyMRI:
 
 **Detection:**
 - Exclusive flag: `is_localizer`
-- Keywords: `localizer`, `scout`, `survey`, `3 plan`, `autoalign`, `calibration`
+- Keywords: `localizer`, `scout`, `survey`, `3 plan`, `autoalign`, `calibration`, `asset cal`, `locator`
 
 **Branch:** `rawrecon`
 
-**Note:** Checked before ProjectionDerived because scout MPR reformats should be classified as localizers.
+**Note:** Checked before ProjectionDerived because scout MPR reformats should be classified as localizers. The `asset cal` keyword catches GE ASSET calibration scans.
 
 ---
 
@@ -309,15 +325,16 @@ Provenances are checked in this order (first match wins):
 
 1. **SyMRI** - Synthetic MRI
 2. **EPIMix** - Multicontrast EPI (before SWI because NeuroMix can produce SWI)
-3. **SWIRecon** - Susceptibility-weighted
-4. **DTIRecon** - Diffusion tensor
-5. **PerfusionRecon** - Perfusion maps
-6. **ASLRecon** - Arterial spin labeling
-7. **BOLDRecon** - BOLD fMRI
-8. **Localizer** - Scout images (before ProjectionDerived)
-9. **ProjectionDerived** - MIP/MPR
-10. **SubtractionDerived** - Subtraction images
-11. **RawRecon** - Default fallback
+3. **STAGE** - Strategically Acquired Gradient Echo (before SWI because STAGE derives its own SWI/QSM)
+4. **SWIRecon** - Susceptibility-weighted (incl. QSM, R2\*)
+5. **DTIRecon** - Diffusion tensor
+6. **PerfusionRecon** - Perfusion maps
+7. **ASLRecon** - Arterial spin labeling
+8. **BOLDRecon** - BOLD fMRI
+9. **Localizer** - Scout images (before ProjectionDerived)
+10. **ProjectionDerived** - MIP/MPR
+11. **SubtractionDerived** - Subtraction images
+12. **RawRecon** - Default fallback
 
 ---
 
@@ -353,7 +370,9 @@ Provenance is a **single value** (not CSV):
 |--------|------------|--------|
 | Standard T1 MPRAGE | `RawRecon` | rawrecon |
 | MAGiC Synthetic T1 | `SyMRI` | symri |
+| STAGE FA6 magnitude | `STAGE` | stage |
 | SWI Phase image | `SWIRecon` | swi |
+| QSM / R2\* map | `SWIRecon` | swi |
 | ADC map from DWI | `DTIRecon` | rawrecon |
 | CBF map from DSC | `PerfusionRecon` | rawrecon |
 | Resting-state fMRI | `BOLDRecon` | rawrecon |
