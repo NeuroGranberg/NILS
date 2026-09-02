@@ -1,5 +1,10 @@
 # NILS - Neuroimaging Intelligent Linked System
 
+> **Archived 2026-09-02.** This repository is the public mirror of NILS v0, the 0.x
+> line, kept read-only for its history and its forks. NILS v1, a rewrite, is
+> developed in the open at <https://github.com/kineuro/nils>. v0 receives bug fixes
+> only; they are not mirrored here.
+
 <p align="center">
   <img src="frontend/public/nils-icon.svg" alt="NILS Logo" width="120">
 </p>
